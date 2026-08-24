@@ -132,65 +132,134 @@ backup_configs() {
 }
 
 backup_postgres() {
-  log "Dump do PostgreSQL..."
+  # Numa instalacao real ha MAIS DE UM banco PostgreSQL: o `postgresql`
+  # principal e o `timescaledb` (series temporais, tambem PostgreSQL).
+  # Fazer dump so do primeiro deixaria o TimescaleDB de fora sem avisar.
+  log "Dump dos bancos PostgreSQL..."
   mkdir -p "$WORK/postgres"
 
-  local pg; pg="$(container_do_servico postgresql)"
-  [ -z "$pg" ] && pg="$(docker ps --filter "label=com.docker.compose.project=$PROJETO" \
-                        --format '{{.Names}}' | grep -i postgres | head -1)"
-  if [ -z "$pg" ]; then
-    log "AVISO: container do PostgreSQL não encontrado — pulando"
+  local conts
+  conts="$(docker ps --filter "label=com.docker.compose.project=$PROJETO"       --format '{{.Names}}	{{.Label "com.docker.compose.service"}}' 2>/dev/null       | awk '$2 ~ /postgres|timescale/ {print $1"|"$2}')"
+
+  if [ -z "$conts" ]; then
+    log "AVISO: nenhum container PostgreSQL/TimescaleDB ativo — pulando"
     emit postgres "ausente"
-    return 0
-  fi
-  log "  container: $pg"
-
-  # Usuário vem do ambiente do próprio container — não adivinhar
-  local PGUSER
-  PGUSER="$(docker exec "$pg" sh -c 'echo -n "$POSTGRES_USER"' 2>/dev/null)"
-  [ -z "$PGUSER" ] && PGUSER="postgres"
-  log "  usuário: $PGUSER"
-
-  # Papéis e permissões — pg_dump por banco NÃO leva isso
-  docker exec "$pg" pg_dumpall -U "$PGUSER" --globals-only \
-    > "$WORK/postgres/globals.sql" 2>"$WORK/postgres/globals.err" \
-    || log "AVISO: pg_dumpall --globals-only falhou (ver globals.err)"
-
-  # Enumera os bancos em vez de chutar nomes: o FindFace cria ffsecurity,
-  # ffsecurity_identity_provider, multi_audit e outros conforme os módulos
-  # habilitados, e a lista muda entre instalações.
-  local bancos
-  bancos="$(docker exec "$pg" psql -U "$PGUSER" -tAc \
-    "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres';" 2>/dev/null)"
-
-  if [ -z "$bancos" ]; then
-    log "AVISO: nenhum banco listado — verifique as credenciais do PostgreSQL"
-    emit postgres "vazio"
     return 0
   fi
 
   local total=0
-  for db in $bancos; do
-    log "  dump: $db"
-    # -Fc: comprimido, restaurável por objeto, é o formato do InfraCore
-    if docker exec "$pg" pg_dump -U "$PGUSER" -Fc --no-password "$db" \
-         > "$WORK/postgres/${db}.dump" 2>>"$WORK/postgres/dump.err"; then
-      local sz; sz="$(stat -c %s "$WORK/postgres/${db}.dump")"
-      # Dump válido tem cabeçalho; arquivo de 0 byte é falha silenciosa
-      if [ "$sz" -lt 100 ]; then
-        log "  AVISO: dump de $db saiu vazio ($sz bytes)"
-        rm -f "$WORK/postgres/${db}.dump"
-      else
-        total=$(( total + sz ))
-        log "  ok: $db ($(numfmt --to=iec "$sz" 2>/dev/null || echo "$sz")B)"
-      fi
-    else
-      log "  AVISO: pg_dump de $db falhou"
+  local instancias=""
+
+  for par in $conts; do
+    local c="${par%%|*}"; local svc="${par##*|}"
+    log "  instancia: $svc ($c)"
+    mkdir -p "$WORK/postgres/$svc"
+
+    # Usuario vem do ambiente do proprio container — nao adivinhar
+    local PGUSER
+    PGUSER="$(docker exec "$c" sh -c 'echo -n "$POSTGRES_USER"' 2>/dev/null)"
+    [ -z "$PGUSER" ] && PGUSER="postgres"
+
+    # Papeis e permissoes: pg_dump por banco NAO leva isso, e sem eles o
+    # restore falha com erro de permissao que parece corrupcao.
+    docker exec "$c" pg_dumpall -U "$PGUSER" --globals-only       > "$WORK/postgres/$svc/globals.sql" 2>"$WORK/postgres/$svc/globals.err"       || log "    AVISO: pg_dumpall --globals-only falhou"
+
+    # Enumera os bancos em vez de chutar nomes: a lista muda conforme os
+    # modulos habilitados do FindFace.
+    local bancos
+    bancos="$(docker exec "$c" psql -U "$PGUSER" -tAc       "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres';" 2>/dev/null)"
+
+    if [ -z "$bancos" ]; then
+      log "    AVISO: nenhum banco listado em $svc"
+      continue
     fi
+
+    for db in $bancos; do
+      if docker exec "$c" pg_dump -U "$PGUSER" -Fc --no-password "$db"            > "$WORK/postgres/$svc/${db}.dump" 2>>"$WORK/postgres/$svc/dump.err"; then
+        local sz; sz="$(stat -c %s "$WORK/postgres/$svc/${db}.dump")"
+        if [ "$sz" -lt 100 ]; then
+          log "    AVISO: dump de $db saiu vazio ($sz bytes)"
+          rm -f "$WORK/postgres/$svc/${db}.dump"
+        else
+          total=$(( total + sz ))
+          log "    ok: $db ($(numfmt --to=iec "$sz" 2>/dev/null || echo "$sz")B)"
+        fi
+      else
+        log "    AVISO: pg_dump de $db falhou"
+      fi
+    done
+    instancias="$instancias $svc"
   done
+
   emit postgres_bytes "$total"
-  emit postgres_bancos "$(echo "$bancos" | tr '\n' ' ')"
-  log "PostgreSQL concluído."
+  emit postgres_instancias "$instancias"
+  log "PostgreSQL concluido."
+}
+
+backup_mongodb() {
+  # O MongoDB guarda os metadados dos trechos de video (Video Recorder).
+  # Sem ele, o video gravado fica no disco mas o sistema nao sabe indexar.
+  log "Dump do MongoDB..."
+  local c; c="$(container_do_servico mongodb)"
+  [ -z "$c" ] && c="$(docker ps --filter "label=com.docker.compose.project=$PROJETO"                       --format '{{.Names}}' | grep -i mongo | head -1)"
+  if [ -z "$c" ]; then
+    log "  MongoDB nao encontrado neste servidor — pulando"
+    emit mongodb "ausente"
+    return 0
+  fi
+
+  mkdir -p "$WORK/mongodb"
+  local UZ PZ ARGS=""
+  UZ="$(docker exec "$c" sh -c 'echo -n "$MONGO_INITDB_ROOT_USERNAME"' 2>/dev/null)"
+  PZ="$(docker exec "$c" sh -c 'echo -n "$MONGO_INITDB_ROOT_PASSWORD"' 2>/dev/null)"
+  if [ -n "$UZ" ]; then
+    ARGS="-u $UZ -p $PZ --authenticationDatabase admin"
+    log "  usando credencial do proprio container"
+  fi
+
+  # --archive --gzip sai por stdout: nao precisa de espaco temporario
+  # dentro do container, que pode ter volume pequeno.
+  if docker exec "$c" sh -c "mongodump $ARGS --archive --gzip"        > "$WORK/mongodb/mongodump.gz" 2>"$WORK/mongodb/mongodump.err"; then
+    local sz; sz="$(stat -c %s "$WORK/mongodb/mongodump.gz")"
+    if [ "$sz" -lt 100 ]; then
+      log "  AVISO: dump vazio — ver mongodump.err"
+      emit mongodb "vazio"
+    else
+      emit mongodb_bytes "$sz"
+      log "  ok ($(numfmt --to=iec "$sz" 2>/dev/null || echo "$sz")B)"
+    fi
+  else
+    log "  AVISO: mongodump falhou — ver mongodump.err"
+    emit mongodb "falhou"
+  fi
+}
+
+backup_etcd() {
+  # O etcd coordena o cluster e guarda configuracao de runtime.
+  # `snapshot save` gera um arquivo consistente; copiar o diretorio nao.
+  log "Snapshot do etcd..."
+  local c; c="$(container_do_servico etcd)"
+  [ -z "$c" ] && c="$(docker ps --filter "label=com.docker.compose.project=$PROJETO"                       --format '{{.Names}}' | grep -i etcd | head -1)"
+  if [ -z "$c" ]; then
+    log "  etcd nao encontrado — pulando"
+    emit etcd "ausente"
+    return 0
+  fi
+
+  mkdir -p "$WORK/etcd"
+  if docker exec -e ETCDCTL_API=3 "$c"        etcdctl snapshot save /tmp/faceops-etcd.db >/dev/null 2>&1      && docker cp "$c:/tmp/faceops-etcd.db" "$WORK/etcd/snapshot.db" >/dev/null 2>&1; then
+    docker exec "$c" rm -f /tmp/faceops-etcd.db 2>/dev/null
+    local sz; sz="$(stat -c %s "$WORK/etcd/snapshot.db" 2>/dev/null || echo 0)"
+    emit etcd_bytes "$sz"
+    log "  ok ($(numfmt --to=iec "$sz" 2>/dev/null || echo "$sz")B)"
+  else
+    log "  AVISO: etcdctl snapshot falhou — copiando o diretorio de dados"
+    if [ -d "$FF_DIR/data/etcd" ]; then
+      tar -czf "$WORK/etcd/etcd-data.tar.gz" -C "$FF_DIR/data" etcd 2>/dev/null         && emit etcd_bytes "$(stat -c %s "$WORK/etcd/etcd-data.tar.gz")"
+      log "  copia direta feita (consistencia nao garantida)"
+    fi
+    emit etcd_metodo "copia-direta"
+  fi
 }
 
 backup_tarantool() {
@@ -199,7 +268,11 @@ backup_tarantool() {
   log "Snapshot do Tarantool (vetores faciais)..."
   mkdir -p "$WORK/tarantool"
 
+  # Instalacao real e SHARDADA: 16 shards + 16 replicas = 32 containers.
+  # Todos precisam de box.snapshot() antes da copia.
   local conts; conts="$(containers_por_padrao 'tarantool')"
+  local qtd; qtd="$(echo "$conts" | grep -c . )"
+  [ -n "$conts" ] && log "  $qtd instancia(s) Tarantool encontrada(s)"
   if [ -z "$conts" ]; then
     log "AVISO: nenhum container Tarantool ativo — pulando"
     emit tarantool "ausente"
@@ -296,10 +369,13 @@ $(cd "$WORK" && find . -type f -not -name MANIFESTO.txt -printf '%10s  %p\n' 2>/
 Como restaurar
 --------------
 Perfil config/essencial — restore quente, ver docs/03_RESTORE.md:
-  1. configs.tar.gz  -> extrair sobre $FF_DIR/
-  2. postgres/*.dump -> pg_restore --clean --if-exists por banco
-  3. tarantool       -> parar findface-tarantool-server, extrair, subir
-  4. subir o stack e conferir o painel do FindFace
+  1. configs.tar.gz        -> extrair sobre $FF_DIR/
+  2. postgres/<inst>/*.dump -> pg_restore --clean --if-exists por banco,
+                               em CADA instancia (postgresql, timescaledb)
+  3. tarantool             -> parar os shards, extrair, subir
+  4. mongodb/mongodump.gz  -> mongorestore --archive --gzip
+  5. etcd/snapshot.db      -> etcdctl snapshot restore
+  6. subir o stack e conferir o painel do FindFace
 
 Perfil completo — procedimento oficial NtechLab:
   1. Instalar o FindFace Multi pelo .run da mesma versão (2.4.1)
@@ -333,6 +409,8 @@ case "$PROFILE" in
     backup_configs
     backup_postgres
     backup_tarantool
+    backup_mongodb
+    backup_etcd
     ;;
   completo)
     backup_configs

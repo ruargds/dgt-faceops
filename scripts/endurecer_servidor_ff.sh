@@ -67,6 +67,7 @@ echo "  maiores arquivos:"
 sudo ls -lhS /var/log/ 2>/dev/null | head -6 | tail -5 | awk '{printf "    %8s  %s\n",$5,$9}'
 
 DRIVER="$(sudo docker info --format '{{.LoggingDriver}}' 2>/dev/null || echo desconhecido)"
+DOCKERROOT="$(sudo docker info --format '{{.DockerRootDir}}' 2>/dev/null)"
 echo "  log-driver do Docker: $DRIVER"
 
 # ── 1. journald ────────────────────────────────────────────────────────
@@ -117,32 +118,58 @@ fi
 
 # ── 3. tirar log de container do syslog ────────────────────────────────
 titulo "3. Log de container fora do /var/log/syslog"
-case "$DRIVER" in
-  journald|syslog)
-    ok "driver '$DRIVER' — os containers alimentam o rsyslog; da para filtrar sem downtime"
-    escrever /etc/rsyslog.d/30-faceops-docker.conf <<'EOF'
-# DGT FaceOps — nao gravar log de container no /var/log/syslog.
+
+# Nao decidir pelo driver: num servidor com driver json-file o log dos
+# containers CHEGAVA no rsyslog assim mesmo (override por servico no
+# compose). O teste honesto e olhar o que realmente esta la.
+AMOSTRA="$(sudo tail -n 2000 /var/log/syslog 2>/dev/null | grep -cE ' [0-9a-f]{12}\[[0-9]+\]:' || echo 0)"
+echo "  linhas de container nas ultimas 2000 do syslog: $AMOSTRA"
+
+if [ "${AMOSTRA:-0}" -gt 0 ]; then
+  ok "o log de container CHEGA no rsyslog (driver informado: $DRIVER)"
+  echo
+  echo "  Duas opcoes. A conservadora descarta so o ruido de sucesso e"
+  echo "  PRESERVA todo erro; a agressiva descarta tambem o nivel info."
+  echo
+
+  escrever /etc/rsyslog.d/30-faceops-docker.conf <<'EOF'
+# DGT FaceOps — reduz o log de container no /var/log/syslog.
 #
-# O log chega com o ID curto do container (12 hex) como programname.
-# Descartar daqui NAO perde nada: continua acessivel por `docker logs`
-# e por `journalctl`. Sem isto, o log de acesso HTTP do FindFace enche
-# vários GB por dia no disco raiz.
-if re_match($programname, "^[0-9a-f]{12}$") then stop
+# NAO reinicia nada do FindFace: o filtro age na chegada ao rsyslog.
+# O log completo continua acessivel por `docker logs` e `journalctl` —
+# aqui so evitamos gravar o ruido no disco raiz.
+#
+# Descarta APENAS requisicao HTTP bem-sucedida. Erro, aviso e qualquer
+# status fora de 2xx/3xx continuam sendo gravados.
+
+if re_match($programname, "^[0-9a-f]{12}$") then {
+    # nginx / extraction-api-lb:  "POST /v2 HTTP/1.1" status=200 ...
+    if re_match($msg, "status=(200|204|206|304)") then stop
+    # nginx classico:  "POST /events/faces/add/ HTTP/1.1" 200 156
+    if re_match($msg, "HTTP/1\.[01]\" (200|204|206|304) ") then stop
+    # findface-multi-legacy:  HTTP RESP GET /users/me/ 200 [0.03s, ...]
+    if re_match($msg, "HTTP RESP .* (200|204|206|304) \[") then stop
+
+    # Mais agressivo — descomente para descartar TODO nivel info.
+    # Reduz mais, mas perde rastro de operacao normal no syslog.
+    # if re_match($msg, "level=info") then stop
+}
 EOF
-    if [ "$APLICAR" = "1" ]; then
+  if [ "$APLICAR" = "1" ]; then
+    acao "validar a configuracao antes de aplicar"
+    if sudo rsyslogd -N1 >/dev/null 2>&1; then
+      ok "configuracao do rsyslog valida"
       acao "systemctl restart rsyslog (instantaneo, nao toca nos containers)"
       sudo systemctl restart rsyslog && ok "rsyslog reiniciado"
+    else
+      erro "configuracao do rsyslog INVALIDA — nao vou reiniciar"
+      sudo rsyslogd -N1 2>&1 | tail -5
     fi
-    ;;
-  json-file)
-    aviso "driver 'json-file' — o log NAO passa pelo rsyslog; nada a filtrar aqui"
-    aviso "o crescimento e por container, em /var/lib/docker/containers/*/*-json.log"
-    aviso "o limite vai na secao 4, e exige reiniciar o dockerd"
-    ;;
-  *)
-    aviso "driver '$DRIVER' desconhecido — pulando esta secao"
-    ;;
-esac
+  fi
+else
+  ok "nenhuma linha de container no syslog — nada a filtrar aqui"
+  [ "$DRIVER" = "json-file" ] &&     aviso "com json-file o crescimento fica em ${DOCKERROOT:-/var/lib/docker}/containers/*/*-json.log"
+fi
 
 # ── 4. limite de log do Docker (SEM reiniciar) ─────────────────────────
 titulo "4. Limite de log do Docker"
