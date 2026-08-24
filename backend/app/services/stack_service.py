@@ -28,6 +28,7 @@ SEP = "###FACEOPS:"
 NOME_VALIDO = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 # Serviços do FindFace Multi que usam GPU — a UI destaca esses.
+# O `-lb` é apenas balanceador da extração: não toca na GPU.
 SERVICOS_GPU = frozenset({
     "findface-extraction-api",
     "findface-video-worker",
@@ -35,15 +36,33 @@ SERVICOS_GPU = frozenset({
 })
 
 # Serviços que guardam estado. Reiniciar é seguro; remover não é.
+# `findface-upload` entra aqui porque é onde as fotos de evento moram.
 SERVICOS_DADOS = frozenset({
     "postgresql",
+    "pgbouncer",
     "tarantool",
     "findface-tarantool-server",
     "mongodb",
     "redis",
     "etcd",
     "timescaledb",
+    "rabbitmq",
+    "nats",
+    "nats-jetstream",
+    "findface-upload",
 })
+
+# Jobs de uma vez só: rodam na subida, fazem a migração e SAEM com 0.
+# Contá-los como "parado" faria o painel reportar meia dúzia de serviços
+# com problema para sempre — alarme falso permanente é pior que alarme
+# nenhum, porque ensina a ignorar a tela.
+SUFIXOS_JOB = ("-migrate", "-init", "-migration")
+NOMES_JOB = frozenset({"findface-multi-legacy-migrate"})
+
+
+def _e_job(servico: str) -> bool:
+    """O container é job de execução única em vez de serviço contínuo?"""
+    return servico in NOMES_JOB or servico.endswith(SUFIXOS_JOB)
 
 
 class StackError(Exception):
@@ -107,10 +126,12 @@ class StackService:
         """
         arquivo = shlex.quote(_compose_file(host))
         diretorio = shlex.quote(_compose_dir(host))
+        sudo = await self.ssh.docker_needs_sudo(host)
         r = await self.ssh.run(
             host,
             f"docker ps -a --filter label=com.docker.compose.project.config_files={arquivo} "
             "--format '{{index .Labels}}' | head -1",
+            sudo=sudo,
             timeout=30,
         )
         for parte in (r.stdout or "").split(","):
@@ -149,7 +170,8 @@ if [ -n "$ids" ]; then
 fi
 echo "{SEP}END"
 """
-        resultado = await self.ssh.run_script(host, script, timeout=90)
+        sudo = await self.ssh.docker_needs_sudo(host)
+        resultado = await self.ssh.run_script(host, script, sudo=sudo, timeout=90)
         secoes = _split_sections(resultado.stdout)
 
         detalhes: dict[str, dict] = {}
@@ -187,10 +209,13 @@ echo "{SEP}END"
 
             extra = detalhes.get(nome, {})
             estado = extra.get("estado") or bruto.get("State", "")
+            nome_servico = servico or nome
+            e_job = _e_job(nome_servico)
 
             servicos.append({
                 "nome": nome,
-                "servico": servico or nome,
+                "servico": nome_servico,
+                "e_job": e_job,
                 "imagem": bruto.get("Image", ""),
                 "estado": estado,
                 "status_texto": bruto.get("Status", ""),
@@ -200,25 +225,40 @@ echo "{SEP}END"
                 "exit_code": extra.get("exit_code", 0),
                 "oom_killed": extra.get("oom_killed", False),
                 "portas": bruto.get("Ports", ""),
-                "usa_gpu": (servico or nome) in SERVICOS_GPU,
-                "guarda_dados": (servico or nome) in SERVICOS_DADOS,
+                "usa_gpu": nome_servico in SERVICOS_GPU,
+                "guarda_dados": nome_servico in SERVICOS_DADOS,
             })
 
-        servicos.sort(key=lambda s: (s["estado"] == "running", s["servico"]))
+        servicos.sort(key=lambda s: (s["e_job"], s["estado"] == "running", s["servico"]))
 
         rodando = sum(1 for s in servicos if s["estado"] == "running")
+
+        # Um job só é problema se terminou com erro; um serviço contínuo é
+        # problema se não está de pé, está unhealthy, ou morreu por falta
+        # de memória.
         doentes = [
             s for s in servicos
-            if s["estado"] != "running" or s["saude"] == "unhealthy" or s["oom_killed"]
+            if (
+                s["oom_killed"]
+                or s["saude"] == "unhealthy"
+                or (s["e_job"] and s["exit_code"] != 0)
+                or (not s["e_job"] and s["estado"] != "running")
+            )
         ]
+
+        continuos = [s for s in servicos if not s["e_job"]]
 
         return {
             "host_id": host.id,
             "host": host.name,
             "projeto": projeto,
             "compose_file": _compose_file(host),
-            "total": len(servicos),
-            "rodando": rodando,
+            # "total" conta só serviço contínuo: é o denominador que faz
+            # sentido no cartão ("26 de 33 rodando"). Jobs concluídos
+            # apareceriam como faltando.
+            "total": len(continuos),
+            "rodando": sum(1 for s in continuos if s["estado"] == "running"),
+            "jobs": len(servicos) - len(continuos),
             "com_problema": len(doentes),
             "servicos": servicos,
         }
@@ -228,9 +268,11 @@ echo "{SEP}END"
         _validar_nome(container)
         await self._garantir_do_projeto(host, container)
         linhas = max(1, min(int(linhas), 2000))
+        sudo = await self.ssh.docker_needs_sudo(host)
         r = await self.ssh.run(
             host,
             f"docker logs --tail {linhas} --timestamps {shlex.quote(container)} 2>&1",
+            sudo=sudo,
             timeout=60,
         )
         return r.stdout or r.stderr
@@ -245,10 +287,12 @@ echo "{SEP}END"
         qualquer container do servidor — inclusive o próprio painel.
         """
         projeto = await self._projeto(host)
+        sudo = await self.ssh.docker_needs_sudo(host)
         r = await self.ssh.run(
             host,
             f"docker inspect {shlex.quote(container)} "
             "--format '{{index .Config.Labels \"com.docker.compose.project\"}}' 2>/dev/null",
+            sudo=sudo,
             timeout=30,
         )
         dono = r.stdout.strip()
@@ -286,6 +330,7 @@ echo "{SEP}END"
             host,
             f"docker inspect {shlex.quote(container)} --format "
             "'{{.State.Status}}|{{.State.Health.Status}}'",
+            sudo=await self.ssh.docker_needs_sudo(host),
             timeout=30,
         )
         partes = estado.stdout.strip().split("|")

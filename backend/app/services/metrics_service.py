@@ -268,8 +268,14 @@ class MetricsService:
         tudo aqui é legível por usuário comum (docker exige o grupo
         `docker`, que o usuário de deploy já tem).
         """
+        # Se o docker deste host exige sudo (usuário fora do grupo `docker`,
+        # que é o padrão da instalação do FindFace), a coleta inteira roda
+        # como root. Ler /proc, df e nvidia-smi como root não muda nada;
+        # sem isso a seção de containers viria vazia, sem erro visível.
+        precisa_sudo = await self.ssh.docker_needs_sudo(host)
+
         resultado: CommandResult = await self.ssh.run_script(
-            host, COLLECT_SCRIPT, sudo=False, timeout=60
+            host, COLLECT_SCRIPT, sudo=precisa_sudo, timeout=60
         )
         if not resultado.stdout.strip():
             raise SSHError(

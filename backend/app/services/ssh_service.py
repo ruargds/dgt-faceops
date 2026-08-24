@@ -70,6 +70,26 @@ class SSHService:
     def __init__(self) -> None:
         self._pool: dict[int, _PooledConnection] = {}
         self._locks: dict[int, asyncio.Lock] = {}
+        # host_id -> o docker daqui exige sudo?
+        self._docker_sudo: dict[int, bool] = {}
+
+    async def docker_needs_sudo(self, host) -> bool:
+        """
+        Descobre se o docker deste host exige sudo.
+
+        Instalação padrão do FindFace deixa o usuário de deploy FORA do
+        grupo `docker` — aí `docker ps` falha com permissão negada e a
+        leitura viria vazia, sem erro visível. Testar uma vez e guardar
+        é mais barato que prefixar sudo em tudo (o que quebraria onde o
+        usuário está no grupo e não tem sudo).
+        """
+        if host.id in self._docker_sudo:
+            return self._docker_sudo[host.id]
+
+        r = await self.run(host, "docker ps -q", timeout=30)
+        precisa = not r.ok
+        self._docker_sudo[host.id] = precisa
+        return precisa
 
     # ── Varredura de identidade ────────────────────────────────────────
 
@@ -185,6 +205,8 @@ class SSHService:
         pooled = self._pool.pop(host_id, None)
         if pooled is not None and not pooled.conn.is_closed():
             pooled.conn.abort()
+        # Credencial ou usuário pode ter mudado — redetectar o sudo do docker
+        self._docker_sudo.pop(host_id, None)
 
     async def disconnect(self, host_id: int) -> None:
         async with self._lock_for(host_id):

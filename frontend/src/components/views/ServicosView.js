@@ -127,6 +127,11 @@ export default function ServicosView() {
             Projeto compose <span className="mono">{dados.projeto}</span> ·{" "}
             <span className="mono">{dados.compose_file}</span> · {dados.rodando} de{" "}
             {dados.total} rodando
+            {dados.jobs > 0 && (
+              <span className="pill pill-idle" title="Jobs de migração, rodam na subida e saem com 0">
+                +{dados.jobs} job(s)
+              </span>
+            )}
             {dados.com_problema > 0 && (
               <span className="pill pill-warn">
                 <IconAlerta size={12} /> {dados.com_problema} com problema
@@ -162,11 +167,30 @@ export default function ServicosView() {
                             dados
                           </span>
                         )}
+                        {s.e_job && (
+                          <span
+                            className="pill pill-idle"
+                            title="Job de execução única: roda na subida e sai. Sair com 0 é o esperado."
+                          >
+                            job
+                          </span>
+                        )}
                       </div>
                       <div className="small muted mono">{s.nome}</div>
                     </td>
                     <td>
-                      <Selo status={s.estado} />
+                      {s.e_job && s.exit_code === 0 ? (
+                        <span className="pill pill-ok" title="Job concluído com sucesso">
+                          Concluído
+                        </span>
+                      ) : (
+                        <Selo status={s.estado} />
+                      )}
+                      {s.e_job && s.exit_code !== 0 && (
+                        <div className="small" style={{ color: "var(--red)", marginTop: 3 }}>
+                          job falhou (exit {s.exit_code})
+                        </div>
+                      )}
                       {s.oom_killed && (
                         <div className="small" style={{ color: "var(--red)", marginTop: 3 }}>
                           morto por falta de memória
@@ -193,7 +217,7 @@ export default function ServicosView() {
                         >
                           <IconLogs size={14} />
                         </button>
-                        {has("services.restart") && (
+                        {has("services.restart") && !s.e_job && (
                           <button
                             className="btn btn-secondary btn-sm"
                             onClick={() => reiniciar(s.nome)}
