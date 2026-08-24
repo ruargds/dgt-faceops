@@ -120,32 +120,30 @@ Duas formas, ambas suportadas:
 
 ## Instalação
 
-### Windows (empacotado)
-
-Docker Desktop instalado → botão direito em `windows\instalar.bat` →
-**Executar como administrador**. O instalador confere pré-requisitos, gera a
-`SECRET_KEY`, constrói e sobe. Detalhes e requisitos em
-[12_INSTALACAO_WINDOWS](docs/12_INSTALACAO_WINDOWS.md).
-
-### Linux
+### Ubuntu — um comando
 
 ```bash
-# Na VM do painel, do zero
-bash scripts/provision_painel.sh
-
 git clone git@github.com:ruargds/dgt-faceops.git
 cd dgt-faceops
-cp .env.example .env
-
-# Gere a SECRET_KEY — dela deriva o cofre que guarda as chaves SSH
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
-# cole em SECRET_KEY no .env
-
-bash deploy.sh --build
+bash instalar.sh
 ```
 
-Primeiro acesso em `http://<vm>:8080` com **admin / admin123**. O painel
-exibe faixa de aviso até a senha ser trocada.
+Instala Docker, ajusta timezone e NTP, gera a `SECRET_KEY` e a senha do
+banco, cria os diretórios, constrói, sobe e confirma que respondeu.
+Pergunta só a porta e onde guardar os backups. É idempotente — rodar de
+novo não quebra nada.
+
+Primeiro acesso em `http://<ip>:8080` com **admin / admin123**. Troque a
+senha imediatamente; o painel exibe faixa de aviso até isso acontecer.
+
+**Guia completo, do zero ao backup agendado:**
+[15_SOLUCAO_PRONTA](docs/15_SOLUCAO_PRONTA.md)
+
+### Windows
+
+Docker Desktop instalado → botão direito em `windows\instalar.bat` →
+**Executar como administrador**. Detalhes e limitações em
+[12_INSTALACAO_WINDOWS](docs/12_INSTALACAO_WINDOWS.md).
 
 ## Documentação
 
@@ -166,11 +164,13 @@ exibe faixa de aviso até a senha ser trocada.
 | [12_INSTALACAO_WINDOWS](docs/12_INSTALACAO_WINDOWS.md) | Instalação empacotada em máquina Windows |
 | [13_DESTINOS](docs/13_DESTINOS.md) | Destinos de backup: local, Azure e rclone |
 | [14_MANUTENCAO](docs/14_MANUTENCAO.md) | Disco e log: diagnóstico e correção sem linha de comando |
+| [**15_SOLUCAO_PRONTA**](docs/15_SOLUCAO_PRONTA.md) | **Comece aqui** — do zero ao backup agendado, em Ubuntu |
 
 ## Scripts
 
 | Script | Para quê |
 |--------|----------|
+| [`instalar.sh`](instalar.sh) | **Instalação completa em Ubuntu**, um comando, idempotente |
 | [`inventario.sh`](scripts/inventario.sh) | Levanta tudo de um servidor — **somente leitura**, não altera nada |
 | [`descobrir_topologia.sh`](scripts/descobrir_topologia.sh) | Onde cada componente do FindFace está, e qual perfil de backup cabe ali |
 | [`ffmulti-backup.sh`](scripts/ffmulti-backup.sh) | O backup em si, enviado pelo painel via stdin — não fica no servidor |

@@ -4,6 +4,7 @@
 
 | Se você é… | Leia nesta ordem |
 |------------|------------------|
+| **Primeira vez aqui** | [15_SOLUCAO_PRONTA](15_SOLUCAO_PRONTA.md) — do zero ao backup agendado |
 | **Quem vai instalar (Linux)** | [04_INSTALACAO](04_INSTALACAO.md) → [06_SEGURANCA](06_SEGURANCA.md) → [02_ESTRATEGIA_BACKUP](02_ESTRATEGIA_BACKUP.md) |
 | **Quem vai instalar (Windows)** | [12_INSTALACAO_WINDOWS](12_INSTALACAO_WINDOWS.md) → [04_INSTALACAO](04_INSTALACAO.md) (seções de rede e sudoers) |
 | **Quem vai operar / plantão** | [11_OPERACAO_DIARIA](11_OPERACAO_DIARIA.md) → [02_ESTRATEGIA_BACKUP](02_ESTRATEGIA_BACKUP.md) → [14_MANUTENCAO](14_MANUTENCAO.md) → [10_ERROS_CONHECIDOS](10_ERROS_CONHECIDOS.md) |
@@ -30,6 +31,11 @@
   evento foram perdidas.
 
 ### Operação
+
+- **[15_SOLUCAO_PRONTA](15_SOLUCAO_PRONTA.md)** — o caminho completo em
+  nove partes: instalar o painel em Ubuntu, preparar os servidores,
+  cadastrar, dimensionar o disco, validar, agendar, conter o log e
+  operar. Com os valores reais do ambiente levantado.
 
 - **[04_INSTALACAO](04_INSTALACAO.md)** — do zero: VM, rede, NSG do Azure,
   sudoers nos servidores do FindFace, cadastro do primeiro host, validação.
