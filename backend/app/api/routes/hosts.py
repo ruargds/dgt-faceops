@@ -268,16 +268,47 @@ async def testar(
         if len(linhas) > 2 and linhas[2] == "sim" and not host.has_gpu:
             host.has_gpu = True
 
+        # Se o caminho cadastrado não existe no servidor, pergunta ao
+        # Docker onde o FindFace realmente está. Instalação distribuída
+        # não usa /opt/findface-multi, e o backup falharia procurando
+        # configs/ no lugar errado — com mensagem que não ajuda ninguém.
+        instalacao: dict = {}
+        corrigido = False
+        if linhas and linhas[0] != "sim":
+            instalacao = await request.app.state.stack.detectar_instalacao(host)
+            if instalacao.get("working_dir"):
+                host.ffmulti_dir = instalacao["working_dir"]
+                if instalacao.get("compose_file"):
+                    host.compose_file = instalacao["compose_file"]
+                ff_dir = host.ffmulti_dir
+                corrigido = True
+
         await db.commit()
+
+        if corrigido:
+            await audit_service.registrar(
+                db,
+                usuario=autor.username,
+                action="hosts.testar",
+                target=host.name,
+                ip=client_ip(request),
+                detail={
+                    "acao": "caminho do FindFace corrigido por deteccao",
+                    "novo_dir": host.ffmulti_dir,
+                    "novo_compose": host.compose_file,
+                },
+            )
 
         return {
             "ok": True,
             **info,
             "sudo": tem_sudo,
-            "findface_presente": linhas[0] == "sim" if linhas else False,
+            "findface_presente": (linhas[0] == "sim" if linhas else False) or corrigido,
             "docker_presente": linhas[1] == "sim" if len(linhas) > 1 else False,
             "gpu_presente": linhas[2] == "sim" if len(linhas) > 2 else False,
             "ffmulti_dir": ff_dir,
+            "caminho_corrigido": corrigido,
+            "instalacao": instalacao,
         }
     except SSHError as exc:
         host.last_status = "erro"

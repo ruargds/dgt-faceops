@@ -157,6 +157,16 @@ exibe faixa de aviso até a senha ser trocada.
 | [11_OPERACAO_DIARIA](docs/11_OPERACAO_DIARIA.md) | Rotina, plantão e o que olhar |
 | [12_INSTALACAO_WINDOWS](docs/12_INSTALACAO_WINDOWS.md) | Instalação empacotada em máquina Windows |
 
+## Scripts
+
+| Script | Para quê |
+|--------|----------|
+| [`inventario.sh`](scripts/inventario.sh) | Levanta tudo de um servidor — **somente leitura**, não altera nada |
+| [`descobrir_topologia.sh`](scripts/descobrir_topologia.sh) | Onde cada componente do FindFace está, e qual perfil de backup cabe ali |
+| [`ffmulti-backup.sh`](scripts/ffmulti-backup.sh) | O backup em si, enviado pelo painel via stdin — não fica no servidor |
+| [`endurecer_servidor_ff.sh`](scripts/endurecer_servidor_ff.sh) | Contém o crescimento de log que enche o disco. **Simula por padrão**; só altera com `--aplicar` |
+| [`provision_painel.sh`](scripts/provision_painel.sh) | Prepara a VM do painel do zero |
+
 ## Escopo
 
 Ver [SCOPE.md](SCOPE.md) — o que o projeto faz, o que não faz e o que ficou

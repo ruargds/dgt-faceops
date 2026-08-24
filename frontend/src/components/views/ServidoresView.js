@@ -152,6 +152,12 @@ export default function ServidoresView() {
                             Sem sudo o backup e o restart de container não funcionam.
                           </div>
                         )}
+                        {teste.caminho_corrigido && (
+                          <div style={{ marginTop: 4 }}>
+                            Caminho do FindFace corrigido por detecção:{" "}
+                            <span className="mono">{teste.ffmulti_dir}</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="small" style={{ color: "#8c1c1c" }}>{teste.erro}</div>

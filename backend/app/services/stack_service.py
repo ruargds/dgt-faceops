@@ -118,6 +118,42 @@ class StackService:
         self._bin_cache[host.id] = binario
         return binario
 
+    async def detectar_instalacao(self, host) -> dict:
+        """
+        Descobre onde o FindFace REALMENTE está, perguntando ao Docker.
+
+        Assumir `/opt/findface-multi` é errado: em instalação distribuída
+        o caminho muda, e num servidor real encontrado em campo o
+        diretório sequer existia — o backup procuraria `configs/` no
+        lugar errado e falharia com mensagem confusa.
+
+        Os rótulos que o compose grava em cada container têm a verdade:
+        `project.working_dir` e `project.config_files`.
+        """
+        sudo = await self.ssh.docker_needs_sudo(host)
+        r = await self.ssh.run(
+            host,
+            "docker inspect $(docker ps -q | head -1) --format "
+            "'{{index .Config.Labels \"com.docker.compose.project\"}}|"
+            "{{index .Config.Labels \"com.docker.compose.project.config_files\"}}|"
+            "{{index .Config.Labels \"com.docker.compose.project.working_dir\"}}|"
+            "{{.HostConfig.LogConfig.Type}}' 2>/dev/null",
+            sudo=sudo,
+            timeout=40,
+        )
+        partes = (r.stdout or "").strip().split("|")
+        if not r.ok or len(partes) < 3 or not partes[2] or partes[2] == "<no value>":
+            return {}
+
+        # config_files pode trazer vários caminhos separados por vírgula
+        compose = partes[1].split(",")[0].strip()
+        return {
+            "projeto": partes[0].strip(),
+            "compose_file": compose,
+            "working_dir": partes[2].strip(),
+            "log_driver": partes[3].strip() if len(partes) > 3 else "",
+        }
+
     async def _projeto(self, host) -> str:
         """
         Nome do projeto compose. O Docker deriva do nome do diretório, mas
@@ -168,6 +204,8 @@ if [ -n "$ids" ]; then
   docker inspect $ids --format \
     '{{{{.Name}}}}|{{{{.State.Status}}}}|{{{{.State.Health.Status}}}}|{{{{.RestartCount}}}}|{{{{.State.StartedAt}}}}|{{{{.State.ExitCode}}}}|{{{{.State.OOMKilled}}}}' 2>/dev/null
 fi
+echo "{SEP}DF"
+df -B1 -P -x tmpfs -x devtmpfs -x overlay -x squashfs 2>/dev/null
 echo "{SEP}END"
 """
         sudo = await self.ssh.docker_needs_sudo(host)
@@ -248,6 +286,12 @@ echo "{SEP}END"
 
         continuos = [s for s in servicos if not s["e_job"]]
 
+        # Disco vem de carona no mesmo script. Disco cheio derruba
+        # PostgreSQL e Tarantool antes de qualquer container aparecer
+        # como "com problema" — o painel precisa avisar ANTES disso.
+        discos = _parse_df(secoes.get("DF", ""))
+        criticos = [d for d in discos if d["percentual"] >= 90]
+
         return {
             "host_id": host.id,
             "host": host.name,
@@ -261,6 +305,8 @@ echo "{SEP}END"
             "jobs": len(servicos) - len(continuos),
             "com_problema": len(doentes),
             "servicos": servicos,
+            "discos": discos,
+            "discos_criticos": criticos,
         }
 
     async def logs(self, host, container: str, linhas: int = 200) -> str:
@@ -386,15 +432,47 @@ echo "{SEP}END"
                 "total": 0,
                 "rodando": 0,
                 "com_problema": 0,
+                "discos_criticos": [],
             }
+        criticos = dados.get("discos_criticos", [])
         return {
             "host_id": host.id,
-            "ok": dados["com_problema"] == 0,
+            # Disco em 90%+ conta como "nao ok" mesmo com todo container
+            # de pe: e o estado que antecede a queda, e e quando ainda da
+            # tempo de agir.
+            "ok": dados["com_problema"] == 0 and not criticos,
             "erro": "",
             "total": dados["total"],
             "rodando": dados["rodando"],
             "com_problema": dados["com_problema"],
+            "discos_criticos": [
+                {"ponto": d["ponto"], "percentual": d["percentual"],
+                 "livre_bytes": d["livre_bytes"]}
+                for d in criticos
+            ],
         }
+
+
+def _parse_df(texto: str) -> list[dict]:
+    """`df -P` -> lista de montagens. Uma linha por sistema de arquivos."""
+    montagens: list[dict] = []
+    for linha in texto.strip().splitlines()[1:]:
+        partes = linha.split()
+        if len(partes) < 6:
+            continue
+        try:
+            total, usado, livre = int(partes[1]), int(partes[2]), int(partes[3])
+        except ValueError:
+            continue
+        montagens.append({
+            "dispositivo": partes[0],
+            "ponto": " ".join(partes[5:]),
+            "total_bytes": total,
+            "usado_bytes": usado,
+            "livre_bytes": livre,
+            "percentual": round(usado / total * 100, 1) if total else 0.0,
+        })
+    return montagens
 
 
 def _split_sections(saida: str) -> dict[str, str]:

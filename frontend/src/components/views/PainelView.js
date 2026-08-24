@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatBytes, formatData } from "../../api";
 import { Carregando, Erro, Estatistica, Vazio } from "../Comuns";
-import { IconAtualizar, IconGPU } from "../Icons";
+import { IconAlerta, IconAtualizar, IconGPU } from "../Icons";
 
 const PAPEIS = {
   appserver: "Aplicação",
@@ -104,6 +104,8 @@ function CartaoServidor({ s }) {
   const serv = s.servicos || {};
   const backup = s.ultimo_backup;
 
+  const discosCriticos = serv.discos_criticos || [];
+
   let classeDot = "dot-idle";
   let textoStatus = "Nunca contactado";
   if (!s.ativo) {
@@ -112,6 +114,12 @@ function CartaoServidor({ s }) {
   } else if (s.status_conexao === "erro") {
     classeDot = "dot-err";
     textoStatus = "Sem conexão";
+  } else if (discosCriticos.length > 0) {
+    // Disco cheio vem antes de serviço com problema na ordem de leitura:
+    // e o que causa o resto. Container so aparece quebrado depois que o
+    // banco ja parou de escrever.
+    classeDot = "dot-err";
+    textoStatus = `Disco em ${discosCriticos[0].percentual}%`;
   } else if (serv.com_problema > 0) {
     classeDot = "dot-warn";
     textoStatus = `${serv.com_problema} serviço(s) com problema`;
@@ -137,6 +145,27 @@ function CartaoServidor({ s }) {
       </div>
 
       <div className="small" style={{ marginBottom: 10 }}>{textoStatus}</div>
+
+      {discosCriticos.length > 0 && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--red-bg)", borderColor: "#f3b6b6", marginBottom: 10 }}
+        >
+          {discosCriticos.map((d) => (
+            <div
+              key={d.ponto}
+              className="stack-h small"
+              style={{ color: "#8c1c1c", gap: 6 }}
+            >
+              <IconAlerta size={13} />
+              <span className="mono">{d.ponto}</span>
+              <span>
+                {d.percentual}% — só {formatBytes(d.livre_bytes)} livres
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {serv.erro && (
         <div className="small" style={{ color: "var(--red)", marginBottom: 10 }}>

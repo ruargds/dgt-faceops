@@ -336,6 +336,89 @@ estiver buildando à mão:
 CI=false npm run build
 ```
 
+## Casos encontrados em campo
+
+Registro do que já apareceu num servidor real. Vale mais que o resto do
+documento, porque aconteceu de verdade.
+
+### `/var/log` com 99 GB num disco de 123 GB
+
+**Sintoma:** disco raiz a 100%, 1,1 GB livres, FindFace ainda de pé.
+
+**Investigação:**
+
+```
+/var        120G
+/var/log     99G   ← aqui
+syslog       64G   ← ativo
+syslog.1     33G   ← rotacionado, sem compressão
+```
+
+**Causa:** o log de acesso HTTP do próprio FindFace indo para o syslog.
+Cada face detectada gera 2+ linhas (`POST /events/faces/add/ 200`), mais o
+polling da UI (`GET /users/me/ 200`). Deu **~8 GB/dia** em operação normal.
+
+**O que enganou:** parecia loop de erro. Não era — todas as respostas eram
+`200`. O sistema estava funcionando; era telemetria sem limite. A rotação
+padrão do Ubuntu é semanal, o que não segura 8 GB/dia.
+
+**Correção:** `scripts/endurecer_servidor_ff.sh` — rotação por tamanho
+(`maxsize 500M`), teto no journald, e filtro no rsyslog para o log de
+container não cair no `/var/log/syslog`.
+
+**Para liberar sem perder nada:** mover os rotacionados para um disco com
+folga, copiar o ativo e depois `truncate -s 0`. Nunca `rm` no arquivo
+ativo — o rsyslog o mantém aberto, e apagar libera o nome mas não o
+espaço; você fica sem o log E sem o disco.
+
+### `/opt/findface-multi` não existe
+
+**Sintoma:** backup falha procurando `configs/`; o script avisa que o
+diretório não existe.
+
+**Causa:** o caminho de instalação não é o padrão da documentação. Em
+instalação distribuída, muda.
+
+**Correção:** o "Testar conexão" detecta sozinho, lendo os rótulos que o
+compose grava em cada container (`project.working_dir` e
+`project.config_files`), e corrige o cadastro. Para conferir na mão:
+
+```bash
+sudo docker inspect $(sudo docker ps -q | head -1) --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'
+```
+
+### Tela de Serviços vazia, sem erro
+
+**Causa:** o usuário SSH não está no grupo `docker` — que é o padrão da
+instalação do FindFace. `docker ps` falha com permissão negada e a leitura
+volta vazia.
+
+**Correção:** o painel detecta e usa sudo por host
+(`SSHService.docker_needs_sudo`). Se preferir resolver na origem:
+`sudo usermod -aG docker <usuario>` e relogar.
+
+### "6 serviços com problema" que nunca somem
+
+**Causa:** os containers `*-migrate` são jobs de execução única — rodam na
+subida, migram o banco e saem com código 0. Contá-los como "não está
+running" gerava alarme falso permanente.
+
+**Correção:** job é classificado à parte e só conta como problema se sair
+com código diferente de 0. Aparece como "Concluído" na tela.
+
+### Instalação distribuída, não single-node
+
+**Sintoma:** o perfil `essencial` gera artefato menor que o esperado.
+
+**Causa:** os componentes estão espalhados entre as VMs. A presença de
+`findface-extraction-api-**lb**` (balanceador) indica que a extração roda
+em outra máquina. O Tarantool — que guarda os vetores faciais — pode estar
+num servidor diferente do PostgreSQL.
+
+**Correção:** rode `scripts/inventario.sh` em cada VM e agende o perfil
+`essencial` onde cada componente realmente está. Um agendamento por
+servidor com dado, não um só.
+
 ## Método quando nada aqui serve
 
 1. `docker compose logs --tail 200 backend` — o erro está lá, quase sempre
