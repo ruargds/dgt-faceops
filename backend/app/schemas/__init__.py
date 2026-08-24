@@ -10,7 +10,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.backup import PROFILES
-from app.services.storage_service import DESTINOS_VALIDOS
+from app.models.destino import TIPOS as TIPOS_DESTINO
 
 # ── Autenticação ───────────────────────────────────────────────────────
 
@@ -173,7 +173,8 @@ class AcaoStackIn(BaseModel):
 
 class BackupIn(BaseModel):
     perfil: str
-    destinos: list[str] = ["local"]
+    # IDs dos destinos cadastrados. Vazio = usa os marcados como padrão.
+    destinos: list[int] = []
     retencao_dias: int | None = Field(default=None, ge=0, le=3650)
     # Perfil completo derruba o reconhecimento — exige aceite explícito
     aceito_downtime: bool = False
@@ -184,14 +185,6 @@ class BackupIn(BaseModel):
         if v not in PROFILES:
             raise ValueError(f"perfil deve ser um de {PROFILES}")
         return v
-
-    @field_validator("destinos")
-    @classmethod
-    def _validar_destinos(cls, v: list[str]) -> list[str]:
-        invalidos = [d for d in v if d not in DESTINOS_VALIDOS]
-        if invalidos:
-            raise ValueError(f"destinos invalidos: {invalidos}")
-        return v or ["local"]
 
 
 class BackupOut(BaseModel):
@@ -231,7 +224,7 @@ class ScheduleIn(BaseModel):
     host_id: int
     perfil: str
     cron: str = Field(min_length=1, max_length=64)
-    destinos: list[str] = ["local"]
+    destinos: list[int] = []
     retencao_dias: int = Field(default=30, ge=0, le=3650)
     enabled: bool = True
     allow_downtime: bool = False
@@ -243,20 +236,12 @@ class ScheduleIn(BaseModel):
             raise ValueError(f"perfil deve ser um de {PROFILES}")
         return v
 
-    @field_validator("destinos")
-    @classmethod
-    def _validar_destinos(cls, v: list[str]) -> list[str]:
-        invalidos = [d for d in v if d not in DESTINOS_VALIDOS]
-        if invalidos:
-            raise ValueError(f"destinos invalidos: {invalidos}")
-        return v or ["local"]
-
 
 class ScheduleUpdate(BaseModel):
     name: str | None = None
     perfil: str | None = None
     cron: str | None = None
-    destinos: list[str] | None = None
+    destinos: list[int] | None = None
     retencao_dias: int | None = Field(default=None, ge=0, le=3650)
     enabled: bool | None = None
     allow_downtime: bool | None = None
@@ -281,6 +266,80 @@ class ScheduleOut(BaseModel):
 
     host_nome: str = ""
     cron_legivel: str = ""
+
+
+# ── Destinos de backup ─────────────────────────────────────────────────
+
+
+class DestinoIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=120)
+    descricao: str = ""
+    tipo: str
+    enabled: bool = True
+    padrao: bool = False
+    retencao_dias: int = Field(default=0, ge=0, le=3650)
+
+    # local
+    caminho: str = ""
+
+    # azure
+    azure_container: str = ""
+    azure_tier: str = "Cool"
+    azure_conn: str | None = None       # segredo — só entra
+
+    # rclone
+    rclone_remote: str = ""
+    rclone_caminho: str = ""
+    rclone_conf: str | None = None      # segredo — só entra
+    rclone_flags: str = ""
+
+    @field_validator("tipo")
+    @classmethod
+    def _validar_tipo(cls, v: str) -> str:
+        if v not in TIPOS_DESTINO:
+            raise ValueError(f"tipo deve ser um de {TIPOS_DESTINO}")
+        return v
+
+
+class DestinoUpdate(BaseModel):
+    nome: str | None = None
+    descricao: str | None = None
+    enabled: bool | None = None
+    padrao: bool | None = None
+    retencao_dias: int | None = Field(default=None, ge=0, le=3650)
+    caminho: str | None = None
+    azure_container: str | None = None
+    azure_tier: str | None = None
+    azure_conn: str | None = None
+    rclone_remote: str | None = None
+    rclone_caminho: str | None = None
+    rclone_conf: str | None = None
+    rclone_flags: str | None = None
+
+
+class DestinoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nome: str
+    descricao: str
+    tipo: str
+    enabled: bool
+    padrao: bool
+    retencao_dias: int
+    caminho: str
+    azure_container: str
+    azure_tier: str
+    rclone_remote: str
+    rclone_caminho: str
+    rclone_flags: str
+
+    last_test_at: datetime | None
+    last_test_ok: bool
+    last_test_error: str
+    # Confirma QUAL credencial está guardada, sem revelá-la
+    cred_fingerprint: str
+    tem_credencial: bool = False
 
 
 # ── Auditoria ──────────────────────────────────────────────────────────

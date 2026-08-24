@@ -13,12 +13,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from app.api.routes import audit, auth, backups, hosts, ops, terminal
+from app.api.routes import (
+    audit, auth, backups, destinos, hosts, maintenance, ops, terminal,
+)
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
-from app.models import User  # noqa: F401 — registra todos os modelos
+from app.models import Destino, User  # noqa: F401 — registra todos os modelos
 from app.services.backup_service import BackupService
+from app.services.maintenance_service import MaintenanceService
 from app.services.metrics_service import MetricsService
 from app.services.scheduler_service import SchedulerService
 from app.services.ssh_service import SSHService
@@ -64,6 +67,33 @@ async def _semear_admin() -> None:
         )
 
 
+async def _semear_destino_local() -> None:
+    """
+    Cria o destino local padrão se não houver nenhum destino.
+
+    Sem isto, um painel recém-instalado aceitaria disparar backup e
+    falharia no fim, depois de já ter copiado o artefato do servidor —
+    o pior momento possível para descobrir que falta configuração.
+    """
+    async with AsyncSessionLocal() as db:
+        resultado = await db.execute(select(Destino).limit(1))
+        if resultado.scalars().first() is not None:
+            return
+
+        db.add(Destino(
+            nome="Disco do painel",
+            descricao="Destino local criado automaticamente na primeira subida",
+            tipo="local",
+            caminho=settings.LOCAL_BACKUP_DIR,
+            enabled=True,
+            padrao=True,
+            retencao_dias=settings.RETENTION_ESSENCIAL_DAYS,
+            created_by="sistema",
+        ))
+        await db.commit()
+        log.info("destino local padrao criado em %s", settings.LOCAL_BACKUP_DIR)
+
+
 async def _varredor_de_ociosas(app: FastAPI) -> None:
     """Derruba sessões de terminal esquecidas abertas."""
     while True:
@@ -104,6 +134,7 @@ app.add_middleware(
 async def iniciar() -> None:
     await _criar_tabelas()
     await _semear_admin()
+    await _semear_destino_local()
 
     ssh = SSHService()
     storage = StorageService()
@@ -112,6 +143,7 @@ async def iniciar() -> None:
     app.state.storage = storage
     app.state.metrics = MetricsService(ssh)
     app.state.stack = StackService(ssh)
+    app.state.manutencao = MaintenanceService(ssh)
     app.state.backups = BackupService(ssh, storage)
     app.state.terminals = TerminalManager()
     app.state.scheduler = SchedulerService(app.state.backups)
@@ -165,5 +197,7 @@ app.include_router(auth.router)
 app.include_router(hosts.router)
 app.include_router(ops.router)
 app.include_router(backups.router)
+app.include_router(destinos.router)
+app.include_router(maintenance.router)
 app.include_router(terminal.router)
 app.include_router(audit.router)

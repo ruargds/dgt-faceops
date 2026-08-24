@@ -1,9 +1,16 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
 import { usePermissions } from "../../usePermissions";
-import { Carregando, Erro, Vazio, useHosts } from "../Comuns";
+import {
+  Carregando,
+  Erro,
+  SeletorDestinos,
+  Vazio,
+  useDestinos,
+  useHosts,
+} from "../Comuns";
 import { IconAgenda, IconAtualizar, IconLixeira, IconPlay } from "../Icons";
-import { DESTINOS, PERFIS } from "./BackupsView";
+import { PERFIS } from "./BackupsView";
 
 /**
  * Atalhos de recorrência. A maioria das equipes nunca vai escrever cron à
@@ -22,6 +29,7 @@ const ATALHOS = [
 export default function AgendamentosView() {
   const { has } = usePermissions();
   const { hosts, carregando: carregandoHosts } = useHosts(false);
+  const { ativos: destinosAtivos, nomePorId } = useDestinos();
 
   const [lista, setLista] = useState([]);
   const [erro, setErro] = useState("");
@@ -132,8 +140,18 @@ export default function AgendamentosView() {
                     <div style={{ fontWeight: 600 }}>{a.name}</div>
                     <div className="stack-h" style={{ gap: 4, marginTop: 3 }}>
                       {(a.destinations || []).map((d) => (
-                        <span className="pill pill-idle" key={d}>{d}</span>
+                        <span className="pill pill-idle" key={d}>
+                          {nomePorId[d] || `#${d}`}
+                        </span>
                       ))}
+                      {(a.destinations || []).length === 0 && (
+                        <span
+                          className="pill pill-idle"
+                          title="Usa os destinos marcados como padrao"
+                        >
+                          padrão
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="mono small">{a.host_nome}</td>
@@ -207,6 +225,7 @@ export default function AgendamentosView() {
         <ModalAgendamento
           inicial={editando}
           hosts={hosts.filter((h) => h.enabled)}
+          destinosDisponiveis={destinosAtivos}
           onFechar={() => setEditando(null)}
           onPronto={async () => {
             setEditando(null);
@@ -218,13 +237,13 @@ export default function AgendamentosView() {
   );
 }
 
-function ModalAgendamento({ inicial, hosts, onFechar, onPronto }) {
+function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPronto }) {
   const editando = Boolean(inicial.id);
   const [nome, setNome] = useState(inicial.name || "");
   const [hostId, setHostId] = useState(inicial.host_id || (hosts[0] && hosts[0].id));
   const [perfil, setPerfil] = useState(inicial.profile || "essencial");
   const [cron, setCron] = useState(inicial.cron || "0 2 * * *");
-  const [destinos, setDestinos] = useState(inicial.destinations || ["local"]);
+  const [destinos, setDestinos] = useState(inicial.destinations || []);
   const [retencao, setRetencao] = useState(inicial.retention_days ?? 30);
   const [aceito, setAceito] = useState(inicial.allow_downtime || false);
   const [erro, setErro] = useState("");
@@ -232,16 +251,8 @@ function ModalAgendamento({ inicial, hosts, onFechar, onPronto }) {
 
   const host = hosts.find((h) => h.id === hostId);
 
-  function alternarDestino(id) {
-    setDestinos((a) => (a.includes(id) ? a.filter((d) => d !== id) : [...a, id]));
-  }
-
   async function enviar(e) {
     e.preventDefault();
-    if (!destinos.length) {
-      setErro("Escolha pelo menos um destino.");
-      return;
-    }
     setErro("");
     setEnviando(true);
     const corpo = {
@@ -362,17 +373,17 @@ function ModalAgendamento({ inicial, hosts, onFechar, onPronto }) {
           </div>
 
           <div className="field">
-            <label className="label label-required">Destinos</label>
-            {DESTINOS.map((d) => (
-              <label className="check" key={d.id}>
-                <input
-                  type="checkbox"
-                  checked={destinos.includes(d.id)}
-                  onChange={() => alternarDestino(d.id)}
-                />
-                <span>{d.nome}</span>
-              </label>
-            ))}
+            <label className="label">Destinos</label>
+            <SeletorDestinos
+              destinos={destinosDisponiveis || []}
+              selecionados={destinos}
+              onMudar={setDestinos}
+            />
+            <div className="field-help">
+              Sem nenhum marcado, o agendamento usa os destinos marcados como
+              padrão na hora de rodar — assim ele continua valendo se o destino
+              padrão mudar depois.
+            </div>
           </div>
 
           {perfil === "completo" && (

@@ -4,15 +4,19 @@ import {
   IconAgenda,
   IconAuditoria,
   IconBackup,
+  IconChave,
   IconPainel,
   IconRecursos,
   IconSair,
   IconServicos,
   IconServidor,
+  IconLogs,
   IconTerminal,
   IconUsuarios,
 } from "../components/Icons";
 import AgendamentosView from "../components/views/AgendamentosView";
+import DestinosView from "../components/views/DestinosView";
+import ManutencaoView from "../components/views/ManutencaoView";
 import AuditoriaView from "../components/views/AuditoriaView";
 import BackupsView from "../components/views/BackupsView";
 import PainelView from "../components/views/PainelView";
@@ -28,11 +32,13 @@ const MENU = [
   { id: "painel", rotulo: "Painel", icone: IconPainel, perm: "hosts.view" },
   { id: "recursos", rotulo: "Recursos", icone: IconRecursos, perm: "metrics.view" },
   { id: "servicos", rotulo: "Serviços", icone: IconServicos, perm: "services.view" },
+  { id: "manutencao", rotulo: "Manutenção", icone: IconLogs, perm: "maintenance.view" },
   { id: "terminal", rotulo: "InTerminal", icone: IconTerminal, perm: "terminal.use" },
 
   { grupo: "Backup" },
   { id: "backups", rotulo: "Backups", icone: IconBackup, perm: "backups.view" },
   { id: "agendamentos", rotulo: "Agendamentos", icone: IconAgenda, perm: "schedules.view" },
+  { id: "destinos", rotulo: "Destinos", icone: IconChave, perm: "backups.view" },
 
   { grupo: "Administração" },
   { id: "servidores", rotulo: "Servidores", icone: IconServidor, perm: "hosts.view" },
@@ -115,9 +121,11 @@ export default function AppShell() {
           {abaValida === "painel" && <PainelView />}
           {abaValida === "recursos" && <RecursosView />}
           {abaValida === "servicos" && <ServicosView />}
+          {abaValida === "manutencao" && <ManutencaoView />}
           {abaValida === "terminal" && <TerminalView />}
           {abaValida === "backups" && <BackupsView />}
           {abaValida === "agendamentos" && <AgendamentosView />}
+          {abaValida === "destinos" && <DestinosView />}
           {abaValida === "servidores" && <ServidoresView />}
           {abaValida === "usuarios" && <UsuariosView />}
           {abaValida === "auditoria" && <AuditoriaView />}

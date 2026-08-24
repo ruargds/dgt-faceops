@@ -110,6 +110,74 @@ export function SeletorHost({ hosts, hostId, onMudar, incluirTodos = false }) {
   );
 }
 
+/**
+ * Destinos cadastrados. Os marcados como padrão vêm pré-selecionados —
+ * quem só quer disparar um backup não deveria precisar escolher nada.
+ */
+export function useDestinos() {
+  const [destinos, setDestinos] = useState([]);
+  const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    let vivo = true;
+    api
+      .destinos()
+      .then((l) => vivo && setDestinos(l))
+      .catch((e) => vivo && setErro(e.message))
+      .finally(() => vivo && setCarregando(false));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  const ativos = destinos.filter((d) => d.enabled);
+  const padroes = ativos.filter((d) => d.padrao).map((d) => d.id);
+  const nomePorId = Object.fromEntries(destinos.map((d) => [d.id, d.nome]));
+
+  return { destinos, ativos, padroes, nomePorId, erro, carregando };
+}
+
+/** Caixas de seleção de destino, compartilhadas por backup e agendamento. */
+export function SeletorDestinos({ destinos, selecionados, onMudar }) {
+  if (!destinos.length) {
+    return (
+      <div className="small" style={{ color: "var(--amber)" }}>
+        Nenhum destino ativo. Cadastre um em <strong>Destinos</strong> antes de
+        continuar.
+      </div>
+    );
+  }
+  return (
+    <>
+      {destinos.map((d) => (
+        <label className="check" key={d.id}>
+          <input
+            type="checkbox"
+            checked={selecionados.includes(d.id)}
+            onChange={() =>
+              onMudar(
+                selecionados.includes(d.id)
+                  ? selecionados.filter((x) => x !== d.id)
+                  : [...selecionados, d.id]
+              )
+            }
+          />
+          <span>
+            {d.nome}{" "}
+            <span className="muted">— {d.tipo}</span>
+            {d.last_test_at && !d.last_test_ok && (
+              <span className="pill pill-err" style={{ marginLeft: 6 }}>
+                último teste falhou
+              </span>
+            )}
+          </span>
+        </label>
+      ))}
+    </>
+  );
+}
+
 /** Selo colorido de status usado em backups, serviços e execuções. */
 export function Selo({ status }) {
   const mapa = {

@@ -52,9 +52,17 @@ atalhos prontos e tradução em português ("todo dia às 02:00"). É o que não
 existe na plataforma nativa. Perfil `Completo` só agenda com aceite
 explícito de janela.
 
-**Múltiplos destinos** — disco do painel, Azure Blob (tier Cool) e Google
-Drive via rclone, selecionáveis por execução ou por agendamento. Falha em
-um destino não invalida os outros.
+**Destinos configuráveis pela web** — disco local, Azure Blob e **rclone**,
+que cobre Google Drive, S3, B2, OneDrive, SFTP, WebDAV e dezenas de outros
+provedores. Cadastro, teste de escrita real e retenção por destino, sem
+editar `.env` nem reiniciar container. Falha em um destino não invalida os
+outros.
+
+**Manutenção de disco e log** — o problema mais comum num servidor de
+reconhecimento facial não é o FindFace: é o disco raiz enchendo de log
+(encontramos 99 GB de `/var/log` em operação normal, ~8 GB/dia). A tela
+diagnostica, mede o crescimento e aplica a contenção — filtrando o ruído
+na chegada ao rsyslog, **sem reiniciar nada do FindFace**.
 
 **Serviços do FindFace** — estado, saúde, contagem de reinícios e OOM kill
 de cada container, com log e reinício individual. Ações cercadas ao projeto
@@ -156,6 +164,8 @@ exibe faixa de aviso até a senha ser trocada.
 | [10_ERROS_CONHECIDOS](docs/10_ERROS_CONHECIDOS.md) | Sintoma → causa → solução |
 | [11_OPERACAO_DIARIA](docs/11_OPERACAO_DIARIA.md) | Rotina, plantão e o que olhar |
 | [12_INSTALACAO_WINDOWS](docs/12_INSTALACAO_WINDOWS.md) | Instalação empacotada em máquina Windows |
+| [13_DESTINOS](docs/13_DESTINOS.md) | Destinos de backup: local, Azure e rclone |
+| [14_MANUTENCAO](docs/14_MANUTENCAO.md) | Disco e log: diagnóstico e correção sem linha de comando |
 
 ## Scripts
 

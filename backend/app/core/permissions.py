@@ -16,12 +16,16 @@ PERMISSION_CATALOG: dict[str, str] = {
     "services.view": "Ver status dos containers do FindFace Multi",
     "services.restart": "Reiniciar um container individual",
     "services.stack": "Parar/subir o stack inteiro do FindFace Multi",
+    # Manutenção de disco e log
+    "maintenance.view": "Ver diagnóstico de disco e crescimento de log",
+    "maintenance.apply": "Aplicar contenção de log e arquivar log antigo",
     # Backups
     "backups.view": "Ver histórico e artefatos de backup",
     "backups.run": "Disparar backup sob demanda",
     "backups.download": "Baixar artefato de backup",
     "backups.restore": "Restaurar backup sobre o servidor",
     "backups.delete": "Apagar artefato de backup",
+    "destinations.manage": "Cadastrar e editar destinos de backup (local, Azure, rclone)",
     # Agendamentos
     "schedules.view": "Ver agendamentos",
     "schedules.manage": "Criar, editar, pausar e remover agendamentos",
@@ -38,9 +42,13 @@ PERMISSION_CATALOG: dict[str, str] = {
 # registro de auditoria com nível "critical".
 DESTRUCTIVE_PERMISSIONS: frozenset[str] = frozenset({
     "services.stack",
+    # Escreve configuração de sistema em servidor de produção e reinicia
+    # rsyslog/journald. Não derruba o FindFace, mas merece rastro forte.
+    "maintenance.apply",
     "backups.restore",
     "backups.delete",
     "hosts.manage",
+    "destinations.manage",
 })
 
 VIEW_ONLY: list[str] = [
@@ -49,6 +57,7 @@ VIEW_ONLY: list[str] = [
     "services.view",
     "backups.view",
     "schedules.view",
+    "maintenance.view",
 ]
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {
@@ -62,9 +71,11 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     # Técnico: opera backups e terminal com sudo, sem restore nem stack.
     "tecnico": VIEW_ONLY + [
+        "maintenance.apply",
         "services.restart",
         "backups.run",
         "backups.download",
+        "destinations.manage",
         "schedules.manage",
         "terminal.use",
         "terminal.sudo",

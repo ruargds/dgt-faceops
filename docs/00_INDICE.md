@@ -6,7 +6,7 @@
 |------------|------------------|
 | **Quem vai instalar (Linux)** | [04_INSTALACAO](04_INSTALACAO.md) → [06_SEGURANCA](06_SEGURANCA.md) → [02_ESTRATEGIA_BACKUP](02_ESTRATEGIA_BACKUP.md) |
 | **Quem vai instalar (Windows)** | [12_INSTALACAO_WINDOWS](12_INSTALACAO_WINDOWS.md) → [04_INSTALACAO](04_INSTALACAO.md) (seções de rede e sudoers) |
-| **Quem vai operar / plantão** | [11_OPERACAO_DIARIA](11_OPERACAO_DIARIA.md) → [02_ESTRATEGIA_BACKUP](02_ESTRATEGIA_BACKUP.md) → [10_ERROS_CONHECIDOS](10_ERROS_CONHECIDOS.md) |
+| **Quem vai operar / plantão** | [11_OPERACAO_DIARIA](11_OPERACAO_DIARIA.md) → [02_ESTRATEGIA_BACKUP](02_ESTRATEGIA_BACKUP.md) → [14_MANUTENCAO](14_MANUTENCAO.md) → [10_ERROS_CONHECIDOS](10_ERROS_CONHECIDOS.md) |
 | **Quem precisa restaurar agora** | [03_RESTORE](03_RESTORE.md) — vá direto, o resto espera |
 | **Quem vai desenvolver** | [01_ARQUITETURA](01_ARQUITETURA.md) → [09_REGRAS_DESENVOLVIMENTO](09_REGRAS_DESENVOLVIMENTO.md) → [08_API](08_API.md) |
 | **Quem vai auditar** | [06_SEGURANCA](06_SEGURANCA.md) → [05_PERMISSOES](05_PERMISSOES.md) → [07_INTERMINAL](07_INTERMINAL.md) |
@@ -45,6 +45,15 @@
 
 - **[10_ERROS_CONHECIDOS](10_ERROS_CONHECIDOS.md)** — sintoma, causa,
   solução. Cresce com o uso; registre aqui o que custou tempo para achar.
+
+- **[13_DESTINOS](13_DESTINOS.md)** — onde os backups vão parar: disco
+  local, Azure Blob e rclone (Drive, S3, B2, OneDrive, SFTP…). Como
+  configurar, testar e combinar destinos, e por que a retenção só age no
+  local.
+
+- **[14_MANUTENCAO](14_MANUTENCAO.md)** — disco e log pela web. Por que o
+  disco raiz enche num servidor de reconhecimento facial, como medir o
+  crescimento, e como conter sem reiniciar nada do FindFace.
 
 ### Segurança e acesso
 

@@ -104,6 +104,11 @@ export const api = {
   reiniciarContainer: (id, container) => post(`/services/${id}/restart`, { container }),
   acaoStack: (id, acao, confirmar_host) => post(`/services/${id}/stack`, { acao, confirmar_host }),
 
+  // Manutenção de disco e log
+  diagnostico: (id) => get(`/manutencao/${id}`),
+  contencaoLog: (id, d) => post(`/manutencao/${id}/contencao`, d),
+  arquivarLog: (id, d) => post(`/manutencao/${id}/arquivar`, d),
+
   // Backups
   dispararBackup: (id, d) => post(`/backups/${id}`, d),
   backups: (params = "") => get(`/backups${params}`),
@@ -111,6 +116,13 @@ export const api = {
   removerBackup: (runId) => del(`/backups/${runId}`),
   urlDownload: (runId) => `/api/backups/${runId}/download`,
   armazenamentoPainel: () => get("/backups-armazenamento"),
+
+  // Destinos de backup
+  destinos: () => get("/destinos"),
+  criarDestino: (d) => post("/destinos", d),
+  atualizarDestino: (id, d) => patch(`/destinos/${id}`, d),
+  removerDestino: (id) => del(`/destinos/${id}`),
+  testarDestino: (id) => post(`/destinos/${id}/testar`),
 
   // Agendamentos
   agendamentos: () => get("/schedules"),

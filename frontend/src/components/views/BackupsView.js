@@ -4,9 +4,11 @@ import { usePermissions } from "../../usePermissions";
 import {
   Carregando,
   Erro,
+  SeletorDestinos,
   SeletorHost,
   Selo,
   Vazio,
+  useDestinos,
   useHosts,
 } from "../Comuns";
 import { IconAtualizar, IconBackup, IconDownload, IconLixeira, IconLogs } from "../Icons";
@@ -33,12 +35,6 @@ export const PERFIS = [
     detalhe:
       "Horas, centenas de GB, PARA o FindFace Multi durante a cópia. Leva tudo, inclusive as fotos de evento. Use em janela de manutenção.",
   },
-];
-
-export const DESTINOS = [
-  { id: "local", nome: "Disco do painel" },
-  { id: "azure", nome: "Azure Blob" },
-  { id: "gdrive", nome: "Google Drive" },
 ];
 
 export default function BackupsView() {
@@ -241,7 +237,7 @@ function LinhaBackup({ r, onDetalhe, onRemover }) {
               className={`pill ${d.status === "ok" ? "pill-ok" : "pill-err"}`}
               title={d.error || d.uri}
             >
-              {d.type}
+              {d.nome || d.type}
             </span>
           ))}
           {(!r.destinations || r.destinations.length === 0) && (
@@ -281,21 +277,22 @@ function LinhaBackup({ r, onDetalhe, onRemover }) {
 }
 
 function ModalNovoBackup({ hosts, onFechar, onPronto }) {
+  const { ativos, padroes, carregando: carregandoDest } = useDestinos();
   const [hostId, setHostId] = useState(hosts[0] ? hosts[0].id : null);
   const [perfil, setPerfil] = useState("essencial");
-  const [destinos, setDestinos] = useState(["local"]);
+  const [destinos, setDestinos] = useState([]);
+  const [tocou, setTocou] = useState(false);
   const [aceito, setAceito] = useState(false);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
-  const perfilInfo = PERFIS.find((p) => p.id === perfil);
   const host = hosts.find((h) => h.id === hostId);
 
-  function alternarDestino(id) {
-    setDestinos((atual) =>
-      atual.includes(id) ? atual.filter((d) => d !== id) : [...atual, id]
-    );
-  }
+  // Pre-seleciona os destinos padrao, mas so ate o operador mexer —
+  // depois disso a escolha dele manda.
+  useEffect(() => {
+    if (!tocou && padroes.length) setDestinos(padroes);
+  }, [padroes, tocou]);
 
   async function enviar(e) {
     e.preventDefault();
@@ -373,19 +370,20 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
 
           <div className="field">
             <label className="label label-required">Destinos</label>
-            {DESTINOS.map((d) => (
-              <label className="check" key={d.id}>
-                <input
-                  type="checkbox"
-                  checked={destinos.includes(d.id)}
-                  onChange={() => alternarDestino(d.id)}
-                />
-                <span>{d.nome}</span>
-              </label>
-            ))}
+            {carregandoDest ? (
+              <Carregando texto="Carregando destinos…" />
+            ) : (
+              <SeletorDestinos
+                destinos={ativos}
+                selecionados={destinos}
+                onMudar={(v) => {
+                  setTocou(true);
+                  setDestinos(v);
+                }}
+              />
+            )}
             <div className="field-help">
-              Azure e Google Drive precisam das credenciais preenchidas no{" "}
-              <span className="mono">.env</span> do painel.
+              Cadastre e teste destinos em <strong>Destinos</strong>.
             </div>
           </div>
 

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.backup import PROFILES, BackupRun
+from app.models.destino import Destino
 from app.models.host import Host
 from app.services.ssh_service import SSHError, SSHService
 from app.services.storage_service import StorageService
@@ -88,7 +89,7 @@ class BackupService:
         db: AsyncSession,
         host: Host,
         perfil: str,
-        destinos: list[str],
+        destinos: list[int],
         *,
         disparado_por: str,
         schedule_id: int | None = None,
@@ -153,7 +154,7 @@ class BackupService:
         run: BackupRun,
         host: Host,
         perfil: str,
-        destinos: list[str],
+        destinos: list[int],
         retencao_dias: int | None,
     ) -> None:
         ff_dir = host.ffmulti_dir or settings.FFMULTI_DIR
@@ -293,7 +294,7 @@ class BackupService:
         run_id: int,
         host_id: int,
         perfil: str,
-        destinos: list[str],
+        destinos: list[int],
         disparado_por: str,
         retencao_dias: int | None = None,
     ) -> None:

@@ -1,5 +1,6 @@
 """Backups sob demanda, histórico, download e agendamentos."""
 import asyncio
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
@@ -183,7 +184,16 @@ async def baixar(
     if host is None:
         raise HTTPException(status_code=404, detail="servidor do backup não existe mais")
 
-    caminho = StorageService.caminho_artefato(host.name, run.artifact_name)
+    # O caminho vem do destino local registrado na própria execução —
+    # destinos são configuráveis, então assumir um diretório fixo
+    # quebraria depois de qualquer mudança de configuração.
+    base = None
+    for d in (run.destinations or []):
+        if d.get("type") == "local" and d.get("status") == "ok" and d.get("uri"):
+            base = str(Path(d["uri"]).parent.parent)
+            break
+
+    caminho = StorageService.caminho_artefato(host.name, run.artifact_name, base)
     if caminho is None:
         raise HTTPException(
             status_code=404,
@@ -222,7 +232,12 @@ async def remover(
     host = await db.get(Host, run.host_id)
     removido = False
     if host is not None and run.artifact_name:
-        caminho = StorageService.caminho_artefato(host.name, run.artifact_name)
+        base = None
+        for d in (run.destinations or []):
+            if d.get("type") == "local" and d.get("uri"):
+                base = str(Path(d["uri"]).parent.parent)
+                break
+        caminho = StorageService.caminho_artefato(host.name, run.artifact_name, base)
         if caminho is not None:
             try:
                 caminho.unlink()
