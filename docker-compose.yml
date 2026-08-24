@@ -1,0 +1,91 @@
+# DGT FaceOps — painel de operação do FindFace Multi
+#
+# Roda numa VM Linux hospedada no Windows Server (Hyper-V), FORA do
+# ambiente facial. Requisito de rede: esta VM precisa alcançar as VMs do
+# FindFace no Azure na porta 22.
+#
+# Subir:  bash deploy.sh --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: faceops_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ:-America/Sao_Paulo}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # O banco do painel guarda cadastro, histórico e auditoria — volume
+    # pequeno. 512 MB sobra e deixa RAM para o resto da VM.
+    mem_limit: 512m
+    memswap_limit: 512m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: faceops_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      TZ: ${TZ:-America/Sao_Paulo}
+    volumes:
+      # Artefatos de backup e gravações de terminal. Monte um disco de
+      # verdade aqui — o perfil completo gera centenas de GB.
+      - ./data/backups:/data/backups
+      - ./data/sessions:/data/sessions
+      # rclone.conf para o destino Google Drive (opcional).
+      # Gere com `rclone config` e copie para ./rclone/rclone.conf
+      - ./rclone:/root/.config/rclone:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/saude', timeout=5).status==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    mem_limit: 1g
+    memswap_limit: 1g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: faceops_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${PORTA_HTTP:-8080}:80"
+    mem_limit: 128m
+    memswap_limit: 128m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+volumes:
+  postgres_data:

@@ -1,0 +1,33 @@
+# Ambiente
+.env
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Backups e sessões gravadas — NUNCA versionar
+backups/
+sessions/
+logs/
+*.dump
+*.tar.gz
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.venv-check/
+
+# Node
+node_modules/
+build/
+dist/
+
+# Dados em runtime
+data/
+rclone/rclone.conf
+
+# SO
+.DS_Store
+Thumbs.db

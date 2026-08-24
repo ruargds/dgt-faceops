@@ -1,0 +1,297 @@
+"""Cadastro dos servidores e teste de conexão."""
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.deps import client_ip, get_current_user, require_permission
+from app.core.vault import encrypt_secret, fingerprint
+from app.db.database import get_db
+from app.models.host import Host
+from app.models.user import User
+from app.schemas import HostIn, HostOut, HostUpdate, ScanChaveIn, ScanChaveOut
+from app.services import audit_service
+from app.services.ssh_service import SSHError
+
+router = APIRouter(prefix="/api/hosts", tags=["hosts"])
+
+
+def _para_out(host: Host) -> HostOut:
+    saida = HostOut.model_validate(host)
+    saida.tem_credencial = bool(host.ssh_key_enc or host.ssh_password_enc)
+    saida.tem_sudo = bool(host.sudo_password_enc)
+    return saida
+
+
+@router.post("/scan-chave", response_model=ScanChaveOut)
+async def scan_chave(
+    dados: ScanChaveIn,
+    _: User = Depends(require_permission("hosts.manage")),
+):
+    """
+    Lê a chave pública do servidor SEM autenticar.
+
+    Passo obrigatório antes de cadastrar credenciais: é o que permite
+    fixar a identidade do host e recusar um impostor na rede depois.
+    """
+    from app.services.ssh_service import SSHService
+
+    try:
+        pub, fp = await SSHService.scan_host_key(dados.address, dados.ssh_port)
+    except SSHError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ScanChaveOut(host_key_pub=pub, fingerprint=fp)
+
+
+@router.get("", response_model=list[HostOut])
+async def listar(
+    _: User = Depends(require_permission("hosts.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    resultado = await db.execute(select(Host).order_by(Host.name))
+    return [_para_out(h) for h in resultado.scalars().all()]
+
+
+@router.get("/{host_id}", response_model=HostOut)
+async def obter(
+    host_id: int,
+    _: User = Depends(require_permission("hosts.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+    return _para_out(host)
+
+
+@router.post("", response_model=HostOut, status_code=201)
+async def criar(
+    dados: HostIn,
+    request: Request,
+    autor: User = Depends(require_permission("hosts.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ssh_service import SSHService
+
+    existente = await db.execute(select(Host).where(Host.name == dados.name))
+    if existente.scalars().first() is not None:
+        raise HTTPException(status_code=409, detail=f"já existe servidor '{dados.name}'")
+
+    if dados.auth_method == "key" and not dados.ssh_key:
+        raise HTTPException(status_code=400, detail="chave PEM obrigatória para auth por chave")
+    if dados.auth_method == "password" and not dados.ssh_password:
+        raise HTTPException(status_code=400, detail="senha obrigatória para auth por senha")
+
+    # Fixa a identidade do servidor antes de guardar qualquer credencial
+    try:
+        pub, fp = await SSHService.scan_host_key(dados.address, dados.ssh_port)
+    except SSHError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"não consegui alcançar {dados.address}:{dados.ssh_port} — {exc}",
+        ) from exc
+
+    host = Host(
+        name=dados.name,
+        description=dados.description,
+        role=dados.role,
+        address=dados.address,
+        ssh_port=dados.ssh_port,
+        ssh_user=dados.ssh_user,
+        auth_method=dados.auth_method,
+        ssh_key_enc=encrypt_secret(dados.ssh_key or ""),
+        ssh_key_passphrase_enc=encrypt_secret(dados.ssh_key_passphrase or ""),
+        ssh_password_enc=encrypt_secret(dados.ssh_password or ""),
+        sudo_password_enc=encrypt_secret(dados.sudo_password or ""),
+        host_key_pub=pub,
+        host_key_fingerprint=fp,
+        key_fingerprint=fingerprint(dados.ssh_key or dados.ssh_password or ""),
+        ffmulti_dir=dados.ffmulti_dir or settings.FFMULTI_DIR,
+        compose_file=dados.compose_file or settings.FFMULTI_COMPOSE,
+        has_gpu=dados.has_gpu,
+        enabled=dados.enabled,
+    )
+    db.add(host)
+    await db.commit()
+    await db.refresh(host)
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="hosts.manage",
+        target=host.name,
+        ip=client_ip(request),
+        detail={
+            "acao": "criar",
+            "endereco": f"{host.address}:{host.ssh_port}",
+            "usuario_ssh": host.ssh_user,
+            "host_key": fp,
+        },
+    )
+    return _para_out(host)
+
+
+@router.patch("/{host_id}", response_model=HostOut)
+async def atualizar(
+    host_id: int,
+    dados: HostUpdate,
+    request: Request,
+    autor: User = Depends(require_permission("hosts.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.ssh_service import SSHService
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    alterados: list[str] = []
+
+    for campo in (
+        "name", "description", "role", "ssh_user", "auth_method",
+        "ffmulti_dir", "compose_file", "has_gpu", "enabled", "ssh_port",
+    ):
+        valor = getattr(dados, campo)
+        if valor is not None and getattr(host, campo) != valor:
+            setattr(host, campo, valor)
+            alterados.append(campo)
+
+    # Endereço ou porta novos exigem nova varredura — a identidade fixada
+    # vale para o par (endereço, porta) antigo, não para o novo.
+    if dados.address is not None and dados.address != host.address:
+        porta = dados.ssh_port or host.ssh_port
+        try:
+            pub, fp = await SSHService.scan_host_key(dados.address, porta)
+        except SSHError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"não consegui alcançar o novo endereço — {exc}"
+            ) from exc
+        host.address = dados.address
+        host.host_key_pub = pub
+        host.host_key_fingerprint = fp
+        alterados += ["address", "host_key"]
+
+    if dados.ssh_key is not None:
+        host.ssh_key_enc = encrypt_secret(dados.ssh_key)
+        host.key_fingerprint = fingerprint(dados.ssh_key)
+        alterados.append("ssh_key")
+    if dados.ssh_key_passphrase is not None:
+        host.ssh_key_passphrase_enc = encrypt_secret(dados.ssh_key_passphrase)
+        alterados.append("ssh_key_passphrase")
+    if dados.ssh_password is not None:
+        host.ssh_password_enc = encrypt_secret(dados.ssh_password)
+        alterados.append("ssh_password")
+    if dados.sudo_password is not None:
+        host.sudo_password_enc = encrypt_secret(dados.sudo_password)
+        alterados.append("sudo_password")
+
+    await db.commit()
+    await db.refresh(host)
+
+    # Credencial ou endereço mudou: derruba a conexão em cache, senão a
+    # próxima operação seguiria usando a sessão aberta com a chave antiga.
+    await request.app.state.ssh.disconnect(host_id)
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="hosts.manage",
+        target=host.name,
+        ip=client_ip(request),
+        detail={"acao": "atualizar", "campos": alterados},
+    )
+    return _para_out(host)
+
+
+@router.delete("/{host_id}")
+async def remover(
+    host_id: int,
+    request: Request,
+    autor: User = Depends(require_permission("hosts.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    nome = host.name
+    await request.app.state.ssh.disconnect(host_id)
+    await db.delete(host)
+    await db.commit()
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="hosts.manage",
+        target=nome,
+        ip=client_ip(request),
+        level="critical",
+        detail={"acao": "remover"},
+    )
+    return {"ok": True}
+
+
+@router.post("/{host_id}/testar")
+async def testar(
+    host_id: int,
+    request: Request,
+    autor: User = Depends(require_permission("hosts.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Testa conexão, sudo e presença do FindFace. Botão 'Testar conexão'."""
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    ssh = request.app.state.ssh
+    try:
+        info = await ssh.test(host)
+        tem_sudo = await ssh.can_sudo(host)
+
+        ff_dir = host.ffmulti_dir or settings.FFMULTI_DIR
+        checagem = await ssh.run(
+            host,
+            f"test -d {ff_dir} && echo sim || echo nao; "
+            "command -v docker >/dev/null 2>&1 && echo sim || echo nao; "
+            "command -v nvidia-smi >/dev/null 2>&1 && echo sim || echo nao",
+            timeout=30,
+        )
+        linhas = checagem.stdout.strip().splitlines()
+
+        host.last_seen_at = datetime.now(timezone.utc)
+        host.last_status = "ok"
+        host.last_error = ""
+
+        # Detecta a GPU sozinho — poupa o operador de marcar na mão
+        if len(linhas) > 2 and linhas[2] == "sim" and not host.has_gpu:
+            host.has_gpu = True
+
+        await db.commit()
+
+        return {
+            "ok": True,
+            **info,
+            "sudo": tem_sudo,
+            "findface_presente": linhas[0] == "sim" if linhas else False,
+            "docker_presente": linhas[1] == "sim" if len(linhas) > 1 else False,
+            "gpu_presente": linhas[2] == "sim" if len(linhas) > 2 else False,
+            "ffmulti_dir": ff_dir,
+        }
+    except SSHError as exc:
+        host.last_status = "erro"
+        host.last_error = str(exc)[:2000]
+        host.last_seen_at = datetime.now(timezone.utc)
+        await db.commit()
+
+        await audit_service.registrar(
+            db,
+            usuario=autor.username,
+            action="hosts.testar",
+            target=host.name,
+            ip=client_ip(request),
+            success=False,
+            detail={"erro": str(exc)[:500]},
+        )
+        return {"ok": False, "erro": str(exc)}

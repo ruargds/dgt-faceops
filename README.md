@@ -1,0 +1,169 @@
+<div align="center">
+
+# DGT FaceOps
+
+**Painel de operação para FindFace Multi (NtechLab)**
+
+Backup com recorrência · Serviços · Recursos · Terminal SSH web
+
+[![Stack](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Stack](https://img.shields.io/badge/React_18-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev)
+[![Stack](https://img.shields.io/badge/PostgreSQL_16-4169E1?style=flat&logo=postgresql&logoColor=white)](https://postgresql.org)
+[![Stack](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://docker.com)
+[![FindFace](https://img.shields.io/badge/FindFace_Multi-2.4.1-0D1F35?style=flat)](https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/)
+
+</div>
+
+---
+
+## Por que existe
+
+A plataforma web do FindFace Multi 2.4.1 não tem tela de backup. O
+procedimento oficial da NtechLab é manual, por linha de comando, e **frio**:
+
+```bash
+sudo docker-compose stop
+sudo tar -cvzf ~/configs.tar.gz -C /opt/findface-multi/ configs
+sudo tar -cvzf ~/data.tar.gz   -C /opt/findface-multi/ data
+sudo cp /opt/findface-multi/docker-compose.yaml ~/
+```
+
+Isso **para o reconhecimento facial** e arquiva o `data/` inteiro — que
+contém PostgreSQL, Tarantool, MongoDB e todas as fotos de evento. Vira
+centenas de gigabytes. Não é algo que se rode todo dia, e é justamente por
+isso que não existe botão para isso na interface.
+
+O FaceOps resolve por camadas: um backup **quente** que roda de madrugada
+sem parar nada, e o procedimento oficial reservado para janela de
+manutenção. Junto vem o resto do que falta no dia a dia — status e reinício
+de serviço, leitura de RAM/GPU/disco e terminal SSH pelo navegador.
+
+## Funcionalidades
+
+**Backup em três perfis** — `Config` (segundos, MB, zero downtime),
+`Essencial` (minutos, GB, zero downtime: `pg_dump` de todos os bancos +
+snapshot do Tarantool com os vetores faciais) e `Completo` (procedimento
+oficial NtechLab, com parada). Checksum SHA-256 conferido depois da
+transferência, retenção por perfil e manifesto de restore dentro do próprio
+artefato.
+
+**Recorrência programada pela web** — expressão cron editável na tela, com
+atalhos prontos e tradução em português ("todo dia às 02:00"). É o que não
+existe na plataforma nativa. Perfil `Completo` só agenda com aceite
+explícito de janela.
+
+**Múltiplos destinos** — disco do painel, Azure Blob (tier Cool) e Google
+Drive via rclone, selecionáveis por execução ou por agendamento. Falha em
+um destino não invalida os outros.
+
+**Serviços do FindFace** — estado, saúde, contagem de reinícios e OOM kill
+de cada container, com log e reinício individual. Ações cercadas ao projeto
+compose do FindFace: o painel recusa agir em container de fora.
+
+**Recursos sob demanda** — RAM (descontando cache, como deve ser), carga por
+núcleo, GPU via `nvidia-smi` (utilização, VRAM, temperatura, watts, processos)
+e ocupação de disco. Coleta no clique do botão, numa única execução SSH.
+Sem Zabbix e sem polling em segundo plano.
+
+**InTerminal** — terminal SSH real no navegador (xterm.js + PTY via
+asyncssh), com sessão gravada em asciicast v2 para auditoria e queda
+automática por inatividade.
+
+**Perfis de acesso** — Observador (vê tudo, não age), Operador (reinicia e
+faz backup), Técnico (soma terminal com sudo e agendamentos) e
+Administrador (restore e parada de stack). Botão sem permissão não aparece.
+
+**Cofre de credenciais** — chave PEM, senha SSH e senha de sudo cifradas com
+Fernet (AES-128-CBC + HMAC-SHA256). Nunca saem pela API depois de gravadas;
+a tela confirma o que está guardado pelo fingerprint.
+
+**Identidade de host fixada** — a chave pública do servidor é lida *antes*
+de qualquer credencial trafegar, e toda conexão posterior é fixada nela.
+Se a chave mudar, a conexão é recusada em vez de entregar a senha de sudo a
+um impostor na rede.
+
+## Stack
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Backend | FastAPI + SQLAlchemy 2 async + Pydantic v2 |
+| Frontend | React 18 (SPA) + xterm.js |
+| Banco | PostgreSQL 16 (só do painel) |
+| SSH | asyncssh (agentless — nada instalado nos servidores) |
+| Agendamento | APScheduler, jobstore em memória, tabela como fonte de verdade |
+| Proxy | Nginx 1.27 (gzip, CSP, WebSocket) |
+| Containers | Docker Compose (3 containers) |
+| Criptografia | Fernet AES-128-CBC + HMAC-SHA256 |
+
+## Onde roda
+
+**Fora do ambiente facial** — isolamento intencional: se um servidor
+FindFace travar, o painel continua de pé para diagnosticar e restaurar.
+
+Duas formas, ambas suportadas:
+
+- **Máquina Windows** com Docker Desktop (backend WSL2) — instalação
+  empacotada, ver [12_INSTALACAO_WINDOWS](docs/12_INSTALACAO_WINDOWS.md)
+- **VM Linux** no Hyper-V do Windows Server — mais robusta para operação
+  desatendida (não depende de logon para iniciar)
+
+**Requisito de rede em qualquer uma:** alcançar as VMs do FindFace na porta
+22 — NSG do Azure liberando o IP de saída, VPN ou Azure Bastion.
+
+## Instalação
+
+### Windows (empacotado)
+
+Docker Desktop instalado → botão direito em `windows\instalar.bat` →
+**Executar como administrador**. O instalador confere pré-requisitos, gera a
+`SECRET_KEY`, constrói e sobe. Detalhes e requisitos em
+[12_INSTALACAO_WINDOWS](docs/12_INSTALACAO_WINDOWS.md).
+
+### Linux
+
+```bash
+# Na VM do painel, do zero
+bash scripts/provision_painel.sh
+
+git clone git@github.com:ruargds/dgt-faceops.git
+cd dgt-faceops
+cp .env.example .env
+
+# Gere a SECRET_KEY — dela deriva o cofre que guarda as chaves SSH
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+# cole em SECRET_KEY no .env
+
+bash deploy.sh --build
+```
+
+Primeiro acesso em `http://<vm>:8080` com **admin / admin123**. O painel
+exibe faixa de aviso até a senha ser trocada.
+
+## Documentação
+
+| Documento | Para que serve |
+|-----------|----------------|
+| [00_INDICE](docs/00_INDICE.md) | Índice e por onde começar |
+| [01_ARQUITETURA](docs/01_ARQUITETURA.md) | Componentes, fluxos e decisões |
+| [02_ESTRATEGIA_BACKUP](docs/02_ESTRATEGIA_BACKUP.md) | Os três perfis e o que cada um recupera |
+| [03_RESTORE](docs/03_RESTORE.md) | Procedimento de restauração, passo a passo |
+| [04_INSTALACAO](docs/04_INSTALACAO.md) | Instalação do zero, incluindo rede e sudoers |
+| [05_PERMISSOES](docs/05_PERMISSOES.md) | Perfis, catálogo e ações destrutivas |
+| [06_SEGURANCA](docs/06_SEGURANCA.md) | Cofre, pinagem de host, auditoria, superfície de ataque |
+| [07_INTERMINAL](docs/07_INTERMINAL.md) | Terminal web: protocolo, gravação, limites |
+| [08_API](docs/08_API.md) | Referência dos 33 endpoints |
+| [09_REGRAS_DESENVOLVIMENTO](docs/09_REGRAS_DESENVOLVIMENTO.md) | Convenções e checklist de commit |
+| [10_ERROS_CONHECIDOS](docs/10_ERROS_CONHECIDOS.md) | Sintoma → causa → solução |
+| [11_OPERACAO_DIARIA](docs/11_OPERACAO_DIARIA.md) | Rotina, plantão e o que olhar |
+| [12_INSTALACAO_WINDOWS](docs/12_INSTALACAO_WINDOWS.md) | Instalação empacotada em máquina Windows |
+
+## Escopo
+
+Ver [SCOPE.md](SCOPE.md) — o que o projeto faz, o que não faz e o que ficou
+para depois.
+
+---
+
+<div align="center">
+<sub>DGT · Projeto autônomo. Não depende do InfraCore nem do Camsync — segue os mesmos padrões de criação.</sub>
+</div>

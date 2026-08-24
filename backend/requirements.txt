@@ -1,0 +1,30 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.18
+sqlalchemy==2.0.36
+alembic==1.14.0
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.0.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+email-validator==2.2.0
+python-dotenv==1.0.1
+cryptography>=41.0
+uvloop==0.19.0
+
+# SSH agentless — asyncssh é nativo async, casa com o WebSocket do terminal
+asyncssh==2.18.0
+
+# Agendamento com jobstore no Postgres (recorrência editável pela web)
+apscheduler==3.10.4
+tzlocal==5.2
+
+# Destino Azure Blob
+azure-storage-blob==12.24.0
+
+# Testes
+pytest==8.3.3
+pytest-asyncio==0.24.0

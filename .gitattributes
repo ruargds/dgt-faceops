@@ -1,0 +1,24 @@
+# Padrão do repositório: LF. Todo o código roda em container Linux ou nos
+# servidores Ubuntu; deixar o autocrlf do Git decidir gera diff fantasma
+# entre quem edita no Windows e quem edita no Linux.
+*       text=auto eol=lf
+
+# Os scripts .sh rodam DENTRO de container Linux e nos servidores Ubuntu.
+# Sem LF, o bash quebra com "$'\r': command not found" — erro que não diz
+# nada sobre a causa real. Explícito aqui porque é o que mais dói.
+*.sh    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+Dockerfile text eol=lf
+*.conf  text eol=lf
+.env.example text eol=lf
+
+# Os .bat/.ps1 rodam no Windows e precisam de CRLF
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binários
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.pdf   binary

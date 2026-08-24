@@ -1,0 +1,320 @@
+"""
+Schemas de entrada e saída.
+
+Regra dura deste arquivo: **nenhum schema de saída expõe coluna `*_enc`**.
+A chave PEM e as senhas entram por aqui e nunca mais saem — a UI confirma
+o que está cadastrado pelo fingerprint, não pelo valor.
+"""
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.models.backup import PROFILES
+from app.services.storage_service import DESTINOS_VALIDOS
+
+# ── Autenticação ───────────────────────────────────────────────────────
+
+
+class LoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    usuario: "UsuarioOut"
+
+
+class TrocarSenhaIn(BaseModel):
+    senha_atual: str = Field(min_length=1, max_length=256)
+    senha_nova: str = Field(min_length=6, max_length=256)
+
+
+class UsuarioOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    full_name: str
+    role: str
+    is_active: bool
+    is_super_admin: bool
+    senha_padrao: bool
+    last_login_at: datetime | None = None
+
+
+class UsuarioIn(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    full_name: str = ""
+    password: str = Field(min_length=6, max_length=256)
+    role: str = "observador"
+
+
+class UsuarioUpdate(BaseModel):
+    full_name: str | None = None
+    role: str | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=6, max_length=256)
+
+
+class MeOut(BaseModel):
+    usuario: UsuarioOut
+    permissoes: list[str]
+
+
+# ── Hosts ──────────────────────────────────────────────────────────────
+
+
+class HostIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = ""
+    role: str = "outro"
+    address: str = Field(min_length=1, max_length=255)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
+    ssh_user: str = Field(min_length=1, max_length=120)
+    auth_method: str = "key"
+
+    # Segredos — só entram, nunca saem
+    ssh_key: str | None = None
+    ssh_key_passphrase: str | None = None
+    ssh_password: str | None = None
+    sudo_password: str | None = None
+
+    ffmulti_dir: str = ""
+    compose_file: str = ""
+    has_gpu: bool = False
+    enabled: bool = True
+
+    @field_validator("auth_method")
+    @classmethod
+    def _validar_auth(cls, v: str) -> str:
+        if v not in ("key", "password"):
+            raise ValueError("auth_method deve ser 'key' ou 'password'")
+        return v
+
+
+class HostUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    role: str | None = None
+    address: str | None = None
+    ssh_port: int | None = Field(default=None, ge=1, le=65535)
+    ssh_user: str | None = None
+    auth_method: str | None = None
+    ssh_key: str | None = None
+    ssh_key_passphrase: str | None = None
+    ssh_password: str | None = None
+    sudo_password: str | None = None
+    ffmulti_dir: str | None = None
+    compose_file: str | None = None
+    has_gpu: bool | None = None
+    enabled: bool | None = None
+
+
+class HostOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str
+    role: str
+    address: str
+    ssh_port: int
+    ssh_user: str
+    auth_method: str
+    ffmulti_dir: str
+    compose_file: str
+    has_gpu: bool
+    enabled: bool
+    last_seen_at: datetime | None
+    last_status: str
+    last_error: str
+
+    # Confirmam O QUE está cadastrado, sem revelar nada
+    host_key_fingerprint: str
+    key_fingerprint: str
+    tem_credencial: bool = False
+    tem_sudo: bool = False
+
+
+class ScanChaveIn(BaseModel):
+    address: str = Field(min_length=1, max_length=255)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
+
+
+class ScanChaveOut(BaseModel):
+    host_key_pub: str
+    fingerprint: str
+
+
+# ── Serviços ───────────────────────────────────────────────────────────
+
+
+class AcaoContainerIn(BaseModel):
+    container: str = Field(min_length=1, max_length=128)
+
+
+class AcaoStackIn(BaseModel):
+    acao: str
+    # Dupla confirmação: o operador digita o nome do host para seguir
+    confirmar_host: str = ""
+
+    @field_validator("acao")
+    @classmethod
+    def _validar(cls, v: str) -> str:
+        if v not in ("stop", "up", "restart"):
+            raise ValueError("acao deve ser 'stop', 'up' ou 'restart'")
+        return v
+
+
+# ── Backups ────────────────────────────────────────────────────────────
+
+
+class BackupIn(BaseModel):
+    perfil: str
+    destinos: list[str] = ["local"]
+    retencao_dias: int | None = Field(default=None, ge=0, le=3650)
+    # Perfil completo derruba o reconhecimento — exige aceite explícito
+    aceito_downtime: bool = False
+
+    @field_validator("perfil")
+    @classmethod
+    def _validar_perfil(cls, v: str) -> str:
+        if v not in PROFILES:
+            raise ValueError(f"perfil deve ser um de {PROFILES}")
+        return v
+
+    @field_validator("destinos")
+    @classmethod
+    def _validar_destinos(cls, v: list[str]) -> list[str]:
+        invalidos = [d for d in v if d not in DESTINOS_VALIDOS]
+        if invalidos:
+            raise ValueError(f"destinos invalidos: {invalidos}")
+        return v or ["local"]
+
+
+class BackupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    host_id: int
+    schedule_id: int | None
+    profile: str
+    status: str
+    stage: str
+    progress: int
+    artifact_name: str
+    size_bytes: int
+    checksum_sha256: str
+    destinations: list
+    caused_downtime: bool
+    downtime_seconds: int
+    triggered_by: str
+    error: str
+    started_at: datetime
+    finished_at: datetime | None
+    expired: bool
+
+    host_nome: str = ""
+
+
+class BackupDetalheOut(BackupOut):
+    log: str = ""
+
+
+# ── Agendamentos ───────────────────────────────────────────────────────
+
+
+class ScheduleIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    host_id: int
+    perfil: str
+    cron: str = Field(min_length=1, max_length=64)
+    destinos: list[str] = ["local"]
+    retencao_dias: int = Field(default=30, ge=0, le=3650)
+    enabled: bool = True
+    allow_downtime: bool = False
+
+    @field_validator("perfil")
+    @classmethod
+    def _validar_perfil(cls, v: str) -> str:
+        if v not in PROFILES:
+            raise ValueError(f"perfil deve ser um de {PROFILES}")
+        return v
+
+    @field_validator("destinos")
+    @classmethod
+    def _validar_destinos(cls, v: list[str]) -> list[str]:
+        invalidos = [d for d in v if d not in DESTINOS_VALIDOS]
+        if invalidos:
+            raise ValueError(f"destinos invalidos: {invalidos}")
+        return v or ["local"]
+
+
+class ScheduleUpdate(BaseModel):
+    name: str | None = None
+    perfil: str | None = None
+    cron: str | None = None
+    destinos: list[str] | None = None
+    retencao_dias: int | None = Field(default=None, ge=0, le=3650)
+    enabled: bool | None = None
+    allow_downtime: bool | None = None
+
+
+class ScheduleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    host_id: int
+    profile: str
+    cron: str
+    destinations: list
+    retention_days: int
+    enabled: bool
+    allow_downtime: bool
+    last_run_at: datetime | None
+    last_status: str
+    next_run_at: datetime | None
+    created_by: str
+
+    host_nome: str = ""
+    cron_legivel: str = ""
+
+
+# ── Auditoria ──────────────────────────────────────────────────────────
+
+
+class AuditOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ts: datetime
+    usuario: str
+    ip: str
+    action: str
+    target: str
+    level: str
+    success: bool
+    detail: dict
+
+
+class SessaoTerminalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    host_id: int
+    usuario: str
+    ip: str
+    started_at: datetime
+    ended_at: datetime | None
+    bytes_in: int
+    bytes_out: int
+    sudo_used: bool
+    end_reason: str
+
+    host_nome: str = ""
+
+
+TokenOut.model_rebuild()
