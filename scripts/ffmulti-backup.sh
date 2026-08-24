@@ -9,10 +9,16 @@
 #   config     configs/ + docker-compose.yaml + licença.
 #              Segundos, alguns MB, zero downtime.
 #
-#   essencial  config + pg_dump de todos os bancos + snapshot do Tarantool.
-#              Minutos, alguns GB, zero downtime. É o backup diário:
-#              recupera cadastros, usuários, câmeras, dossiês e os vetores
-#              faciais. NÃO leva as fotos originais de evento.
+#   essencial  config + todos os bancos do projeto compose:
+#              PostgreSQL/TimescaleDB, Tarantool, MongoDB, etcd, Redis e
+#              Grafana. Minutos, alguns GB, zero downtime. E o backup
+#              diario: recupera cadastros, usuarios, cameras, dossies e os
+#              vetores faciais. NAO leva as fotos originais de evento.
+#
+#              Funciona tambem em host que NAO e FindFace (aplicacao de
+#              integracao, coletor, dashboards): sem configs/, arquiva os
+#              arquivos de configuracao do projeto, e faz dump do que
+#              encontrar.
 #
 #   completo   Procedimento oficial da NtechLab: para o stack e tara
 #              configs/ + data/ inteiros. Horas, centenas de GB, COM
@@ -109,26 +115,49 @@ trap cleanup_stack EXIT INT TERM
 # ── Componentes do backup ──────────────────────────────────────────────────
 
 backup_configs() {
-  log "Copiando configs/ e docker-compose..."
+  log "Copiando configuracao..."
   mkdir -p "$WORK/config"
+
+  # Instalacao do FindFace tem configs/. Um host com outra aplicacao
+  # (ponte de integracao, coletor, dashboards) nao tem — e mesmo assim
+  # precisa do compose e dos arquivos de configuracao salvos.
   if [ -d "$FF_DIR/configs" ]; then
     tar -czf "$WORK/config/configs.tar.gz" -C "$FF_DIR" configs \
       || die "falha ao arquivar configs/"
     emit configs_bytes "$(stat -c %s "$WORK/config/configs.tar.gz")"
+    log "  configs/ arquivado"
   else
-    log "AVISO: $FF_DIR/configs não existe"
+    log "  sem configs/ — arquivando os arquivos de configuracao do projeto"
+    # Tudo que NAO for dado: yaml, json, conf, env, sql, sh, certificado.
+    # O -size limita para nao arrastar dump ou midia por engano, e o
+    # -not -path exclui data/ e volumes, que sao dado, nao configuracao.
+    find "$FF_DIR" -maxdepth 3 -type f \
+         \( -name "*.y*ml" -o -name "*.json" -o -name "*.conf" -o -name "*.env" \
+            -o -name ".env" -o -name "*.ini" -o -name "*.toml" -o -name "*.sql" \
+            -o -name "*.sh" -o -name "*.pem" -o -name "*.crt" -o -name "*.key" \) \
+         -size -20M \
+         -not -path "*/data/*" -not -path "*/volumes/*" -not -path "*/node_modules/*" \
+         -print0 2>/dev/null \
+      | tar --null -czf "$WORK/config/projeto-config.tar.gz" -T - 2>/dev/null
+    if [ -s "$WORK/config/projeto-config.tar.gz" ]; then
+      emit configs_bytes "$(stat -c %s "$WORK/config/projeto-config.tar.gz")"
+      log "  configuracao do projeto arquivada"
+    else
+      log "  AVISO: nenhum arquivo de configuracao encontrado em $FF_DIR"
+    fi
   fi
 
   [ -f "$COMPOSE_FILE" ] && cp "$COMPOSE_FILE" "$WORK/config/"
   [ -f "$FF_DIR/.env" ] && cp "$FF_DIR/.env" "$WORK/config/env.bak"
 
-  # Licença do ntls — sem ela o sistema restaurado não sobe
+  # Licenca do ntls — sem ela o FindFace restaurado nao sobe. Em host
+  # que nao e FindFace simplesmente nao acha nada, e tudo bem.
   find "$FF_DIR" -maxdepth 3 \( -name "*.key" -o -name "license*" -o -name "*.lic" \) \
        -size -10M 2>/dev/null | while read -r f; do
     mkdir -p "$WORK/config/licenca"
     cp "$f" "$WORK/config/licenca/" 2>/dev/null
   done
-  log "configs/ concluído."
+  log "Configuracao concluida."
 }
 
 backup_postgres() {
@@ -348,6 +377,66 @@ backup_data_completo() {
   log "data/ concluído."
 }
 
+backup_redis() {
+  # O Redis costuma ser fila descartavel, mas em algumas aplicacoes
+  # guarda estado que nao esta em outro lugar. BGSAVE e barato; salvar
+  # e mais seguro do que descobrir depois que fazia falta.
+  local conts; conts="$(containers_por_padrao 'redis')"
+  [ -z "$conts" ] && { emit redis "ausente"; return 0; }
+
+  log "Snapshot do Redis..."
+  mkdir -p "$WORK/redis"
+  local total=0
+
+  for c in $conts; do
+    log "  container: $c"
+    # BGSAVE grava em segundo plano; esperamos o rdb_bgsave_in_progress
+    # voltar a 0 antes de copiar, senao pegamos arquivo pela metade.
+    if docker exec "$c" redis-cli BGSAVE >/dev/null 2>&1; then
+      local espera=0
+      while [ "$espera" -lt 60 ]; do
+        if docker exec "$c" redis-cli INFO persistence 2>/dev/null \
+             | grep -q "rdb_bgsave_in_progress:0"; then
+          break
+        fi
+        sleep 2
+        espera=$(( espera + 2 ))
+      done
+
+      local rdb
+      rdb="$(docker exec "$c" sh -c 'ls /data/*.rdb 2>/dev/null | head -1')"
+      if [ -n "$rdb" ] && docker cp "$c:$rdb" "$WORK/redis/${c}.rdb" >/dev/null 2>&1; then
+        local sz; sz="$(stat -c %s "$WORK/redis/${c}.rdb" 2>/dev/null || echo 0)"
+        total=$(( total + sz ))
+        log "    ok ($(numfmt --to=iec "$sz" 2>/dev/null || echo "$sz")B)"
+      else
+        log "    AVISO: nao encontrei o .rdb dentro do container"
+      fi
+    else
+      log "    AVISO: BGSAVE falhou (Redis sem persistencia habilitada?)"
+    fi
+  done
+
+  emit redis_bytes "$total"
+}
+
+backup_grafana() {
+  # Dashboard e fonte de dados do Grafana ficam num SQLite pequeno.
+  # Refazer dashboard perdido custa mais tempo do que salvar isso.
+  local c; c="$(containers_por_padrao 'grafana' | head -1)"
+  [ -z "$c" ] && { emit grafana "ausente"; return 0; }
+
+  log "Copiando Grafana..."
+  mkdir -p "$WORK/grafana"
+  if docker cp "$c:/var/lib/grafana/grafana.db" "$WORK/grafana/grafana.db" >/dev/null 2>&1; then
+    local sz; sz="$(stat -c %s "$WORK/grafana/grafana.db" 2>/dev/null || echo 0)"
+    emit grafana_bytes "$sz"
+    log "  ok ($(numfmt --to=iec "$sz" 2>/dev/null || echo "$sz")B)"
+  else
+    log "  AVISO: grafana.db nao encontrado (provisionamento por arquivo?)"
+  fi
+}
+
 # ── Manifesto ──────────────────────────────────────────────────────────────
 
 escrever_manifesto() {
@@ -394,7 +483,7 @@ log " FaceOps — backup perfil '$PROFILE'"
 log "════════════════════════════════════════════════════"
 
 command -v docker >/dev/null 2>&1 || die "docker não encontrado neste servidor"
-[ -d "$FF_DIR" ] || die "$FF_DIR não existe — FindFace Multi está instalado aqui?"
+[ -d "$FF_DIR" ] || die "$FF_DIR nao existe. Confira o caminho cadastrado para este servidor."
 
 PROJETO="$(projeto_compose)"
 log "Projeto compose: $PROJETO"
@@ -411,6 +500,8 @@ case "$PROFILE" in
     backup_tarantool
     backup_mongodb
     backup_etcd
+    backup_redis
+    backup_grafana
     ;;
   completo)
     backup_configs
