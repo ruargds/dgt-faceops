@@ -131,6 +131,14 @@ export const api = {
   removerAgendamento: (id) => del(`/schedules/${id}`),
   executarAgendamento: (id) => post(`/schedules/${id}/executar`),
 
+  // Logs ao vivo
+  containersLog: (id) => get(`/logs/containers/${id}`),
+  visoesLog: () => get("/logs/visoes"),
+  criarVisaoLog: (d) => post("/logs/visoes", d),
+  removerVisaoLog: (id) => del(`/logs/visoes/${id}`),
+  ticketLog: (id, container, tail) =>
+    post(`/logs/ticket/${id}?container=${encodeURIComponent(container)}&tail=${tail}`),
+
   // InTerminal
   ticketTerminal: (hostId) => post(`/terminal/ticket/${hostId}`),
   sessoesAtivas: () => get("/terminal/ativas"),

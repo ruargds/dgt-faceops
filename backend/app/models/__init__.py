@@ -11,6 +11,7 @@ from app.models.backup import (
 from app.models.destino import TIPOS as TIPOS_DESTINO, Destino
 from app.models.host import Host
 from app.models.user import User
+from app.models.visao_log import VisaoLog
 
 __all__ = [
     "AuditLog",
@@ -20,6 +21,7 @@ __all__ = [
     "Host",
     "User",
     "Destino",
+    "VisaoLog",
     "TIPOS_DESTINO",
     "PROFILES",
     "PROFILE_CONFIG",

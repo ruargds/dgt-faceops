@@ -14,13 +14,14 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from app.api.routes import (
-    audit, auth, backups, destinos, hosts, maintenance, ops, terminal,
+    audit, auth, backups, destinos, hosts, logs, maintenance, ops, terminal,
 )
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
-from app.models import Destino, User  # noqa: F401 — registra todos os modelos
+from app.models import Destino, User, VisaoLog  # noqa: F401 — registra os modelos
 from app.services.backup_service import BackupService
+from app.services.logs_service import LogManager
 from app.services.maintenance_service import MaintenanceService
 from app.services.metrics_service import MetricsService
 from app.services.scheduler_service import SchedulerService
@@ -94,6 +95,47 @@ async def _semear_destino_local() -> None:
         log.info("destino local padrao criado em %s", settings.LOCAL_BACKUP_DIR)
 
 
+async def _semear_visao_log() -> None:
+    """
+    Cria a visão de exemplo se não houver nenhuma.
+
+    É o `docker logs -f | jq -r '…'` que a equipe já usava no shell,
+    virando configuração compartilhada — serve de modelo para as próximas.
+    """
+    async with AsyncSessionLocal() as db:
+        resultado = await db.execute(select(VisaoLog).limit(1))
+        if resultado.scalars().first() is not None:
+            return
+
+        db.add(VisaoLog(
+            nome="Integração — matches",
+            descricao=(
+                "Acompanha o consumidor de matches: hora, trace, dgtId, "
+                "cartão e mensagem. Equivale ao jq que era rodado no shell."
+            ),
+            container="macthes-faces-consumer-1",
+            tail=0,
+            campos=[
+                {"caminho": "timestamp", "rotulo": "hora",
+                 "corte_inicio": 11, "corte_fim": 19},
+                {"caminho": "trace_id", "rotulo": "trace",
+                 "corte_inicio": None, "corte_fim": None},
+                {"caminho": "context.dgtId", "rotulo": "dgtId",
+                 "corte_inicio": None, "corte_fim": None},
+                {"caminho": "context.matchedCardName", "rotulo": "cartão",
+                 "corte_inicio": None, "corte_fim": None},
+                {"caminho": "message", "rotulo": "mensagem",
+                 "corte_inicio": None, "corte_fim": None},
+            ],
+            exigir_campos=["trace_id"],
+            destacar="error|exception|timeout|refused|failed",
+            mostrar_nao_json=False,
+            created_by="sistema",
+        ))
+        await db.commit()
+        log.info("visao de log de exemplo criada")
+
+
 async def _varredor_de_ociosas(app: FastAPI) -> None:
     """Derruba sessões de terminal esquecidas abertas."""
     while True:
@@ -102,6 +144,9 @@ async def _varredor_de_ociosas(app: FastAPI) -> None:
             encerradas = await app.state.terminals.varrer_ociosas()
             if encerradas:
                 log.info("%d sessao(oes) de terminal encerradas por inatividade", encerradas)
+            logs_fechados = await app.state.logs.varrer_ociosas()
+            if logs_fechados:
+                log.info("%d stream(s) de log encerrado(s) por inatividade", logs_fechados)
         except asyncio.CancelledError:
             break
         except Exception:
@@ -135,6 +180,7 @@ async def iniciar() -> None:
     await _criar_tabelas()
     await _semear_admin()
     await _semear_destino_local()
+    await _semear_visao_log()
 
     ssh = SSHService()
     storage = StorageService()
@@ -146,6 +192,7 @@ async def iniciar() -> None:
     app.state.manutencao = MaintenanceService(ssh)
     app.state.backups = BackupService(ssh, storage)
     app.state.terminals = TerminalManager()
+    app.state.logs = LogManager()
     app.state.scheduler = SchedulerService(app.state.backups)
 
     await app.state.scheduler.start()
@@ -164,6 +211,8 @@ async def encerrar() -> None:
         await app.state.scheduler.shutdown()
     if hasattr(app.state, "terminals"):
         await app.state.terminals.encerrar_todas()
+    if hasattr(app.state, "logs"):
+        await app.state.logs.encerrar_todas()
     if hasattr(app.state, "ssh"):
         await app.state.ssh.close_all()
 
@@ -198,6 +247,7 @@ app.include_router(hosts.router)
 app.include_router(ops.router)
 app.include_router(backups.router)
 app.include_router(destinos.router)
+app.include_router(logs.router)
 app.include_router(maintenance.router)
 app.include_router(terminal.router)
 app.include_router(audit.router)

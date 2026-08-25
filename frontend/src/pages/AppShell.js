@@ -3,6 +3,7 @@ import { api } from "../api";
 import {
   IconAgenda,
   IconAuditoria,
+  IconAlerta,
   IconBackup,
   IconChave,
   IconPainel,
@@ -16,6 +17,7 @@ import {
 } from "../components/Icons";
 import AgendamentosView from "../components/views/AgendamentosView";
 import DestinosView from "../components/views/DestinosView";
+import LogsView from "../components/views/LogsView";
 import ManutencaoView from "../components/views/ManutencaoView";
 import AuditoriaView from "../components/views/AuditoriaView";
 import BackupsView from "../components/views/BackupsView";
@@ -32,7 +34,8 @@ const MENU = [
   { id: "painel", rotulo: "Painel", icone: IconPainel, perm: "hosts.view" },
   { id: "recursos", rotulo: "Recursos", icone: IconRecursos, perm: "metrics.view" },
   { id: "servicos", rotulo: "Serviços", icone: IconServicos, perm: "services.view" },
-  { id: "manutencao", rotulo: "Manutenção", icone: IconLogs, perm: "maintenance.view" },
+  { id: "logs", rotulo: "Logs ao vivo", icone: IconLogs, perm: "services.view" },
+  { id: "manutencao", rotulo: "Manutenção", icone: IconAlerta, perm: "maintenance.view" },
   { id: "terminal", rotulo: "InTerminal", icone: IconTerminal, perm: "terminal.use" },
 
   { grupo: "Backup" },
@@ -121,6 +124,7 @@ export default function AppShell() {
           {abaValida === "painel" && <PainelView />}
           {abaValida === "recursos" && <RecursosView />}
           {abaValida === "servicos" && <ServicosView />}
+          {abaValida === "logs" && <LogsView />}
           {abaValida === "manutencao" && <ManutencaoView />}
           {abaValida === "terminal" && <TerminalView />}
           {abaValida === "backups" && <BackupsView />}
