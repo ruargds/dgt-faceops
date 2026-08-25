@@ -69,6 +69,18 @@
   servidores sem parar, travar ou pesar nada em operação. As três
   garantias, a reversão automática e os códigos de saída.
 
+- **[18_LIMPEZA_DE_EVENTOS](18_LIMPEZA_DE_EVENTOS.md)** — a ação que
+  realmente libera disco, e a mais destrutiva do painel. Procedimento
+  oficial da NtechLab, com as três proteções que o cercam.
+
+- **[19_BACKUP_DO_PAINEL](19_BACKUP_DO_PAINEL.md)** — o painel protegia
+  quatro servidores e nada protegia o painel. O que se perderia, o que
+  entra no artefato e por que a `SECRET_KEY` fica fora.
+
+- **[20_PERSISTENCIA](20_PERSISTENCIA.md)** — documento de revisão: o que
+  sobrevive a cada operação, onde cada dado mora, por que não há volume
+  fantasma e qual é o único comando que apaga o banco.
+
 ### Segurança e acesso
 
 - **[05_PERMISSOES](05_PERMISSOES.md)** — os quatro perfis, o catálogo

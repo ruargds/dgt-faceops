@@ -126,9 +126,12 @@ export const api = {
   arquivarLog: (id, d) => post(`/manutencao/${id}/arquivar`, d),
   faxinaPrevia: () => get("/manutencao/faxina/previa"),
   faxinaExecutar: () => post("/manutencao/faxina/executar"),
+  limpezaOpcoes: (id) => get(`/manutencao/${id}/limpeza/opcoes`),
+  limpezaExecutar: (id, d) => post(`/manutencao/${id}/limpeza`, d),
 
   // Backups
   dispararBackup: (id, d) => post(`/backups/${id}`, d),
+  backupDoPainel: (destinos) => post("/backups-painel", { destinos }),
   backups: (params = "") => get(`/backups${params}`),
   backup: (runId) => get(`/backups/${runId}`),
   removerBackup: (runId) => del(`/backups/${runId}`),

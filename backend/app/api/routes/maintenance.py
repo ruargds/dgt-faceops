@@ -25,6 +25,16 @@ class ContencaoIn(BaseModel):
     confirmar_host: str = ""
 
 
+class ItemLimpezaIn(BaseModel):
+    opcao: str = Field(min_length=4, max_length=64)
+    dias: int = Field(ge=0, le=3650)
+
+
+class LimpezaIn(BaseModel):
+    itens: list[ItemLimpezaIn]
+    confirmar_host: str = ""
+
+
 class ArquivarIn(BaseModel):
     destino: str = Field(min_length=1, max_length=255)
     simular: bool = True
@@ -126,6 +136,105 @@ async def contencao(
                 "arquivos": [a["caminho"] for a in resultado["alteracoes"]],
             },
         )
+    return resultado
+
+
+@router.get("/{host_id}/limpeza/opcoes")
+async def limpeza_opcoes(
+    host_id: int,
+    request: Request,
+    _: User = Depends(require_permission("maintenance.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    O que o `manage.py cleanup` daquele servidor aceita.
+
+    A lista vem do próprio `--help` do servidor, não de uma tabela minha:
+    ela muda entre versões, e uma opção inventada faria o comando falhar
+    inteiro — depois de o operador já ter confirmado.
+    """
+    from app.services.limpeza_service import LimpezaError
+
+    host = await _host_ou_404(db, host_id)
+    try:
+        dados = await request.app.state.limpeza.opcoes(host, request.app.state.stack)
+    except (SSHError, LimpezaError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    dados["em_andamento"] = request.app.state.limpeza.em_andamento(host_id)
+    dados["ultimo"] = request.app.state.limpeza.ultimo(host_id)
+    return dados
+
+
+@router.post("/{host_id}/limpeza")
+async def limpeza_executar(
+    host_id: int,
+    dados: LimpezaIn,
+    request: Request,
+    autor: User = Depends(require_permission("cleanup.run")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Apaga eventos antigos. **Irreversível — não há lixeira.**
+
+    Exige digitar o nome do servidor. É a ação mais destrutiva do painel:
+    apaga dado de produção que nenhum backup essencial recupera.
+    """
+    from app.services.limpeza_service import LimpezaError
+
+    host = await _host_ou_404(db, host_id)
+
+    if dados.confirmar_host.strip() != host.name:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"confirmação necessária: digite exatamente '{host.name}'. "
+                "Esta ação APAGA eventos de produção e não tem volta."
+            ),
+        )
+
+    itens = [i.model_dump() for i in dados.itens]
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="cleanup.run",
+        target=host.name,
+        ip=client_ip(request),
+        level="critical",
+        detail={"acao": "iniciada", "itens": itens},
+    )
+
+    try:
+        resultado = await request.app.state.limpeza.executar(
+            host, request.app.state.stack, itens
+        )
+    except (SSHError, LimpezaError) as exc:
+        await audit_service.registrar(
+            db,
+            usuario=autor.username,
+            action="cleanup.run",
+            target=host.name,
+            ip=client_ip(request),
+            success=False,
+            level="critical",
+            detail={"acao": "falhou", "erro": str(exc)[:800]},
+        )
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="cleanup.run",
+        target=host.name,
+        ip=client_ip(request),
+        level="critical",
+        detail={
+            "acao": "concluida",
+            "itens": itens,
+            "duracao_ms": resultado.get("duracao_ms"),
+        },
+    )
     return resultado
 
 

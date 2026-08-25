@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +38,51 @@ async def _host_ou_404(db: AsyncSession, host_id: int) -> Host:
 async def _nomes_hosts(db: AsyncSession) -> dict[int, str]:
     resultado = await db.execute(select(Host.id, Host.name))
     return {linha[0]: linha[1] for linha in resultado.all()}
+
+
+# ── Backup do próprio painel ───────────────────────────────────────────
+
+
+class BackupPainelIn(BaseModel):
+    destinos: list[int] = []
+
+
+@router.post("/backups-painel", response_model=BackupOut, status_code=202)
+async def backup_do_painel(
+    dados: BackupPainelIn,
+    request: Request,
+    autor: User = Depends(require_permission("backups.run")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Salva o banco do PRÓPRIO painel.
+
+    Protege o que nenhum outro backup cobre: cadastro dos servidores,
+    credenciais cifradas, destinos, agendamentos, histórico e auditoria.
+    São alguns MB — irrisório perto de recadastrar tudo.
+
+    A SECRET_KEY não vai no artefato, de propósito: ela decifra o que
+    está lá dentro. Guarde o `.env` separado.
+    """
+    servico = request.app.state.painel_backup
+    if servico.ocupado():
+        raise HTTPException(
+            status_code=409, detail="já existe um backup do painel em andamento"
+        )
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="backups.run",
+        target="painel",
+        ip=client_ip(request),
+        detail={"perfil": "painel", "destinos": dados.destinos},
+    )
+
+    run = await servico.executar(db, dados.destinos, disparado_por=autor.username)
+    saida = BackupOut.model_validate(run)
+    saida.host_nome = "Painel"
+    return saida
 
 
 # ── Execução ───────────────────────────────────────────────────────────
@@ -146,7 +192,9 @@ async def historico(
     saida: list[BackupOut] = []
     for run in resultado.scalars().all():
         item = BackupOut.model_validate(run)
-        item.host_nome = nomes.get(run.host_id, "?")
+        item.host_nome = (
+            "Painel" if run.host_id is None else nomes.get(run.host_id, "?")
+        )
         saida.append(item)
     return saida
 
@@ -163,7 +211,9 @@ async def detalhe(
         raise HTTPException(status_code=404, detail="execução não encontrada")
     nomes = await _nomes_hosts(db)
     saida = BackupDetalheOut.model_validate(run)
-    saida.host_nome = nomes.get(run.host_id, "?")
+    saida.host_nome = (
+        "Painel" if run.host_id is None else nomes.get(run.host_id, "?")
+    )
     return saida
 
 

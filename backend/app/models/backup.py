@@ -16,7 +16,13 @@ PROFILE_CONFIG = "config"        # configs/ + docker-compose.yaml + licença
 PROFILE_ESSENCIAL = "essencial"  # + pg_dump + snapshot Tarantool (quente)
 PROFILE_COMPLETO = "completo"    # procedimento oficial NtechLab (frio)
 
+# O painel protegia quatro servidores e nada protegia o painel. Este
+# perfil não tem servidor: salva o banco do próprio painel — cadastro,
+# credenciais cifradas, agendamentos, histórico e auditoria.
+PROFILE_PAINEL = "painel"
+
 PROFILES = (PROFILE_CONFIG, PROFILE_ESSENCIAL, PROFILE_COMPLETO)
+PROFILES_TODOS = PROFILES + (PROFILE_PAINEL,)
 
 
 class BackupRun(Base):
@@ -25,7 +31,10 @@ class BackupRun(Base):
     __tablename__ = "backup_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    host_id: Mapped[int] = mapped_column(ForeignKey("hosts.id", ondelete="CASCADE"), index=True)
+    # Nulo no perfil "painel": esse backup não tem servidor de origem.
+    host_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hosts.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     schedule_id: Mapped[int | None] = mapped_column(
         ForeignKey("schedules.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -69,7 +78,10 @@ class Schedule(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
-    host_id: Mapped[int] = mapped_column(ForeignKey("hosts.id", ondelete="CASCADE"), index=True)
+    # Nulo quando o perfil é "painel"
+    host_id: Mapped[int | None] = mapped_column(
+        ForeignKey("hosts.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     profile: Mapped[str] = mapped_column(String(16))
 
     # Expressão cron de 5 campos (min hora dia mês diadasemana), fuso do painel

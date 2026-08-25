@@ -191,7 +191,7 @@ class BackupOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    host_id: int
+    host_id: int | None
     schedule_id: int | None
     profile: str
     status: str
@@ -252,7 +252,7 @@ class ScheduleOut(BaseModel):
 
     id: int
     name: str
-    host_id: int
+    host_id: int | None
     profile: str
     cron: str
     destinations: list

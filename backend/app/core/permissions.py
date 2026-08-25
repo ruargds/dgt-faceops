@@ -19,6 +19,7 @@ PERMISSION_CATALOG: dict[str, str] = {
     # Manutenção de disco e log
     "maintenance.view": "Ver diagnóstico de disco e crescimento de log",
     "maintenance.apply": "Aplicar contenção de log e arquivar log antigo",
+    "cleanup.run": "Apagar eventos antigos do FindFace (libera disco, irreversível)",
     # Backups
     "backups.view": "Ver histórico e artefatos de backup",
     "backups.run": "Disparar backup sob demanda",

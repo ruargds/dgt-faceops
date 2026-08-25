@@ -19,6 +19,232 @@ import { IconAlerta, IconAtualizar, IconLogs, IconOk } from "../Icons";
  * facial não é o FindFace — é o disco raiz enchendo de log. E resolver
  * isso não deveria exigir linha de comando em quatro máquinas diferentes.
  */
+/**
+ * Limpeza de eventos antigos — procedimento oficial da NtechLab.
+ *
+ * É o que ataca a causa do disco cheio: num servidor real as fotos de
+ * evento ocupavam 242 GB de 268 GB. Backup não resolve isso; retenção de
+ * evento resolve.
+ *
+ * A idade vai em dias na tela e vira segundos no comando. Pedir segundos
+ * ao operador seria convite a apagar cinco anos achando que apagou cinco
+ * dias.
+ */
+function Limpeza({ hostId, hostNome }) {
+  const { has } = usePermissions();
+  const [dados, setDados] = useState(null);
+  const [selecao, setSelecao] = useState({});
+  const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+
+  useEffect(() => {
+    setDados(null);
+    setSelecao({});
+    setResultado(null);
+  }, [hostId]);
+
+  async function carregar() {
+    setCarregando(true);
+    setErro("");
+    try {
+      setDados(await api.limpezaOpcoes(hostId));
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  const itens = Object.entries(selecao)
+    .filter(([, v]) => v.marcado)
+    .map(([opcao, v]) => ({ opcao, dias: Number(v.dias) }));
+
+  const temZero = itens.some((i) => i.dias === 0);
+
+  return (
+    <div className="card">
+      <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+        <div className="section-title" style={{ marginBottom: 0 }}>
+          Limpeza de eventos antigos
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={carregar} disabled={carregando}>
+          {carregando ? "Consultando…" : dados ? "Recarregar" : "Consultar opções"}
+        </button>
+      </div>
+      <div className="small muted" style={{ marginBottom: 14 }}>
+        Procedimento oficial da NtechLab. É o que libera espaço de verdade —
+        as fotos de evento são quase todo o volume do diretório de dados.
+        <strong> Irreversível: não há lixeira.</strong>
+      </div>
+
+      <Erro mensagem={erro} />
+
+      {dados && dados.em_andamento && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--amber-bg)", borderColor: "#f5d9a8", marginBottom: 12 }}
+        >
+          <span className="small" style={{ color: "#8a4b00" }}>
+            Há uma limpeza em andamento neste servidor. Enquanto ela roda, o
+            painel recusa reiniciar container e parar o stack — o manual é
+            explícito de que isso corromperia o banco.
+          </span>
+        </div>
+      )}
+
+      {dados && !dados.confirmado_pelo_servidor && (
+        <div className="small" style={{ color: "var(--amber)", marginBottom: 10 }}>
+          O servidor não respondeu ao <span className="mono">--help</span>. A
+          lista abaixo é a documentada para a 2.4.1 e pode não bater com esta
+          instalação.
+        </div>
+      )}
+
+      {dados && (
+        <>
+          <div className="table-wrap" style={{ marginBottom: 12 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 1 }}></th>
+                  <th>O que apagar</th>
+                  <th style={{ width: 150 }}>Mais velho que</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.opcoes.map((o) => {
+                  const sel = selecao[o.nome] || { marcado: false, dias: 90 };
+                  return (
+                    <tr key={o.nome}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={sel.marcado}
+                          onChange={(e) =>
+                            setSelecao((a) => ({
+                              ...a,
+                              [o.nome]: { ...sel, marcado: e.target.checked },
+                            }))
+                          }
+                        />
+                      </td>
+                      <td>
+                        <div className="small">
+                          {o.descricao}
+                          {o.pesada && (
+                            <span className="pill pill-info" style={{ marginLeft: 6 }}>
+                              libera mais
+                            </span>
+                          )}
+                        </div>
+                        <div className="small muted mono">--{o.nome}</div>
+                      </td>
+                      <td>
+                        <div className="stack-h" style={{ gap: 6 }}>
+                          <input
+                            type="number"
+                            min={0}
+                            max={3650}
+                            value={sel.dias}
+                            disabled={!sel.marcado}
+                            onChange={(e) =>
+                              setSelecao((a) => ({
+                                ...a,
+                                [o.nome]: { ...sel, dias: e.target.value },
+                              }))
+                            }
+                            style={{ width: 90 }}
+                          />
+                          <span className="small muted">dias</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {temZero && (
+            <div
+              className="card card-tight"
+              style={{ background: "var(--red-bg)", borderColor: "#f3b6b6", marginBottom: 12 }}
+            >
+              <span className="small" style={{ color: "#8c1c1c" }}>
+                <IconAlerta size={13} /> Há item com <strong>0 dias</strong>. Isso
+                apaga <strong>TODOS</strong> os registros daquele tipo, não só os
+                antigos.
+              </span>
+            </div>
+          )}
+
+          {resultado && (
+            <div
+              className="card card-tight"
+              style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 12 }}
+            >
+              <div className="small" style={{ color: "#06694a" }}>
+                Limpeza concluída em {Math.round((resultado.duracao_ms || 0) / 1000)}s.
+              </div>
+              {resultado.saida && (
+                <div className="log" style={{ marginTop: 8, maxHeight: 160 }}>
+                  {resultado.saida}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="stack-h">
+            <span className="small muted" style={{ flex: 1 }}>
+              {itens.length
+                ? `${itens.length} tipo(s) selecionado(s).`
+                : "Marque o que quer apagar e por quanto tempo guardar."}
+            </span>
+            {has("cleanup.run") && (
+              <button
+                className="btn btn-danger"
+                disabled={!itens.length || dados.em_andamento}
+                onClick={() => setConfirmando(true)}
+              >
+                Apagar eventos antigos
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {confirmando && (
+        <ConfirmarDigitando
+          titulo="Apagar eventos antigos"
+          palavra={hostNome}
+          rotuloBotao="Apagar definitivamente"
+          aviso={
+            `Isto APAGA de ${hostNome}: ` +
+            itens
+              .map((i) => `${i.opcao} mais velho que ${i.dias} dia(s)`)
+              .join("; ") +
+            ". Não há lixeira e nenhum backup essencial recupera isso. " +
+            "A operação pode levar horas em base grande, e durante ela o " +
+            "painel recusa reiniciar container neste servidor."
+          }
+          onConfirmar={async (confirmacao) => {
+            const r = await api.limpezaExecutar(hostId, {
+              itens,
+              confirmar_host: confirmacao,
+            });
+            setResultado(r);
+            setSelecao({});
+            await carregar();
+          }}
+          onFechar={() => setConfirmando(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function Faxina() {
   const { has } = usePermissions();
   const [previa, setPrevia] = useState(null);
@@ -510,6 +736,8 @@ export default function ManutencaoView() {
           )}
         </div>
       )}
+
+      {diag && <Limpeza hostId={hostId} hostNome={host ? host.name : ""} />}
 
       <Faxina />
 

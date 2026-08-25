@@ -48,6 +48,7 @@ export default function BackupsView() {
   const [novo, setNovo] = useState(false);
   const [detalhe, setDetalhe] = useState(null);
   const [espaco, setEspaco] = useState(null);
+  const [painelRodando, setPainelRodando] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro("");
@@ -69,6 +70,19 @@ export default function BackupsView() {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  async function backupPainel() {
+    setPainelRodando(true);
+    setErro("");
+    try {
+      await api.backupDoPainel([]);
+      await carregar();
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setPainelRodando(false);
+    }
+  }
 
   // Enquanto houver execução em andamento, atualiza sozinho a cada 4s.
   // Fora disso não fica pedindo nada — a tela não precisa de polling
@@ -109,14 +123,38 @@ export default function BackupsView() {
             <IconAtualizar size={15} /> Atualizar
           </button>
           {has("backups.run") && (
-            <button className="btn btn-primary" onClick={() => setNovo(true)}>
-              <IconBackup size={15} /> Novo backup
-            </button>
+            <>
+              <button
+                className="btn btn-secondary"
+                onClick={backupPainel}
+                disabled={painelRodando}
+                title="Salva o banco do próprio painel: servidores, credenciais cifradas, agendamentos, histórico e auditoria"
+              >
+                {painelRodando ? "Salvando…" : "Backup do painel"}
+              </button>
+              <button className="btn btn-primary" onClick={() => setNovo(true)}>
+                <IconBackup size={15} /> Novo backup
+              </button>
+            </>
           )}
         </div>
       </div>
 
       <Erro mensagem={erro} onTentar={carregar} />
+
+      {!carregando && !lista.some((r) => r.profile === "painel" && r.status === "sucesso") && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--amber-bg)", borderColor: "#f5d9a8", marginBottom: 14 }}
+        >
+          <span className="small" style={{ color: "#8a4b00" }}>
+            <strong>O painel nunca foi salvo.</strong> Se esta máquina morrer,
+            perdem-se o cadastro dos servidores, as credenciais cifradas, os
+            agendamentos, o histórico e a auditoria. São alguns MB — use o
+            botão <strong>Backup do painel</strong>.
+          </span>
+        </div>
+      )}
 
       {carregando ? (
         <Carregando />

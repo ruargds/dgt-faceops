@@ -68,6 +68,16 @@ antes de mexer: recusa se houver backup rodando, terminal aberto ou carga
 alta na máquina. Reverte sozinho se a versão nova não subir. Nunca toca
 nos containers do FindFace.
 
+**Limpeza de eventos** — executa o procedimento oficial da NtechLab para
+apagar evento antigo, que é o que realmente libera disco: num servidor
+real, as fotos de evento eram 242 GB de 268 GB. A lista de opções vem do
+`--help` do próprio servidor, e durante a limpeza o painel **recusa**
+reiniciar container — o manual avisa que isso corromperia o banco.
+
+**Backup do próprio painel** — protege o que nenhum outro backup cobre:
+cadastro dos servidores, credenciais cifradas, agendamentos, histórico e
+auditoria. A `SECRET_KEY` fica deliberadamente **fora** do artefato.
+
 **Manutenção de disco e log** — o problema mais comum num servidor de
 reconhecimento facial não é o FindFace: é o disco raiz enchendo de log
 (encontramos 99 GB de `/var/log` em operação normal, ~8 GB/dia). A tela
@@ -177,6 +187,9 @@ Docker Desktop instalado → botão direito em `windows\instalar.bat` →
 | [**15_SOLUCAO_PRONTA**](docs/15_SOLUCAO_PRONTA.md) | **Comece aqui** — do zero ao backup agendado, em Ubuntu |
 | [16_CONFIGURACOES](docs/16_CONFIGURACOES.md) | Aba Configurações: catálogo, e como reusar em outro projeto |
 | [17_ATUALIZACAO](docs/17_ATUALIZACAO.md) | Buscar versão nova sem parar nem pesar serviço em operação |
+| [18_LIMPEZA_DE_EVENTOS](docs/18_LIMPEZA_DE_EVENTOS.md) | Liberar disco de verdade — procedimento oficial da NtechLab |
+| [19_BACKUP_DO_PAINEL](docs/19_BACKUP_DO_PAINEL.md) | Salvar o próprio painel, e por que a SECRET_KEY fica fora |
+| [20_PERSISTENCIA](docs/20_PERSISTENCIA.md) | O que sobrevive a quê, e por que não há volume fantasma |
 
 ## Scripts
 

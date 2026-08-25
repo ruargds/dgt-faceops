@@ -24,6 +24,8 @@ from app.models import Destino, User, VisaoLog  # noqa: F401 — registra os mod
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
 from app.services.faxina_service import FaxinaService
+from app.services.limpeza_service import LimpezaService
+from app.services.painel_backup_service import PainelBackupService
 from app.services.logs_service import LogManager
 from app.services.maintenance_service import MaintenanceService
 from app.services.metrics_service import MetricsService
@@ -54,6 +56,14 @@ COLUNAS_NOVAS = [
     ("hosts", "host_key_pub", "TEXT NOT NULL DEFAULT ''"),
 ]
 
+# Alterações que não são "coluna nova". Escritas para serem idempotentes:
+# rodar duas vezes não muda nada e não levanta erro.
+ALTERACOES = [
+    # O backup do painel não tem servidor de origem
+    "ALTER TABLE backup_runs ALTER COLUMN host_id DROP NOT NULL",
+    "ALTER TABLE schedules ALTER COLUMN host_id DROP NOT NULL",
+]
+
 
 async def _criar_tabelas() -> None:
     from sqlalchemy import text
@@ -71,6 +81,13 @@ async def _criar_tabelas() -> None:
                 # Tabela pode não existir ainda numa instalação parcial —
                 # não pode impedir a subida.
                 log.warning("coluna %s.%s: %s", tabela, coluna, exc)
+
+    for comando in ALTERACOES:
+        try:
+            async with engine.begin() as conexao:
+                await conexao.execute(text(comando))
+        except Exception as exc:
+            log.debug("alteracao ja aplicada ou nao aplicavel: %s (%s)", comando, exc)
 
 
 async def _semear_admin() -> None:
@@ -226,12 +243,14 @@ async def iniciar() -> None:
     app.state.ssh = ssh
     app.state.storage = storage
     app.state.metrics = MetricsService(ssh)
-    app.state.stack = StackService(ssh, config)
+    app.state.limpeza = LimpezaService(ssh)
+    app.state.stack = StackService(ssh, config, limpeza=app.state.limpeza)
     app.state.manutencao = MaintenanceService(ssh)
     app.state.backups = BackupService(ssh, storage, config)
     app.state.terminals = TerminalManager()
     app.state.logs = LogManager()
     app.state.faxina = FaxinaService(config)
+    app.state.painel_backup = PainelBackupService(storage, config)
     app.state.scheduler = SchedulerService(
         app.state.backups, faxina=app.state.faxina, config=config
     )

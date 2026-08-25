@@ -86,8 +86,11 @@ def _compose_file(host) -> str:
 
 
 class StackService:
-    def __init__(self, ssh: SSHService, config=None) -> None:
+    def __init__(self, ssh: SSHService, config=None, limpeza=None) -> None:
         self.ssh = ssh
+        # O manual da NtechLab proibe reiniciar container durante a
+        # limpeza de eventos: causa erro no banco. O painel recusa.
+        self.limpeza = limpeza
         # Opcional de proposito: se nao vier, cai no padrao. Servico que
         # quebra por falta de configuracao seria pior que o valor fixo.
         self.config = config
@@ -368,8 +371,17 @@ echo "{SEP}END"
 
     # ── Ações ──────────────────────────────────────────────────────────
 
+    def _recusar_se_limpando(self, host) -> None:
+        if self.limpeza is not None and self.limpeza.em_andamento(host.id):
+            raise StackError(
+                f"há uma limpeza de eventos em andamento em '{host.name}'. "
+                "O manual da NtechLab é explícito: reiniciar container "
+                "durante a limpeza corrompe o banco. Espere terminar."
+            )
+
     async def restart_container(self, host, container: str, timeout_s: int = 60) -> dict:
         """Reinicia um container. Ação de menor risco — resolve a maioria."""
+        self._recusar_se_limpando(host)
         _validar_nome(container)
         await self._garantir_do_projeto(host, container)
 
@@ -406,6 +418,7 @@ echo "{SEP}END"
         """
         if acao not in ("stop", "up", "restart"):
             raise StackError(f"ação inválida: {acao}")
+        self._recusar_se_limpando(host)
 
         binario = await self.compose_bin(host)
         arquivo = shlex.quote(_compose_file(host))

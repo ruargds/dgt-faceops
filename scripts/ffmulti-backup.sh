@@ -442,6 +442,13 @@ backup_grafana() {
 # ── Manifesto ──────────────────────────────────────────────────────────────
 
 escrever_manifesto() {
+  # Versao das imagens em uso. O Tarantool NAO e compativel entre versoes
+  # maiores do FindFace: restaurar a base biometrica num sistema de outra
+  # versao nao funciona. Sem registrar isso aqui, alguem descobriria no
+  # pior momento possivel.
+  local VERSOES
+  VERSOES="$(docker ps --filter "label=com.docker.compose.project=$PROJETO"     --format '{{.Image}}' 2>/dev/null | sed 's|.*/||' | sort -u | head -12 | paste -sd', ')"
+
   cat > "$WORK/MANIFESTO.txt" <<MANIFESTO
 DGT FaceOps — manifesto de backup
 =================================
@@ -452,6 +459,16 @@ Data...............: $(date '+%Y-%m-%d %H:%M:%S %Z')
 Diretório FindFace.: $FF_DIR
 Projeto compose....: $PROJETO
 Downtime...........: ${DOWNTIME_TOTAL}s
+
+VERSAO DAS IMAGENS
+------------------
+$VERSOES
+
+  ATENCAO: a base do Tarantool (vetores faciais) NAO e compativel entre
+  versoes maiores do FindFace. Restaurar este backup num sistema de outra
+  versao nao vai funcionar para os vetores — os cadastros do PostgreSQL
+  ate voltam, mas o reconhecimento nao. Para migrar de versao, use o
+  procedimento de atualizacao do fabricante, nao o restore.
 
 Conteúdo
 --------
