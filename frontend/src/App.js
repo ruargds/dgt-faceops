@@ -2,11 +2,19 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api, clearToken, getToken } from "./api";
 import AppShell from "./pages/AppShell";
 import Login from "./pages/Login";
+import { carregarMarca } from "./marca";
 import { SessaoContext } from "./usePermissions";
 
 export default function App() {
   const [sessao, setSessao] = useState({ usuario: null, permissoes: [] });
   const [carregando, setCarregando] = useState(true);
+  const [marca, setMarca] = useState(null);
+
+  // Antes de qualquer tela: cores e logo do cliente. Aplicar depois faria
+  // a paleta padrão piscar na frente do usuário.
+  useEffect(() => {
+    carregarMarca().then(setMarca);
+  }, []);
 
   const carregar = useCallback(async () => {
     if (!getToken()) {
@@ -52,12 +60,12 @@ export default function App() {
   }
 
   if (!sessao.usuario) {
-    return <Login onEntrar={carregar} />;
+    return <Login onEntrar={carregar} marca={marca} />;
   }
 
   return (
     <SessaoContext.Provider
-      value={{ ...sessao, recarregar: carregar, sair }}
+      value={{ ...sessao, recarregar: carregar, sair, marca }}
     >
       <AppShell />
     </SessaoContext.Provider>

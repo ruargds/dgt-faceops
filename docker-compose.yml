@@ -58,6 +58,8 @@ services:
       # atualizar.sh falhar com "alteração local não commitada".
       - ${DIR_BACKUPS:-./data/backups}:/data/backups
       - ${DIR_SESSOES:-./data/sessions}:/data/sessions
+      # Logotipos enviados pela tela de Configurações
+      - ${DIR_MARCA:-./data/marca}:/data/marca
       # rclone.conf para o destino Google Drive (opcional).
       # Gere com `rclone config` e copie para ./rclone/rclone.conf
       - ./rclone:/root/.config/rclone:ro

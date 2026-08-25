@@ -3,6 +3,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import { api } from "../../api";
+import { MARCA_PADRAO } from "../../marca";
+import { useSessao } from "../../usePermissions";
 import { Carregando, Erro, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { IconTerminal } from "../Icons";
 
@@ -32,6 +34,8 @@ const TEMA = {
 };
 
 export default function TerminalView() {
+  const { marca } = useSessao();
+  const nomePainel = (marca || MARCA_PADRAO).nome;
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
 
   const containerRef = useRef(null);
@@ -65,7 +69,7 @@ export default function TerminalView() {
 
     const term = termRef.current;
     term.clear();
-    term.writeln("\x1b[36mDGT FaceOps — InTerminal\x1b[0m");
+    term.writeln(`\x1b[36m${nomePainel} — InTerminal\x1b[0m`);
     term.writeln("Abrindo sessão…\r\n");
 
     let ticket;
@@ -122,7 +126,7 @@ export default function TerminalView() {
       if (wsRef.current === ws) wsRef.current = null;
       setEstado((atual) => (atual === "erro" ? "erro" : "desconectado"));
     };
-  }, [hostId, desconectar]);
+  }, [hostId, desconectar, nomePainel]);
 
   // Cria o terminal uma única vez. Recriar a cada render perderia o
   // histórico de rolagem e a posição do cursor a cada mudança de estado.

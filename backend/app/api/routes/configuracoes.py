@@ -56,6 +56,9 @@ async def publico(request: Request):
         "nome": cfg.get("projeto.nome"),
         "subtitulo": cfg.get("projeto.subtitulo"),
         "cliente": cfg.get("projeto.cliente"),
+        "cor_escura": cfg.get("projeto.cor_escura"),
+        "cor_primaria": cfg.get("projeto.cor_primaria"),
+        "cor_destaque": cfg.get("projeto.cor_destaque"),
     }
 
 

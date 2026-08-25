@@ -28,6 +28,7 @@ import ServicosView from "../components/views/ServicosView";
 import ServidoresView from "../components/views/ServidoresView";
 import TerminalView from "../components/views/TerminalView";
 import UsuariosView from "../components/views/UsuariosView";
+import { MARCA_PADRAO, urlLogo } from "../marca";
 import { useSessao, usePermissions } from "../usePermissions";
 
 const MENU = [
@@ -52,7 +53,8 @@ const MENU = [
 ];
 
 export default function AppShell() {
-  const { usuario, sair, recarregar } = useSessao();
+  const { usuario, sair, recarregar, marca } = useSessao();
+  const m = marca || MARCA_PADRAO;
   const { has } = usePermissions();
   const [aba, setAba] = useState("painel");
   const [trocandoSenha, setTrocandoSenha] = useState(false);
@@ -78,7 +80,7 @@ export default function AppShell() {
     <div className="shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <img src="/logos/dgt-sidebar.png" alt="DGT FaceOps" />
+          <img src={urlLogo(m.logos, "sidebar", "/logos/dgt-sidebar.png")} alt={m.nome} />
         </div>
 
         <nav className="sidebar-nav">

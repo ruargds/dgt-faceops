@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from app.api.routes import (
     audit, auth, backups, configuracoes, destinos, hosts, logs, maintenance,
-    ops, terminal,
+    marca, ops, terminal,
 )
 from app.core.config import settings
 from app.core.security import hash_password
@@ -319,6 +319,7 @@ async def saude():
 
 app.include_router(auth.router)
 app.include_router(configuracoes.router)
+app.include_router(marca.router)
 app.include_router(hosts.router)
 app.include_router(ops.router)
 app.include_router(backups.router)

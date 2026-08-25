@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { api } from "../../api";
+import { api, enviarLogo } from "../../api";
 import { usePermissions } from "../../usePermissions";
 import { Carregando, Erro } from "../Comuns";
-import { IconAtualizar, IconOk } from "../Icons";
+import { IconAtualizar, IconLixeira, IconOk } from "../Icons";
 
 /**
  * A tela se monta a partir do catálogo do backend.
@@ -12,6 +12,153 @@ import { IconAtualizar, IconOk } from "../Icons";
  * assim porque configuração cresce com o projeto, e ter que editar duas
  * pontas para cada campo novo garante que uma delas fica para trás.
  */
+const LOGOS = [
+  { tipo: "login", rotulo: "Tela de login", dica: "Aparece acima do formulário. Altura de exibição: 40 px.", padrao: "/logos/dgt-login.png" },
+  { tipo: "sidebar", rotulo: "Barra lateral", dica: "Fundo escuro — use versão clara ou negativa. Altura: 26 px.", padrao: "/logos/dgt-sidebar.png" },
+  { tipo: "favicon", rotulo: "Ícone da aba", dica: "Quadrado, idealmente 64x64.", padrao: "/logos/dgt-favicon.png" },
+];
+
+/**
+ * Logo por cliente, sem reconstruir a imagem.
+ *
+ * O arquivo vai para o volume de dados e é servido pelo backend. A mesma
+ * imagem Docker atende qualquer cliente — trocar a marca deixa de ser
+ * motivo para manter um build por cliente.
+ */
+function Marca({ onMudou }) {
+  const [situacao, setSituacao] = useState({});
+  const [ocupado, setOcupado] = useState("");
+  const [erro, setErro] = useState("");
+  const [versao, setVersao] = useState(Date.now());
+
+  const carregar = useCallback(async () => {
+    try {
+      setSituacao(await api.marcaSituacao());
+    } catch (ex) {
+      setErro(ex.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  async function enviar(tipo, arquivo) {
+    if (!arquivo) return;
+    setOcupado(tipo);
+    setErro("");
+    try {
+      await enviarLogo(tipo, arquivo);
+      await carregar();
+      setVersao(Date.now());
+      onMudou && onMudou();
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setOcupado("");
+    }
+  }
+
+  async function remover(tipo) {
+    setOcupado(tipo);
+    try {
+      await api.removerLogo(tipo);
+      await carregar();
+      setVersao(Date.now());
+      onMudou && onMudou();
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setOcupado("");
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="section-title" style={{ marginBottom: 4 }}>Logotipos</div>
+      <div className="small muted" style={{ marginBottom: 16 }}>
+        Substitui a marca padrão sem reconstruir a aplicação. PNG, JPG, GIF
+        ou SVG, até 2 MB. Fica no volume de dados, então sobrevive a
+        atualização.
+      </div>
+
+      <Erro mensagem={erro} />
+
+      <div className="row row-3">
+        {LOGOS.map((l) => {
+          const proprio = situacao[l.tipo];
+          const src = proprio ? `/api/marca/${l.tipo}?v=${versao}` : l.padrao;
+          return (
+            <div className="field" key={l.tipo}>
+              <label className="label">
+                {l.rotulo}
+                {proprio && (
+                  <span className="pill pill-ok" style={{ marginLeft: 6, textTransform: "none" }}>
+                    próprio
+                  </span>
+                )}
+              </label>
+
+              <div
+                style={{
+                  background: l.tipo === "sidebar" ? "var(--navy)" : "var(--bg-2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius)",
+                  padding: 14,
+                  marginBottom: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: 64,
+                }}
+              >
+                <img
+                  src={src}
+                  alt={l.rotulo}
+                  style={{ maxHeight: 40, maxWidth: "100%" }}
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              </div>
+
+              <div className="stack-h" style={{ gap: 6 }}>
+                <label
+                  className="btn btn-secondary btn-sm"
+                  style={{ cursor: "pointer", margin: 0 }}
+                >
+                  {ocupado === l.tipo ? "Enviando…" : "Escolher arquivo"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/svg+xml"
+                    style={{ display: "none" }}
+                    disabled={ocupado === l.tipo}
+                    onChange={(e) => {
+                      enviar(l.tipo, e.target.files && e.target.files[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {proprio && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => remover(l.tipo)}
+                    disabled={ocupado === l.tipo}
+                    title="Voltar ao padrão"
+                  >
+                    <IconLixeira size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="field-help">{l.dica}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ConfiguracoesView() {
   const { has } = usePermissions();
   const podeEditar = has("users.manage");
@@ -130,7 +277,8 @@ export default function ConfiguracoesView() {
 
       <div className="stack-v">
         {grupos.map((g) => (
-          <div className="card" key={g.categoria}>
+          <React.Fragment key={g.categoria}>
+          <div className="card">
             <div className="section-title" style={{ marginBottom: 4 }}>{g.titulo}</div>
             <div className="small muted" style={{ marginBottom: 16 }}>{g.descricao}</div>
 
@@ -215,6 +363,10 @@ export default function ConfiguracoesView() {
               })}
             </div>
           </div>
+          {g.categoria === "projeto" && podeEditar && (
+            <Marca onMudou={() => window.location.reload()} />
+          )}
+          </React.Fragment>
         ))}
       </div>
 

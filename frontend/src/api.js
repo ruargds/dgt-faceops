@@ -71,6 +71,13 @@ const post = (c, corpo) => request(c, { method: "POST", body: JSON.stringify(cor
 const patch = (c, corpo) => request(c, { method: "PATCH", body: JSON.stringify(corpo || {}) });
 const del = (c) => request(c, { method: "DELETE" });
 
+/** Envio de arquivo — sem Content-Type, o navegador monta o boundary. */
+export async function enviarLogo(tipo, arquivo) {
+  const forma = new FormData();
+  forma.append("arquivo", arquivo);
+  return request(`/marca/${tipo}`, { method: "POST", body: forma });
+}
+
 export const api = {
   // Autenticação
   login: (username, password) => post("/auth/login", { username, password }),
@@ -86,6 +93,8 @@ export const api = {
   // Configuração do painel
   config: () => get("/config"),
   configPublico: () => get("/config/publico"),
+  marcaSituacao: () => get("/marca"),
+  removerLogo: (tipo) => del(`/marca/${tipo}`),
   salvarConfig: (valores) => patch("/config", { valores }),
   restaurarConfig: (chave) => del(`/config/${chave}`),
 

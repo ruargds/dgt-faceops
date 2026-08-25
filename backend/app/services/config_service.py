@@ -163,6 +163,16 @@ CATALOGO: list[ItemConfig] = [
                "",
                "Opcional. Útil quando a mesma equipe opera mais de uma "
                "instalação — evita agir no ambiente errado."),
+    ItemConfig("projeto.cor_escura", "projeto", "Cor escura (barra lateral)", "texto",
+               "#0D1F35",
+               "Hexadecimal, com #. É o fundo da barra lateral e da tela "
+               "de login."),
+    ItemConfig("projeto.cor_primaria", "projeto", "Cor primária (botões)", "texto",
+               "#1A6FC4",
+               "Hexadecimal, com #. Botões principais e item de menu ativo."),
+    ItemConfig("projeto.cor_destaque", "projeto", "Cor de destaque", "texto",
+               "#00AEEF",
+               "Hexadecimal, com #. Detalhes e cursor do terminal."),
 
     # Padrões dos servidores
     ItemConfig("servidores.ffmulti_dir", "servidores",

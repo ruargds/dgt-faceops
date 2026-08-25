@@ -1,22 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { api, setToken } from "../api";
+import { MARCA_PADRAO, urlLogo } from "../marca";
 
-export default function Login({ onEntrar }) {
+export default function Login({ onEntrar, marca }) {
+  const m = marca || MARCA_PADRAO;
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
-  // Identidade vem da configuração — a mesma instalação atende outro
-  // cliente só trocando o nome, sem tocar em código.
-  const [marca, setMarca] = useState({
-    nome: "DGT FaceOps",
-    subtitulo: "Operação do FindFace Multi",
-    cliente: "",
-  });
-
-  useEffect(() => {
-    api.configPublico().then(setMarca).catch(() => {});
-  }, []);
 
   async function enviar(e) {
     e.preventDefault();
@@ -35,13 +26,17 @@ export default function Login({ onEntrar }) {
   return (
     <div className="login-bg">
       <form className="login-card" onSubmit={enviar}>
-        <img className="login-logo" src="/logos/dgt-login.png" alt="DGT" />
+        <img
+          className="login-logo"
+          src={urlLogo(m.logos, "login", "/logos/dgt-login.png")}
+          alt={m.nome}
+        />
         <div className="login-sub">
-          {marca.nome} — {marca.subtitulo}
-          {marca.cliente && (
+          {m.nome} — {m.subtitulo}
+          {m.cliente && (
             <>
               <br />
-              <strong>{marca.cliente}</strong>
+              <strong>{m.cliente}</strong>
             </>
           )}
         </div>

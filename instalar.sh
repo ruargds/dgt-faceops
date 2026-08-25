@@ -171,9 +171,9 @@ PORTA="${PORTA:-8080}"
 
 # ── 6. Diretórios e fim de linha ───────────────────────────────────────
 passo "6/9" "Diretórios e scripts..."
-mkdir -p data/backups data/sessions rclone
+mkdir -p data/backups data/sessions data/marca rclone
 [ -f rclone/rclone.conf ] || touch rclone/rclone.conf
-ok "data/backups, data/sessions, rclone"
+ok "data/backups, data/sessions, data/marca, rclone"
 
 # O ffmulti-backup.sh roda dentro de container Linux e nos servidores. Se
 # o projeto veio de ZIP baixado no Windows, veio com CRLF e o bash morre
