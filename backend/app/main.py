@@ -23,6 +23,7 @@ from app.db.database import AsyncSessionLocal, Base, engine
 from app.models import Destino, User, VisaoLog  # noqa: F401 — registra os modelos
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
+from app.services.faxina_service import FaxinaService
 from app.services.logs_service import LogManager
 from app.services.maintenance_service import MaintenanceService
 from app.services.metrics_service import MetricsService
@@ -230,7 +231,10 @@ async def iniciar() -> None:
     app.state.backups = BackupService(ssh, storage, config)
     app.state.terminals = TerminalManager()
     app.state.logs = LogManager()
-    app.state.scheduler = SchedulerService(app.state.backups)
+    app.state.faxina = FaxinaService(config)
+    app.state.scheduler = SchedulerService(
+        app.state.backups, faxina=app.state.faxina, config=config
+    )
 
     await app.state.scheduler.start()
     app.state.tarefa_varredura = asyncio.create_task(_varredor_de_ociosas(app))

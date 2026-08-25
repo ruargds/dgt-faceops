@@ -87,8 +87,10 @@ def cron_legivel(expressao: str) -> str:
 
 
 class SchedulerService:
-    def __init__(self, backup_service) -> None:
+    def __init__(self, backup_service, faxina=None, config=None) -> None:
         self.backups = backup_service
+        self.faxina = faxina
+        self.config = config
         self.scheduler = AsyncIOScheduler(
             jobstores={"default": MemoryJobStore()},
             timezone=settings.TZ,
@@ -105,7 +107,31 @@ class SchedulerService:
     async def start(self) -> None:
         self.scheduler.start()
         await self.sincronizar()
+        self._agendar_faxina()
         log.info("agendador iniciado com %d job(s)", len(self.scheduler.get_jobs()))
+
+    def _agendar_faxina(self) -> None:
+        """
+        Uma tarefa por dia, e só. Laço contínuo para limpeza seria custo
+        permanente para resolver um problema que aparece devagar.
+        """
+        if self.faxina is None:
+            return
+        hora = 4
+        if self.config is not None:
+            try:
+                hora = int(self.config.get("faxina.hora"))
+            except (KeyError, ValueError, TypeError):
+                hora = 4
+
+        self.scheduler.add_job(
+            self.faxina.executar,
+            trigger=CronTrigger(hour=hora, minute=17, timezone=settings.TZ),
+            id="faxina",
+            name="Faxina automática",
+            replace_existing=True,
+        )
+        log.info("faxina agendada para %02d:17", hora)
 
     async def shutdown(self) -> None:
         if self.scheduler.running:
@@ -116,6 +142,8 @@ class SchedulerService:
     async def sincronizar(self) -> int:
         """Remonta o agendador a partir da tabela `schedules`."""
         self.scheduler.remove_all_jobs()
+        # remove_all_jobs leva a faxina junto; recriar depois de remontar
+        self._recriar_faxina = True
 
         async with AsyncSessionLocal() as db:
             resultado = await db.execute(
@@ -145,6 +173,10 @@ class SchedulerService:
                 agendamento.next_run_at = job.next_run_time
 
             await db.commit()
+
+        if getattr(self, "_recriar_faxina", False):
+            self._agendar_faxina()
+            self._recriar_faxina = False
 
         return len(self.scheduler.get_jobs())
 

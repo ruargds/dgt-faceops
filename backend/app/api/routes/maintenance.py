@@ -129,6 +129,40 @@ async def contencao(
     return resultado
 
 
+@router.get("/faxina/previa")
+async def faxina_previa(
+    request: Request,
+    _: User = Depends(require_permission("maintenance.view")),
+):
+    """
+    O que a faxina removeria agora. Só leitura.
+
+    Não recebe host_id: a faxina age no PAINEL, não nos servidores.
+    """
+    return await request.app.state.faxina.previa()
+
+
+@router.post("/faxina/executar")
+async def faxina_executar(
+    request: Request,
+    autor: User = Depends(require_permission("maintenance.apply")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Roda a faxina fora de hora."""
+    resultado = await request.app.state.faxina.executar()
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="maintenance.apply",
+        target="painel",
+        ip=client_ip(request),
+        detail={"acao": "faxina manual", **{
+            k: v for k, v in resultado.items() if isinstance(v, (int, float))
+        }},
+    )
+    return resultado
+
+
 @router.post("/{host_id}/arquivar")
 async def arquivar(
     host_id: int,

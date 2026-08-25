@@ -139,6 +139,12 @@ CATEGORIAS = {
         "Sessão e acesso",
         "Duração do login e alerta de disco.",
     ),
+    "faxina": (
+        "Faxina automática",
+        "Impede o painel de crescer sem fim. Roda uma vez por dia, no "
+        "horário abaixo. O artefato de backup não é tocado aqui — ele tem "
+        "retenção própria, por destino.",
+    ),
 }
 
 
@@ -260,6 +266,32 @@ CATALOGO: list[ItemConfig] = [
                90,
                "Acima disso o cartão do servidor fica vermelho no Painel.",
                minimo=50, maximo=99),
+
+    # Faxina
+    ItemConfig("faxina.hora", "faxina",
+               "Hora em que a faxina roda", "numero",
+               4,
+               "Uma vez por dia, nesta hora. Escolha um horário fora da "
+               "janela dos backups.",
+               minimo=0, maximo=23),
+    ItemConfig("faxina.gravacoes_dias", "faxina",
+               "Guardar gravações do terminal por (dias)", "numero",
+               90,
+               "Um arquivo .cast por sessão. 0 = nunca apagar — só use se "
+               "houver exigência de auditoria que justifique.",
+               minimo=0, maximo=3650),
+    ItemConfig("faxina.auditoria_dias", "faxina",
+               "Guardar auditoria por (dias)", "numero",
+               365,
+               "Registro de nível crítico fica o TRIPLO deste prazo: é o "
+               "que interessa numa investigação, e é fração do volume.",
+               minimo=0, maximo=3650),
+    ItemConfig("faxina.log_execucao_dias", "faxina",
+               "Guardar o log das execuções de backup por (dias)", "numero",
+               60,
+               "Depois disso o texto do log é esvaziado, mas a linha do "
+               "histórico permanece. O log é o que pesa; a linha, não.",
+               minimo=0, maximo=3650),
 ]
 
 POR_CHAVE: dict[str, ItemConfig] = {i.chave: i for i in CATALOGO}

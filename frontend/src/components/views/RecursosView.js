@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, formatDuracao, nivel } from "../../api";
 import {
   Carregando,
@@ -17,6 +17,8 @@ export default function RecursosView() {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [coletadoEm, setColetadoEm] = useState(null);
+  const [aoVivo, setAoVivo] = useState(false);
+  const [intervalo, setIntervalo] = useState(15);
 
   // Coleta SOB DEMANDA. Sem polling automático: o painel bate SSH no
   // servidor de produção a cada leitura, e ficar fazendo isso de minuto
@@ -41,6 +43,46 @@ export default function RecursosView() {
     if (hostId) coletar();
   }, [hostId, coletar]);
 
+  // Acompanhamento ao vivo.
+  //
+  // Três garantias para não onerar nada: para ao sair da tela (cleanup do
+  // efeito), para quando a aba deixa de estar visível (Page Visibility), e
+  // nunca dispara uma coleta com outra em curso. Cada coleta é um SSH no
+  // servidor de produção — deixar isso rodando esquecido em segundo plano
+  // seria exatamente o tipo de peso que o painel promete não criar.
+  const refCarregando = useRef(false);
+  refCarregando.current = carregando;
+
+  useEffect(() => {
+    if (!aoVivo || !hostId) return undefined;
+
+    let vivo = true;
+    let timer = null;
+
+    const tick = async () => {
+      if (!vivo) return;
+      if (document.visibilityState === "visible" && !refCarregando.current) {
+        await coletar();
+      }
+      if (vivo) timer = setTimeout(tick, intervalo * 1000);
+    };
+
+    timer = setTimeout(tick, intervalo * 1000);
+
+    const aoTrocarVisibilidade = () => {
+      if (document.visibilityState === "visible" && vivo && !refCarregando.current) {
+        coletar();
+      }
+    };
+    document.addEventListener("visibilitychange", aoTrocarVisibilidade);
+
+    return () => {
+      vivo = false;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", aoTrocarVisibilidade);
+    };
+  }, [aoVivo, hostId, intervalo, coletar]);
+
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
   if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
@@ -59,6 +101,31 @@ export default function RecursosView() {
         </div>
         <div className="page-actions">
           <SeletorHost hosts={hosts} hostId={hostId} onMudar={setHostId} />
+          {aoVivo && (
+            <select
+              value={intervalo}
+              onChange={(e) => setIntervalo(Number(e.target.value))}
+              style={{ width: "auto" }}
+              title="Intervalo entre coletas"
+            >
+              <option value={10}>10s</option>
+              <option value={15}>15s</option>
+              <option value={30}>30s</option>
+              <option value={60}>60s</option>
+            </select>
+          )}
+          <button
+            className={`btn ${aoVivo ? "btn-danger" : "btn-secondary"}`}
+            onClick={() => setAoVivo((a) => !a)}
+            disabled={!hostId}
+            title={
+              aoVivo
+                ? "Para de coletar"
+                : "Coleta a cada intervalo enquanto esta tela estiver aberta e visível"
+            }
+          >
+            {aoVivo ? "Parar acompanhamento" : "Acompanhar ao vivo"}
+          </button>
           <button className="btn btn-primary" onClick={coletar} disabled={carregando || !hostId}>
             <IconAtualizar size={15} /> {carregando ? "Coletando…" : "Atualizar"}
           </button>
@@ -71,10 +138,17 @@ export default function RecursosView() {
 
       {dados && (
         <div className="stack-v">
-          <div className="small muted">
-            Coletado em {coletadoEm ? coletadoEm.toLocaleTimeString("pt-BR") : "—"} ·
-            leitura levou {dados.coleta_ms} ms · máquina de pé há{" "}
-            {formatDuracao(dados.uptime_segundos)}
+          <div className="stack-h small muted">
+            <span>
+              Coletado em {coletadoEm ? coletadoEm.toLocaleTimeString("pt-BR") : "—"} ·
+              leitura levou {dados.coleta_ms} ms · máquina de pé há{" "}
+              {formatDuracao(dados.uptime_segundos)}
+            </span>
+            {aoVivo && (
+              <span className="pill pill-ok" title="Para sozinho ao sair da tela ou trocar de aba">
+                ao vivo · {intervalo}s
+              </span>
+            )}
           </div>
 
           <div className="grid-stats">

@@ -115,6 +115,8 @@ export const api = {
   diagnostico: (id) => get(`/manutencao/${id}`),
   contencaoLog: (id, d) => post(`/manutencao/${id}/contencao`, d),
   arquivarLog: (id, d) => post(`/manutencao/${id}/arquivar`, d),
+  faxinaPrevia: () => get("/manutencao/faxina/previa"),
+  faxinaExecutar: () => post("/manutencao/faxina/executar"),
 
   // Backups
   dispararBackup: (id, d) => post(`/backups/${id}`, d),

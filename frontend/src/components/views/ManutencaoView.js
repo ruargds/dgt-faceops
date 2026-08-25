@@ -19,6 +19,156 @@ import { IconAlerta, IconAtualizar, IconLogs, IconOk } from "../Icons";
  * facial não é o FindFace — é o disco raiz enchendo de log. E resolver
  * isso não deveria exigir linha de comando em quatro máquinas diferentes.
  */
+function Faxina() {
+  const { has } = usePermissions();
+  const [previa, setPrevia] = useState(null);
+  const [erro, setErro] = useState("");
+  const [rodando, setRodando] = useState(false);
+  const [feito, setFeito] = useState(null);
+
+  const carregar = useCallback(async () => {
+    try {
+      setPrevia(await api.faxinaPrevia());
+    } catch (ex) {
+      setErro(ex.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  async function executar() {
+    setRodando(true);
+    setErro("");
+    try {
+      setFeito(await api.faxinaExecutar());
+      await carregar();
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setRodando(false);
+    }
+  }
+
+  if (!previa) return null;
+
+  const r = previa.retencoes || {};
+  const totalBytes = (previa.gravacoes_bytes || 0) + (previa.staging_bytes || 0);
+  const temAlgo =
+    previa.gravacoes > 0 ||
+    previa.staging > 0 ||
+    previa.auditoria > 0 ||
+    previa.logs_execucao > 0;
+
+  return (
+    <div className="card">
+      <div className="section-title" style={{ marginBottom: 4 }}>
+        Faxina do painel
+      </div>
+      <div className="small muted" style={{ marginBottom: 14 }}>
+        Roda sozinha uma vez por dia. Impede o painel de crescer sem fim.
+        O artefato de backup não é tocado aqui — tem retenção própria, por
+        destino.
+      </div>
+
+      <Erro mensagem={erro} />
+
+      <div className="table-wrap" style={{ marginBottom: 12 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>O que</th>
+              <th className="right">A remover agora</th>
+              <th>Retenção</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Gravações do terminal</td>
+              <td className="right mono">
+                {previa.gravacoes} ({formatBytes(previa.gravacoes_bytes)})
+              </td>
+              <td className="small muted">{r.gravacoes_dias} dias</td>
+            </tr>
+            <tr>
+              <td>
+                Staging órfão
+                <div className="small muted">
+                  sobra de execução que falhou no meio
+                </div>
+              </td>
+              <td className="right mono">
+                {previa.staging} ({formatBytes(previa.staging_bytes)})
+              </td>
+              <td className="small muted">24 horas</td>
+            </tr>
+            <tr>
+              <td>
+                Registros de auditoria
+                <div className="small muted">
+                  nível crítico fica o triplo do prazo
+                </div>
+              </td>
+              <td className="right mono">
+                {previa.auditoria} de {previa.auditoria_total}
+              </td>
+              <td className="small muted">{r.auditoria_dias} dias</td>
+            </tr>
+            <tr>
+              <td>
+                Log das execuções
+                <div className="small muted">
+                  esvazia o texto, mantém a linha do histórico
+                </div>
+              </td>
+              <td className="right mono">{previa.logs_execucao}</td>
+              <td className="small muted">{r.log_execucao_dias} dias</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {feito && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 12 }}
+        >
+          <span className="small" style={{ color: "#06694a" }}>
+            Faxina concluída em {feito.duracao_s}s —{" "}
+            {feito.gravacoes_removidas} gravação(ões),{" "}
+            {feito.staging_removido} staging, {feito.auditoria_removida}{" "}
+            registro(s), {feito.logs_esvaziados} log(s) esvaziado(s).
+            {feito.erros && feito.erros.length > 0 && (
+              <div style={{ color: "#8c1c1c", marginTop: 4 }}>
+                {feito.erros.join(" · ")}
+              </div>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="stack-h">
+        <span className="small muted" style={{ flex: 1 }}>
+          {temAlgo
+            ? `Liberaria ${formatBytes(totalBytes)} em disco agora.`
+            : "Nada a remover no momento."}{" "}
+          Os prazos ficam em <strong>Configurações → Faxina automática</strong>.
+        </span>
+        {has("maintenance.apply") && (
+          <button
+            className="btn btn-secondary"
+            onClick={executar}
+            disabled={rodando || !temAlgo}
+          >
+            {rodando ? "Executando…" : "Executar agora"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ManutencaoView() {
   const { has } = usePermissions();
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
@@ -360,6 +510,8 @@ export default function ManutencaoView() {
           )}
         </div>
       )}
+
+      <Faxina />
 
       {confirmando && host && (
         <ConfirmarDigitando
