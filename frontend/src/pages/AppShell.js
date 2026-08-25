@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { api } from "../api";
+import { api, setToken } from "../api";
 import {
   IconAgenda,
   IconAuditoria,
@@ -168,7 +168,10 @@ function ModalTrocarSenha({ onFechar, onPronto }) {
     setErro("");
     setEnviando(true);
     try {
-      await api.trocarSenha(atual, nova);
+      const r = await api.trocarSenha(atual, nova);
+      // A troca invalidou o token anterior; sem guardar o novo, a próxima
+      // requisição cairia para o login.
+      if (r && r.access_token) setToken(r.access_token);
       await onPronto();
     } catch (ex) {
       setErro(ex.message);

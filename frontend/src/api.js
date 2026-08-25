@@ -75,6 +75,7 @@ export const api = {
   // Autenticação
   login: (username, password) => post("/auth/login", { username, password }),
   me: () => get("/auth/me"),
+  sair: () => post("/auth/sair"),
   catalogo: () => get("/auth/catalogo"),
   trocarSenha: (senha_atual, senha_nova) => post("/auth/trocar-senha", { senha_atual, senha_nova }),
   usuarios: () => get("/auth/usuarios"),

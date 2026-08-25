@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import client_ip, get_current_user, require_permission
 from app.core.permissions import PERMISSION_CATALOG, ROLE_LABELS, permissions_for
+from app.core.rate_limit import freio
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.database import get_db
 from app.models.user import User
@@ -30,25 +31,47 @@ async def login(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    resultado = await db.execute(
-        select(User).where(User.username == dados.username.strip().lower())
-    )
+    ip = client_ip(request)
+    tentado = dados.username.strip().lower()
+
+    # Freio antes de tocar no banco: negar cedo custa menos e nao entrega
+    # tempo de resposta diferente para usuario que existe.
+    barrado, faltam = freio.bloqueado(ip, tentado)
+    if barrado:
+        await audit_service.registrar(
+            db, usuario=tentado[:120], action="auth.login", success=False,
+            ip=ip, level="warning",
+            detail={"motivo": "bloqueado por excesso de tentativas"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Muitas tentativas. Tente de novo em {max(1, faltam // 60)} "
+                "minuto(s)."
+            ),
+        )
+
+    resultado = await db.execute(select(User).where(User.username == tentado))
     usuario = resultado.scalars().first()
 
     # Mensagem única para usuário inexistente e senha errada — dizer qual
     # dos dois falhou entrega a lista de usuários válidos a quem tenta.
     if usuario is None or not verify_password(dados.password, usuario.hashed_password):
+        restantes = freio.registrar_falha(ip, tentado)
         await audit_service.registrar(
             db,
-            usuario=dados.username[:120],
+            usuario=tentado[:120],
             action="auth.login",
             success=False,
-            ip=client_ip(request),
-            detail={"motivo": "credenciais inválidas"},
+            ip=ip,
+            detail={"motivo": "credenciais inválidas", "restantes": restantes},
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuário ou senha inválidos",
+            detail=(
+                "Usuário ou senha inválidos"
+                + (f" — restam {restantes} tentativa(s)" if restantes <= 2 else "")
+            ),
         )
 
     if not usuario.is_active:
@@ -56,6 +79,7 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN, detail="Usuário desativado"
         )
 
+    freio.registrar_sucesso(ip, tentado)
     usuario.last_login_at = datetime.now(timezone.utc)
     await db.commit()
 
@@ -63,14 +87,44 @@ async def login(
         db,
         usuario=usuario.username,
         action="auth.login",
-        ip=client_ip(request),
+        ip=ip,
         detail={"perfil": usuario.role},
     )
 
     return TokenOut(
-        access_token=create_access_token(usuario.username, {"role": usuario.role}),
+        access_token=create_access_token(
+            usuario.username,
+            {"role": usuario.role, "tv": usuario.token_version},
+        ),
         usuario=UsuarioOut.model_validate(usuario),
     )
+
+
+@router.post("/sair")
+async def sair(
+    request: Request,
+    usuario: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Encerra a sessão do lado do SERVIDOR.
+
+    Incrementa a versão do token, o que invalida imediatamente qualquer
+    token emitido antes — inclusive um que tenha sido copiado do
+    localStorage por outra pessoa. Sem isto, "sair" seria apenas apagar
+    o token do próprio navegador.
+
+    Derruba todas as sessões do usuário, em todos os dispositivos. É o
+    comportamento certo para um painel que dá acesso a servidor de
+    produção: na dúvida, encerra tudo.
+    """
+    usuario.token_version += 1
+    await db.commit()
+
+    await audit_service.registrar(
+        db, usuario=usuario.username, action="auth.sair", ip=client_ip(request),
+    )
+    return {"ok": True, "mensagem": "Sessão encerrada em todos os dispositivos."}
 
 
 @router.get("/me", response_model=MeOut)
@@ -102,6 +156,9 @@ async def trocar_senha(
 
     usuario.hashed_password = hash_password(dados.senha_nova)
     usuario.senha_padrao = False
+    # Trocar senha porque suspeita de vazamento nao adianta se o token
+    # antigo continuar valendo.
+    usuario.token_version += 1
     await db.commit()
 
     await audit_service.registrar(
@@ -110,7 +167,16 @@ async def trocar_senha(
         action="auth.trocar_senha",
         ip=client_ip(request),
     )
-    return {"ok": True, "mensagem": "Senha alterada."}
+    # Token novo junto: a troca invalidou o anterior, e sem devolver um
+    # novo a tela cairia para o login logo apos trocar a senha.
+    return {
+        "ok": True,
+        "mensagem": "Senha alterada. As outras sessões foram encerradas.",
+        "access_token": create_access_token(
+            usuario.username,
+            {"role": usuario.role, "tv": usuario.token_version},
+        ),
+    }
 
 
 # ── Gestão de usuários ─────────────────────────────────────────────────
@@ -191,9 +257,14 @@ async def atualizar_usuario(
                 status_code=400, detail="você não pode desativar a própria conta"
             )
         alvo.is_active = dados.is_active
+        if not dados.is_active:
+            # Desativar tem que derrubar a sessao aberta, nao so impedir
+            # o proximo login.
+            alvo.token_version += 1
     if dados.password:
         alvo.hashed_password = hash_password(dados.password)
         alvo.senha_padrao = False
+        alvo.token_version += 1
 
     await db.commit()
     await db.refresh(alvo)

@@ -38,6 +38,15 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário inativo ou removido",
         )
+
+    # Token emitido antes de sair, trocar senha ou ser desativado deixa de
+    # valer. Sem esta checagem, "sair" seria só apagar o token do
+    # navegador — quem tivesse copiado antes continuaria dentro.
+    if int(payload.get("tv", 0)) != usuario.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessão encerrada. Entre novamente.",
+        )
     return usuario
 
 

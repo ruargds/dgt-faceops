@@ -39,9 +39,37 @@ logging.basicConfig(
 log = logging.getLogger("faceops")
 
 
+# Colunas acrescentadas depois da primeira versão. `create_all` cria
+# tabela que falta, mas NÃO acrescenta coluna em tabela que já existe —
+# um painel atualizado quebraria com "column does not exist".
+#
+# Alembic seria o caminho formal, mas para um punhado de colunas ele
+# custa mais do que resolve: mais uma dependência, mais um passo no
+# deploy, e um diretório de migrações para manter. `ADD COLUMN IF NOT
+# EXISTS` é idempotente e roda em milissegundos.
+COLUNAS_NOVAS = [
+    ("users", "senha_padrao", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("users", "token_version", "INTEGER NOT NULL DEFAULT 1"),
+    ("hosts", "host_key_pub", "TEXT NOT NULL DEFAULT ''"),
+]
+
+
 async def _criar_tabelas() -> None:
+    from sqlalchemy import text
+
     async with engine.begin() as conexao:
         await conexao.run_sync(Base.metadata.create_all)
+
+    async with engine.begin() as conexao:
+        for tabela, coluna, tipo in COLUNAS_NOVAS:
+            try:
+                await conexao.execute(
+                    text(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}")
+                )
+            except Exception as exc:
+                # Tabela pode não existir ainda numa instalação parcial —
+                # não pode impedir a subida.
+                log.warning("coluna %s.%s: %s", tabela, coluna, exc)
 
 
 async def _semear_admin() -> None:

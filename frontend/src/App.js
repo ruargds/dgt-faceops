@@ -30,7 +30,15 @@ export default function App() {
     carregar();
   }, [carregar]);
 
-  const sair = useCallback(() => {
+  const sair = useCallback(async () => {
+    // Avisa o servidor ANTES de limpar: ele incrementa a versão do token,
+    // o que invalida qualquer cópia que já tenha sido feita. Só apagar do
+    // navegador deixaria um token roubado valendo até expirar.
+    try {
+      await api.sair();
+    } catch {
+      // Servidor fora do ar não pode impedir o usuário de sair da tela
+    }
     clearToken();
     setSessao({ usuario: null, permissoes: [] });
   }, []);
