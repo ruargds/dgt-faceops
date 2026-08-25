@@ -1,5 +1,8 @@
 # Ambiente
 .env
+
+# Certificado TLS — gerado por instalação, nunca versionado
+tls/
 *.pem
 *.key
 id_rsa*

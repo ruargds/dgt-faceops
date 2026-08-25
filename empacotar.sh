@@ -79,6 +79,7 @@ copiar frontend/src
 echo
 echo "Scripts (só o que o painel executa nos servidores):"
 copiar scripts/ffmulti-backup.sh
+copiar scripts/gerar_certificado.sh
 
 if [ "$COM_DOCS" = "1" ]; then
     echo

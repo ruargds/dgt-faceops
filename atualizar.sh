@@ -196,6 +196,9 @@ if [ "$BUILD" = "1" ]; then
     ok "imagens construídas"
 fi
 
+# Certificado pode nao existir se o repositorio foi clonado direto
+[ -f tls/faceops.crt ] || bash scripts/gerar_certificado.sh >/dev/null 2>&1
+
 echo "  reiniciando apenas os containers do painel..."
 $SUDO docker compose up -d --remove-orphans 2>&1 | tail -10
 
@@ -215,8 +218,9 @@ if [ "$PRONTO" = "1" ]; then
     REV="$(curl -fsS "${BASE}/api/saude" 2>/dev/null | grep -oE '"revisao": *"[^"]*"' | cut -d'"' -f4)"
     echo
     echo "════════════════════════════════════════════════════"
+    PORTA_S="$(grep -E '^PORTA_HTTPS=' .env 2>/dev/null | cut -d= -f2)"
     echo "  ${V}Atualizado${Z} — revisão ${REV:-$FACEOPS_REVISAO}"
-    echo "  $BASE"
+    echo "  https://localhost:${PORTA_S:-8443}"
     echo "════════════════════════════════════════════════════"
     echo
     echo "  O FindFace Multi não foi tocado. Os agendamentos voltaram"

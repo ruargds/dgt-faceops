@@ -137,7 +137,11 @@ else
     SENHA_BD="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("".join(secrets.choice(a) for _ in range(24)))')"
 
     echo
-    read -r -p "  Porta do painel [8080]: " PORTA
+    echo "  O painel responde em HTTPS. O HTTP so redireciona para ele —"
+    echo "  assim usuario e senha nao trafegam em claro na rede."
+    read -r -p "  Porta HTTPS [8443]: " PORTA_S
+    PORTA_S="${PORTA_S:-8443}"
+    read -r -p "  Porta HTTP (redireciona) [8080]: " PORTA
     PORTA="${PORTA:-8080}"
 
     echo
@@ -149,12 +153,13 @@ else
     sed -e "s|^SECRET_KEY=.*|SECRET_KEY=$CHAVE|" \
         -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$SENHA_BD|" \
         -e "s|^PORTA_HTTP=.*|PORTA_HTTP=$PORTA|" \
+        -e "s|^PORTA_HTTPS=.*|PORTA_HTTPS=$PORTA_S|" \
         .env.example > .env
     chmod 600 .env
 
     ok "SECRET_KEY gerada (64 bytes aleatórios)"
     ok "senha do banco gerada"
-    ok "painel na porta $PORTA"
+    ok "painel em HTTPS na porta $PORTA_S (HTTP $PORTA redireciona)"
 
     if [ "$DISCO" != "$RAIZ/data/backups" ]; then
         $SUDO mkdir -p "$DISCO"
@@ -168,6 +173,8 @@ fi
 
 PORTA="$(grep -E '^PORTA_HTTP=' .env | cut -d= -f2)"
 PORTA="${PORTA:-8080}"
+PORTA_S="$(grep -E '^PORTA_HTTPS=' .env | cut -d= -f2)"
+PORTA_S="${PORTA_S:-8443}"
 
 # ── 6. Diretórios e fim de linha ───────────────────────────────────────
 passo "6/9" "Diretórios e scripts..."
@@ -188,6 +195,10 @@ for f in scripts/*.sh deploy.sh instalar.sh; do
 done
 [ "$CORRIGIDOS" -gt 0 ] && ok "$CORRIGIDOS script(s) convertido(s) para LF" || ok "scripts em LF"
 chmod +x scripts/*.sh deploy.sh 2>/dev/null
+
+# ── 6b. Certificado TLS ────────────────────────────────────────────────
+passo "6b/9" "Certificado TLS..."
+bash scripts/gerar_certificado.sh || falha "nao consegui gerar o certificado"
 
 # ── 7. Build ───────────────────────────────────────────────────────────
 passo "7/9" "Construindo as imagens (primeira vez leva alguns minutos)..."
@@ -221,8 +232,9 @@ ok "painel respondendo"
 # ── 9. Firewall ────────────────────────────────────────────────────────
 passo "9/9" "Firewall..."
 if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
-    $SUDO ufw allow "${PORTA}/tcp" comment 'DGT FaceOps' >/dev/null 2>&1
-    ok "porta ${PORTA} liberada no ufw"
+    $SUDO ufw allow "${PORTA}/tcp" comment 'DGT FaceOps (redireciona)' >/dev/null 2>&1
+    $SUDO ufw allow "${PORTA_S}/tcp" comment 'DGT FaceOps' >/dev/null 2>&1
+    ok "portas ${PORTA} e ${PORTA_S} liberadas no ufw"
 else
     ok "ufw inativo — nada a fazer"
 fi
@@ -234,7 +246,7 @@ echo
 echo "════════════════════════════════════════════════════"
 echo "  ${V}Painel no ar${Z}"
 echo
-echo "  Endereço.........: ${C}http://${IP}:${PORTA}${Z}"
+echo "  Endereço.........: ${C}https://${IP}:${PORTA_S}${Z}"
 echo "  Primeiro acesso..: ${A}admin / admin123${Z}"
 echo "════════════════════════════════════════════════════"
 echo
@@ -248,6 +260,10 @@ echo "    2. Testar conexão em cada um"
 echo "    3. Destinos → conferir o destino local e cadastrar o externo"
 echo "    4. Backups → disparar um 'config' para validar de ponta a ponta"
 echo "    5. Agendamentos → programar a recorrência"
+echo
+echo "  ${A}O navegador vai avisar que o certificado nao e confiavel.${Z}"
+echo "  E esperado — ele e autoassinado, para cifrar o trafego na rede"
+echo "  interna. Aceite uma vez. A conexao fica cifrada do mesmo jeito."
 echo
 echo "  Guia completo: docs/15_SOLUCAO_PRONTA.md"
 echo

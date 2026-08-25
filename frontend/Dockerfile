@@ -18,6 +18,8 @@ COPY frontend/public ./public
 RUN CI=false INLINE_RUNTIME_CHUNK=false npm run build
 
 FROM nginx:1.27-alpine
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# Template: a imagem do nginx roda envsubst nele na subida, para a
+# porta externa do HTTPS entrar no redirecionamento.
+COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 80

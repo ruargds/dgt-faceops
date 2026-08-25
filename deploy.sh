@@ -47,8 +47,19 @@ else
     COMPOSE="docker compose"
 fi
 
+# ── Certificado TLS ────────────────────────────────────────────────────
+# Sem ele o nginx nao sobe. Gerar aqui torna o deploy tolerante a quem
+# clonou o repositorio sem passar pelo instalador.
+if [ ! -f tls/faceops.crt ]; then
+    echo "[0/4] Gerando certificado TLS..."
+    bash scripts/gerar_certificado.sh || {
+        echo "ERRO: nao consegui gerar o certificado."
+        exit 1
+    }
+fi
+
 # ── Diretórios de dados ────────────────────────────────────────────────
-mkdir -p data/backups data/sessions rclone
+mkdir -p data/backups data/sessions data/marca rclone
 if [ ! -f rclone/rclone.conf ]; then
     # O compose monta este diretório como read-only; sem o arquivo o
     # container do rclone reclama, e o destino Google Drive fica mudo.
