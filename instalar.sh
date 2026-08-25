@@ -158,7 +158,10 @@ else
 
     if [ "$DISCO" != "$RAIZ/data/backups" ]; then
         $SUDO mkdir -p "$DISCO"
-        sed -i "s|- ./data/backups:/data/backups|- $DISCO:/data/backups|" docker-compose.yml
+        $SUDO chown "$(id -u):$(id -g)" "$DISCO" 2>/dev/null || true
+        # No .env, nunca no docker-compose.yml: editar arquivo versionado
+        # faria o git pull da próxima atualização falhar.
+        sed -i "s|^DIR_BACKUPS=.*|DIR_BACKUPS=$DISCO|" .env
         ok "backups em $DISCO"
     fi
 fi

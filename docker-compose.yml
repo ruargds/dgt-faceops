@@ -51,10 +51,13 @@ services:
       # e na tela, para saber qual versão está no ar sem adivinhar.
       FACEOPS_REVISAO: ${FACEOPS_REVISAO:-desconhecida}
     volumes:
-      # Artefatos de backup e gravações de terminal. Monte um disco de
-      # verdade aqui — o perfil completo gera centenas de GB.
-      - ./data/backups:/data/backups
-      - ./data/sessions:/data/sessions
+      # Artefatos de backup e gravações de terminal.
+      #
+      # O caminho vem do .env em vez de ser editado aqui: editar arquivo
+      # versionado sujaria a árvore de trabalho e faria o `git pull` do
+      # atualizar.sh falhar com "alteração local não commitada".
+      - ${DIR_BACKUPS:-./data/backups}:/data/backups
+      - ${DIR_SESSOES:-./data/sessions}:/data/sessions
       # rclone.conf para o destino Google Drive (opcional).
       # Gere com `rclone config` e copie para ./rclone/rclone.conf
       - ./rclone:/root/.config/rclone:ro
