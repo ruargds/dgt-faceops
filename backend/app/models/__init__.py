@@ -8,6 +8,7 @@ from app.models.backup import (
     BackupRun,
     Schedule,
 )
+from app.models.configuracao import Configuracao
 from app.models.destino import TIPOS as TIPOS_DESTINO, Destino
 from app.models.host import Host
 from app.models.user import User
@@ -21,6 +22,7 @@ __all__ = [
     "Host",
     "User",
     "Destino",
+    "Configuracao",
     "VisaoLog",
     "TIPOS_DESTINO",
     "PROFILES",

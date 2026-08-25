@@ -58,6 +58,16 @@ provedores. Cadastro, teste de escrita real e retenção por destino, sem
 editar `.env` nem reiniciar container. Falha em um destino não invalida os
 outros.
 
+**Configurável pela web** — identidade do painel, retenções, limites e
+padrões numa aba de Configurações que se monta a partir de um catálogo.
+Adicionar uma opção é uma linha no backend. Reusar a instalação em outro
+cliente não exige tocar em código.
+
+**Atualização que não atrapalha** — `atualizar.sh` consulta o painel
+antes de mexer: recusa se houver backup rodando, terminal aberto ou carga
+alta na máquina. Reverte sozinho se a versão nova não subir. Nunca toca
+nos containers do FindFace.
+
 **Manutenção de disco e log** — o problema mais comum num servidor de
 reconhecimento facial não é o FindFace: é o disco raiz enchendo de log
 (encontramos 99 GB de `/var/log` em operação normal, ~8 GB/dia). A tela
@@ -165,12 +175,15 @@ Docker Desktop instalado → botão direito em `windows\instalar.bat` →
 | [13_DESTINOS](docs/13_DESTINOS.md) | Destinos de backup: local, Azure e rclone |
 | [14_MANUTENCAO](docs/14_MANUTENCAO.md) | Disco e log: diagnóstico e correção sem linha de comando |
 | [**15_SOLUCAO_PRONTA**](docs/15_SOLUCAO_PRONTA.md) | **Comece aqui** — do zero ao backup agendado, em Ubuntu |
+| [16_CONFIGURACOES](docs/16_CONFIGURACOES.md) | Aba Configurações: catálogo, e como reusar em outro projeto |
+| [17_ATUALIZACAO](docs/17_ATUALIZACAO.md) | Buscar versão nova sem parar nem pesar serviço em operação |
 
 ## Scripts
 
 | Script | Para quê |
 |--------|----------|
 | [`instalar.sh`](instalar.sh) | **Instalação completa em Ubuntu**, um comando, idempotente |
+| [`atualizar.sh`](atualizar.sh) | **Atualização segura** — recusa se houver backup rodando ou carga alta; reverte sozinho se não subir |
 | [`inventario.sh`](scripts/inventario.sh) | Levanta tudo de um servidor — **somente leitura**, não altera nada |
 | [`descobrir_topologia.sh`](scripts/descobrir_topologia.sh) | Onde cada componente do FindFace está, e qual perfil de backup cabe ali |
 | [`ffmulti-backup.sh`](scripts/ffmulti-backup.sh) | O backup em si, enviado pelo painel via stdin — não fica no servidor |

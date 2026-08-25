@@ -14,13 +14,15 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from app.api.routes import (
-    audit, auth, backups, destinos, hosts, logs, maintenance, ops, terminal,
+    audit, auth, backups, configuracoes, destinos, hosts, logs, maintenance,
+    ops, terminal,
 )
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
 from app.models import Destino, User, VisaoLog  # noqa: F401 — registra os modelos
 from app.services.backup_service import BackupService
+from app.services.config_service import ConfigService
 from app.services.logs_service import LogManager
 from app.services.maintenance_service import MaintenanceService
 from app.services.metrics_service import MetricsService
@@ -185,12 +187,19 @@ async def iniciar() -> None:
     ssh = SSHService()
     storage = StorageService()
 
+    # A configuracao carrega ANTES dos servicos: eles a recebem no
+    # construtor e consultam em caminho quente (cada backup, cada stream).
+    config = ConfigService()
+    async with AsyncSessionLocal() as db:
+        await config.carregar(db)
+    app.state.config = config
+
     app.state.ssh = ssh
     app.state.storage = storage
     app.state.metrics = MetricsService(ssh)
-    app.state.stack = StackService(ssh)
+    app.state.stack = StackService(ssh, config)
     app.state.manutencao = MaintenanceService(ssh)
-    app.state.backups = BackupService(ssh, storage)
+    app.state.backups = BackupService(ssh, storage, config)
     app.state.terminals = TerminalManager()
     app.state.logs = LogManager()
     app.state.scheduler = SchedulerService(app.state.backups)
@@ -230,19 +239,54 @@ async def erro_de_valor(_, exc: ValueError):
 
 @app.get("/api/saude")
 async def saude():
-    """Health check do painel — usado pelo healthcheck do container."""
+    """
+    Health check e estado de ocupação.
+
+    O `atualizar.sh` consulta isto ANTES de mexer em qualquer container:
+    reiniciar o painel no meio de um backup mata a execução depois de ela
+    já ter copiado dezenas de GB do servidor de produção.
+    """
+    import os
+
+    from sqlalchemy import func, select as _select
+
+    from app.models.backup import BackupRun
+
+    executando = 0
+    try:
+        async with AsyncSessionLocal() as db:
+            r = await db.execute(
+                _select(func.count(BackupRun.id)).where(
+                    BackupRun.status.in_(("executando", "pendente"))
+                )
+            )
+            executando = int(r.scalar() or 0)
+    except Exception:
+        # Banco indisponível não pode derrubar o health check — o
+        # healthcheck do container depende dele para não matar o painel.
+        executando = -1
+
+    terminais = len(app.state.terminals.ativas()) if hasattr(app.state, "terminals") else 0
+    streams = len(app.state.logs.ativas()) if hasattr(app.state, "logs") else 0
+
     return {
         "ok": True,
         "servico": "dgt-faceops",
         "versao": app.version,
+        "revisao": os.getenv("FACEOPS_REVISAO", "desconhecida"),
         "agendamentos": len(app.state.scheduler.scheduler.get_jobs())
         if hasattr(app.state, "scheduler") else 0,
-        "terminais_ativos": len(app.state.terminals.ativas())
-        if hasattr(app.state, "terminals") else 0,
+        "backups_executando": executando,
+        "terminais_ativos": terminais,
+        "logs_ativos": streams,
+        # Um único campo para o script decidir. Se estiver True, atualizar
+        # agora interrompe trabalho de alguém.
+        "ocupado": executando > 0 or terminais > 0 or streams > 0,
     }
 
 
 app.include_router(auth.router)
+app.include_router(configuracoes.router)
 app.include_router(hosts.router)
 app.include_router(ops.router)
 app.include_router(backups.router)

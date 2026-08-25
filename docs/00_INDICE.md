@@ -61,6 +61,14 @@
   disco raiz enche num servidor de reconhecimento facial, como medir o
   crescimento, e como conter sem reiniciar nada do FindFace.
 
+- **[16_CONFIGURACOES](16_CONFIGURACOES.md)** — a aba Configurações: as
+  três camadas (banco > `.env` > padrão), como o catálogo faz a tela se
+  montar sozinha, e o que deliberadamente não fica lá.
+
+- **[17_ATUALIZACAO](17_ATUALIZACAO.md)** — buscar versão nova nos
+  servidores sem parar, travar ou pesar nada em operação. As três
+  garantias, a reversão automática e os códigos de saída.
+
 ### Segurança e acesso
 
 - **[05_PERMISSOES](05_PERMISSOES.md)** — os quatro perfis, o catálogo

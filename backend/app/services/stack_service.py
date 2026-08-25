@@ -86,10 +86,21 @@ def _compose_file(host) -> str:
 
 
 class StackService:
-    def __init__(self, ssh: SSHService) -> None:
+    def __init__(self, ssh: SSHService, config=None) -> None:
         self.ssh = ssh
+        # Opcional de proposito: se nao vier, cai no padrao. Servico que
+        # quebra por falta de configuracao seria pior que o valor fixo.
+        self.config = config
         # host_id -> "docker compose" | "docker-compose"
         self._bin_cache: dict[int, str] = {}
+
+    def _limite_disco(self) -> int:
+        if self.config is None:
+            return 90
+        try:
+            return int(self.config.get("sessao.alerta_disco_pct"))
+        except (KeyError, ValueError, TypeError):
+            return 90
 
     # ── Detecção de ambiente ───────────────────────────────────────────
 
@@ -290,7 +301,8 @@ echo "{SEP}END"
         # PostgreSQL e Tarantool antes de qualquer container aparecer
         # como "com problema" — o painel precisa avisar ANTES disso.
         discos = _parse_df(secoes.get("DF", ""))
-        criticos = [d for d in discos if d["percentual"] >= 90]
+        limite = self._limite_disco()
+        criticos = [d for d in discos if d["percentual"] >= limite]
 
         return {
             "host_id": host.id,

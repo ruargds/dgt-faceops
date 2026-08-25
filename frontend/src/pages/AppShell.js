@@ -16,6 +16,7 @@ import {
   IconUsuarios,
 } from "../components/Icons";
 import AgendamentosView from "../components/views/AgendamentosView";
+import ConfiguracoesView from "../components/views/ConfiguracoesView";
 import DestinosView from "../components/views/DestinosView";
 import LogsView from "../components/views/LogsView";
 import ManutencaoView from "../components/views/ManutencaoView";
@@ -47,6 +48,7 @@ const MENU = [
   { id: "servidores", rotulo: "Servidores", icone: IconServidor, perm: "hosts.view" },
   { id: "usuarios", rotulo: "Usuários", icone: IconUsuarios, perm: "users.manage" },
   { id: "auditoria", rotulo: "Auditoria", icone: IconAuditoria, perm: "audit.view" },
+  { id: "config", rotulo: "Configurações", icone: IconServicos, perm: "hosts.view" },
 ];
 
 export default function AppShell() {
@@ -133,6 +135,7 @@ export default function AppShell() {
           {abaValida === "servidores" && <ServidoresView />}
           {abaValida === "usuarios" && <UsuariosView />}
           {abaValida === "auditoria" && <AuditoriaView />}
+          {abaValida === "config" && <ConfiguracoesView />}
         </div>
       </main>
 

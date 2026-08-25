@@ -34,6 +34,8 @@ PROFILE="${PROFILE:-config}"
 STAGING="${STAGING:-/var/backups/faceops}"
 LABEL="${LABEL:-$(date +%Y-%m-%d_%H-%M-%S)}"
 COMPOSE_FILE="${COMPOSE_FILE:-$FF_DIR/docker-compose.yaml}"
+# Margem de disco exigida no perfil completo, configuravel no painel
+MARGEM_PCT="${MARGEM_PCT:-60}"
 
 WORK="$STAGING/$LABEL"
 ARTIFACT="$STAGING/faceops_${PROFILE}_${LABEL}.tar.gz"
@@ -365,7 +367,7 @@ backup_data_completo() {
   # Exigir 60% do tamanho bruto é a margem que evita encher o disco do
   # servidor de produção no meio da noite.
   if [ -n "$necessario" ] && [ -n "$livre" ]; then
-    local minimo=$(( necessario * 6 / 10 ))
+    local minimo=$(( necessario * MARGEM_PCT / 100 ))
     if [ "$livre" -lt "$minimo" ]; then
       die "espaço insuficiente em $STAGING: preciso de ~$(numfmt --to=iec $minimo 2>/dev/null || echo $minimo)B, tem $(numfmt --to=iec "$livre" 2>/dev/null || echo "$livre")B"
     fi

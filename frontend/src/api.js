@@ -82,6 +82,12 @@ export const api = {
   atualizarUsuario: (id, d) => patch(`/auth/usuarios/${id}`, d),
   removerUsuario: (id) => del(`/auth/usuarios/${id}`),
 
+  // Configuração do painel
+  config: () => get("/config"),
+  configPublico: () => get("/config/publico"),
+  salvarConfig: (valores) => patch("/config", { valores }),
+  restaurarConfig: (chave) => del(`/config/${chave}`),
+
   // Servidores
   hosts: () => get("/hosts"),
   host: (id) => get(`/hosts/${id}`),

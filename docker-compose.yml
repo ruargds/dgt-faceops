@@ -47,6 +47,9 @@ services:
     environment:
       POSTGRES_HOST: postgres
       TZ: ${TZ:-America/Sao_Paulo}
+      # Revisão do git, gravada pelo atualizar.sh — aparece em /api/saude
+      # e na tela, para saber qual versão está no ar sem adivinhar.
+      FACEOPS_REVISAO: ${FACEOPS_REVISAO:-desconhecida}
     volumes:
       # Artefatos de backup e gravações de terminal. Monte um disco de
       # verdade aqui — o perfil completo gera centenas de GB.

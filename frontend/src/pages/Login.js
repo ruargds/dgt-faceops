@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api, setToken } from "../api";
 
 export default function Login({ onEntrar }) {
@@ -6,6 +6,17 @@ export default function Login({ onEntrar }) {
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
+  // Identidade vem da configuração — a mesma instalação atende outro
+  // cliente só trocando o nome, sem tocar em código.
+  const [marca, setMarca] = useState({
+    nome: "DGT FaceOps",
+    subtitulo: "Operação do FindFace Multi",
+    cliente: "",
+  });
+
+  useEffect(() => {
+    api.configPublico().then(setMarca).catch(() => {});
+  }, []);
 
   async function enviar(e) {
     e.preventDefault();
@@ -25,7 +36,15 @@ export default function Login({ onEntrar }) {
     <div className="login-bg">
       <form className="login-card" onSubmit={enviar}>
         <img className="login-logo" src="/logos/dgt-login.png" alt="DGT" />
-        <div className="login-sub">FaceOps — operação do FindFace Multi</div>
+        <div className="login-sub">
+          {marca.nome} — {marca.subtitulo}
+          {marca.cliente && (
+            <>
+              <br />
+              <strong>{marca.cliente}</strong>
+            </>
+          )}
+        </div>
 
         {erro && <div className="login-err">{erro}</div>}
 

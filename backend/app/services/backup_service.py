@@ -67,12 +67,22 @@ def _detectar_etapa(linha: str) -> tuple[str, int] | None:
 
 
 class BackupService:
-    def __init__(self, ssh: SSHService, storage: StorageService) -> None:
+    def __init__(self, ssh: SSHService, storage: StorageService, config=None) -> None:
         self.ssh = ssh
         self.storage = storage
+        # Opcional: sem configuracao, valem os padroes do .env
+        self.config = config
         # Uma execução por host de cada vez: dois backups concorrentes no
         # mesmo servidor competem por disco e podem corromper o staging.
         self._locks: dict[int, asyncio.Lock] = {}
+
+    def _cfg(self, chave: str, padrao):
+        if self.config is None:
+            return padrao
+        try:
+            return self.config.get(chave)
+        except (KeyError, ValueError, TypeError):
+            return padrao
 
     def _lock(self, host_id: int) -> asyncio.Lock:
         if host_id not in self._locks:
@@ -159,7 +169,7 @@ class BackupService:
     ) -> None:
         ff_dir = host.ffmulti_dir or settings.FFMULTI_DIR
         compose = host.compose_file or f"{ff_dir}/docker-compose.yaml"
-        staging = settings.REMOTE_STAGING_DIR
+        staging = self._cfg("servidores.staging_remoto", settings.REMOTE_STAGING_DIR)
         rotulo = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
 
         preambulo = "\n".join([
@@ -168,6 +178,7 @@ class BackupService:
             f"export PROFILE={shlex.quote(perfil)}",
             f"export STAGING={shlex.quote(staging)}",
             f"export LABEL={shlex.quote(rotulo)}",
+            f"export MARGEM_PCT={int(self._cfg('backup.margem_disco_pct', 60))}",
             "",
         ])
         script = preambulo + _ler_script()
@@ -197,7 +208,11 @@ class BackupService:
                 await db.commit()
 
         # Perfil completo pode levar horas; os outros, minutos.
-        limite = 8 * 60 * 60 if perfil == "completo" else 2 * 60 * 60
+        limite = (
+            int(self._cfg("backup.timeout_completo_h", 8)) * 3600
+            if perfil == "completo"
+            else int(self._cfg("backup.timeout_essencial_h", 2)) * 3600
+        )
 
         resultado = await self.ssh.run_script_stream(
             host, script, on_line, sudo=True, timeout=limite
@@ -329,6 +344,13 @@ class BackupService:
                 run.finished_at = datetime.now(timezone.utc)
                 await db.commit()
 
+    def _retencao_padrao(self, perfil: str) -> int:
+        return {
+            "config": self._cfg("backup.retencao_config", settings.RETENTION_CONFIG_DAYS),
+            "essencial": self._cfg("backup.retencao_essencial", settings.RETENTION_ESSENCIAL_DAYS),
+            "completo": self._cfg("backup.retencao_completo", settings.RETENTION_COMPLETO_DAYS),
+        }.get(perfil, 30)
+
     @staticmethod
     async def _sha256(caminho: Path) -> str:
         import hashlib
@@ -357,9 +379,4 @@ class BackupService:
         return vistos
 
 
-def _retencao_padrao(perfil: str) -> int:
-    return {
-        "config": settings.RETENTION_CONFIG_DAYS,
-        "essencial": settings.RETENTION_ESSENCIAL_DAYS,
-        "completo": settings.RETENTION_COMPLETO_DAYS,
-    }.get(perfil, 30)
+
