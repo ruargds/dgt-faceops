@@ -553,6 +553,17 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
                   {testeApi.cameras != null ? `${testeApi.cameras} câmera(s)` : "conectou"}
                 </span>
               )}
+              {/* O teste usa o que está DIGITADO; as telas usam o que está
+                  SALVO. Sem este aviso, testar e esquecer de salvar dá OK
+                  aqui e credencial recusada em toda leitura depois. */}
+              {testeApi &&
+                !testeApi.carregando &&
+                (testeApi.origem === "digitada" || testeApi.origem === "token digitado") && (
+                  <span className="small" style={{ color: "var(--amber-fg)" }}>
+                    testado com a credencial digitada — <strong>salve</strong> o
+                    servidor para as telas usarem esta credencial
+                  </span>
+                )}
               {testeApi && !testeApi.carregando && testeApi.ok === false && (
                 <span className="small" style={{ color: "var(--red)" }}>{testeApi.erro}</span>
               )}

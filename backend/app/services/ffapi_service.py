@@ -33,6 +33,23 @@ TIPOS_EVENTO = ("faces", "bodies", "cars")
 SESSAO_TTL = 20 * 60
 
 
+def _erro_http(codigo: int, corpo: str) -> str:
+    """
+    Mensagem de erro que carrega a resposta do servidor.
+
+    401 sozinho não diz se a senha está errada, se a conta não tem acesso à
+    API, se está bloqueada, ou se a instalação exige autenticação facial
+    junto (`video_auth_token`, na documentação). O corpo diz — e sem ele
+    resta adivinhar.
+    """
+    limpo = " ".join((corpo or "").split())[:300]
+    if codigo in (401, 403):
+        base = "credencial recusada (HTTP %d)" % codigo
+    else:
+        base = "respondeu %d" % codigo
+    return f"{base}: {limpo}" if limpo else base
+
+
 def _sem_verificar_tls():
     """
     Handler de HTTPS que não valida o certificado.
@@ -415,7 +432,8 @@ class FFApiService:
                     tentativas.append(f"{alvo} [{rotulo}] → sem token nem cookie")
 
         raise FFApiError(
-            "login na API do FindFace falhou. Tentativas: " + "; ".join(tentativas[:6])
+            f"login na API do FindFace falhou para o usuário '{usuario}'. "
+            "Tentativas: " + "; ".join(tentativas[:6])
         )
 
     async def _post(self, url: str, corpo: dict, extras: dict | None = None) -> tuple:
@@ -432,10 +450,8 @@ class FFApiService:
                     timeout=30, verify=False, follow_redirects=True
                 ) as cli:
                     r = await cli.post(url, headers=cabecalhos, json=corpo)
-                    if r.status_code in (401, 403):
-                        raise FFApiError("usuário ou senha da API recusados")
                     if r.status_code >= 400:
-                        raise FFApiError(f"respondeu {r.status_code}")
+                        raise FFApiError(_erro_http(r.status_code, r.text))
                     try:
                         dados = r.json()
                     except Exception:
@@ -467,9 +483,11 @@ class FFApiService:
                     except Exception:
                         dados = {}
             except urllib.error.HTTPError as exc:
-                if exc.code in (401, 403):
-                    raise FFApiError("usuário ou senha da API recusados")
-                raise FFApiError(f"respondeu {exc.code}") from exc
+                try:
+                    detalhe = exc.read().decode("utf-8", "replace")
+                except Exception:
+                    detalhe = ""
+                raise FFApiError(_erro_http(exc.code, detalhe)) from exc
             except Exception as exc:
                 raise FFApiError(f"falha ao falar com a API: {exc}") from exc
             galheta = "; ".join(f"{c.name}={c.value}" for c in jar)

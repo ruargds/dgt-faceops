@@ -413,8 +413,26 @@ async def testar_api(
         ff_api_pass_enc=encrypt_secret(senha or ""),
         ff_api_token_enc=encrypt_secret(token or ""),
     )
+    # De onde saiu o que foi testado. Sem isto, testar com senha digitada e
+    # esquecer de salvar dá "OK" na tela e "credencial recusada" em todas as
+    # leituras seguintes — e nada liga uma coisa à outra.
+    if dados.ff_api_token:
+        origem = "token digitado"
+    elif dados.ff_api_pass:
+        origem = "digitada"
+    elif token:
+        origem = "token salvo"
+    else:
+        origem = "salva"
+
     try:
         r = await request.app.state.ffapi.testar(alvo)
-        return {"ok": True, "cameras": r.get("cameras"), "url": r.get("url")}
+        return {
+            "ok": True,
+            "cameras": r.get("cameras"),
+            "url": r.get("url"),
+            "usuario": r.get("usuario"),
+            "origem": origem,
+        }
     except FFApiError as exc:
-        return {"ok": False, "erro": str(exc)}
+        return {"ok": False, "erro": str(exc), "origem": origem}
