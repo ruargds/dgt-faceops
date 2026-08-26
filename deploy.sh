@@ -69,6 +69,10 @@ fi
 # ── Git ────────────────────────────────────────────────────────────────
 if [ -d .git ] && git remote get-url origin >/dev/null 2>&1; then
     echo "[1/4] Atualizando o código..."
+    # Descarta diferenca cosmetica de fim-de-linha nos proprios scripts,
+    # que senao faz o git pull abortar por "local changes". So afeta
+    # arquivo versionado; .env, tls/ e data/ sao ignorados pelo git.
+    git checkout -- '*.sh' 'scripts/*.sh' 2>/dev/null || true
     git pull --ff-only || echo "  aviso: git pull falhou, seguindo com o código local"
 else
     echo "[1/4] Sem remote configurado — usando o código local"

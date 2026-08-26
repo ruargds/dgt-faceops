@@ -159,6 +159,9 @@ fi
 
 REVERTER_PARA="$ATUAL"
 if [ -d .git ] && [ "$ATUAL" != "$NOVA" ]; then
+    # Descarta diff cosmetico de fim-de-linha nos scripts, senao o pull
+    # aborta por "local changes". Nao toca em .env, tls/ nem data/.
+    git checkout -- '*.sh' 'scripts/*.sh' 2>/dev/null || true
     if git pull --ff-only --quiet origin main 2>/dev/null; then
         ok "código atualizado para $NOVA"
     else
