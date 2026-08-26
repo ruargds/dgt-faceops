@@ -33,7 +33,7 @@ const DICIONARIO = {
   "menu.recursos": { pt: "Recursos", en: "Resources" },
   "menu.processos": { pt: "Processos", en: "Processes" },
   "menu.servicos": { pt: "Serviços", en: "Services" },
-  "menu.cameras": { pt: "Câmeras", en: "Cameras" },
+  "menu.cameras": { pt: "Licenciamento e dispositivos", en: "Licensing and devices" },
   "menu.descoberta": { pt: "Descoberta", en: "Discovery" },
   "menu.topologia": { pt: "Topologia", en: "Topology" },
   "menu.logs": { pt: "Logs ao vivo", en: "Live logs" },
@@ -120,10 +120,10 @@ const DICIONARIO = {
     pt: "Containers do FindFace Multi — estado, saúde e reinícios",
     en: "FindFace Multi containers — state, health and restarts",
   },
-  "tela.cameras": { pt: "Câmeras", en: "Cameras" },
+  "tela.cameras": { pt: "Licenciamento e dispositivos", en: "Licensing and devices" },
   "tela.cameras.sub": {
-    pt: "Dispositivos cadastrados, última comunicação e volume de eventos",
-    en: "Registered devices, last contact and event volume",
+    pt: "Licença, dispositivos cadastrados, última comunicação e volume de eventos",
+    en: "License, registered devices, last contact and event volume",
   },
   "tela.descoberta": { pt: "Descoberta", en: "Discovery" },
   "tela.descoberta.sub": {
