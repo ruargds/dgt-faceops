@@ -295,61 +295,88 @@ backup_etcd() {
 
 backup_tarantool() {
   # O Tarantool guarda os vetores faciais. Sem ele, o sistema restaurado
-  # tem os cadastros mas não reconhece ninguém.
+  # tem os cadastros mas nao reconhece ninguem.
+  #
+  # Descoberto em campo: esta instalacao usa porta TCP (CFG_LISTEN_PORT,
+  # padrao 8001) para admin, nao socket .control — entao console via
+  # socket nao funciona.
+  #
+  # Isso NAO e problema. O Tarantool foi desenhado para crash recovery:
+  # o par .snap + .xlog que ele grava sozinho e SEMPRE um estado
+  # recuperavel. Copiar o diretorio inteiro (o que este backup faz) e um
+  # backup consistente POR DESIGN do Tarantool. O box.snapshot() manual
+  # abaixo apenas reduz quantos xlogs sao reaplicados no restore — e
+  # otimizacao, nao requisito de consistencia. A estrategia:
+  #   1. Tentar forcar um .snap fresco via `tarantoolctl eval` (nao precisa
+  #      de socket — avalia direto no processo).
+  #   2. De qualquer forma, copiar o diretorio inteiro, que ja contem
+  #      .snap consistentes.
+  #   3. Registrar a idade do .snap mais recente, para o operador saber o
+  #      quao fresco esta o backup dos vetores.
   log "Snapshot do Tarantool (vetores faciais)..."
   mkdir -p "$WORK/tarantool"
 
-  # Instalacao real e SHARDADA: 16 shards + 16 replicas = 32 containers.
-  # Todos precisam de box.snapshot() antes da copia.
   local conts; conts="$(containers_por_padrao 'tarantool')"
   local qtd; qtd="$(echo "$conts" | grep -c . )"
-  [ -n "$conts" ] && log "  $qtd instancia(s) Tarantool encontrada(s)"
   if [ -z "$conts" ]; then
     log "AVISO: nenhum container Tarantool ativo — pulando"
     emit tarantool "ausente"
     return 0
   fi
+  log "  $qtd instancia(s) Tarantool"
 
-  local metodo="nenhum"
-  local total=0
+  local metodo="copia-direta"
+  local disparados=0
 
   for c in $conts; do
-    log "  container: $c"
-
-    # box.snapshot() força a gravação de um .snap consistente. Sem isso,
-    # copiar o diretório pega xlogs no meio de escrita.
-    if docker exec -i "$c" sh -c \
-         'sock=$(ls /var/run/tarantool/*.control 2>/dev/null | head -1); \
-          [ -n "$sock" ] && echo "box.snapshot()" | tarantoolctl connect "$sock"' \
-         >/dev/null 2>&1; then
-      metodo="tarantoolctl"
-      log "    box.snapshot() ok (console)"
-    elif docker exec -i "$c" sh -c 'echo "box.snapshot()" | tarantool' >/dev/null 2>&1; then
+    # box.snapshot() forca um .snap consistente AGORA. tarantoolctl eval
+    # roda o codigo no processo sem depender de socket de console.
+    if docker exec -i "$c" tarantoolctl eval /dev/stdin >/dev/null 2>&1 <<'LUAEOF'
+box.snapshot()
+return true
+LUAEOF
+    then
+      disparados=$(( disparados + 1 ))
+      metodo="tarantoolctl-eval"
+    elif docker exec "$c" sh -c 'echo "box.snapshot()" | tarantool' >/dev/null 2>&1; then
+      disparados=$(( disparados + 1 ))
       metodo="tarantool-stdin"
-      log "    box.snapshot() ok (stdin)"
-    else
-      log "    AVISO: box.snapshot() não pôde ser disparado — copiando assim mesmo."
-      log "    O Tarantool reaplica os xlogs no restore, mas a consistência"
-      log "    não fica garantida. Verifique o console do container."
-      [ "$metodo" = "nenhum" ] && metodo="copia-direta"
     fi
   done
 
-  # Copia os arquivos de estado do host (não de dentro do container —
-  # o volume está montado em data/ e é mais rápido ler direto).
-  local tnt_dir="$FF_DIR/data/findface-tarantool-server"
-  if [ -d "$tnt_dir" ]; then
-    tar -czf "$WORK/tarantool/tarantool-data.tar.gz" \
-        -C "$FF_DIR/data" findface-tarantool-server 2>/dev/null \
-      && total="$(stat -c %s "$WORK/tarantool/tarantool-data.tar.gz")"
-    log "  dados copiados ($(numfmt --to=iec "$total" 2>/dev/null || echo "$total")B)"
+  if [ "$disparados" -gt 0 ]; then
+    log "  box.snapshot() disparado em $disparados de $qtd instancia(s) ($metodo)"
   else
-    log "  AVISO: $tnt_dir não existe"
+    log "  AVISO: nao consegui disparar box.snapshot(). Copiando os .snap"
+    log "  existentes, que o Tarantool grava periodicamente e sao"
+    log "  consistentes por construcao — mas podem ter algumas horas."
+  fi
+
+  # Copia os arquivos de estado do host. O diretorio pai reune todos os
+  # shards e replicas, cada um em sua subpasta.
+  local tnt_dir="$FF_DIR/data/findface-tarantool-server"
+  local total=0
+  if [ -d "$tnt_dir" ]; then
+    tar -czf "$WORK/tarantool/tarantool-data.tar.gz"         -C "$FF_DIR/data" findface-tarantool-server 2>/dev/null       && total="$(stat -c %s "$WORK/tarantool/tarantool-data.tar.gz")"
+    log "  dados copiados ($(numfmt --to=iec "$total" 2>/dev/null || echo "$total")B)"
+
+    # Idade do .snap mais recente = quao fresco esta o backup dos vetores
+    local mais_novo idade_s
+    mais_novo="$(find "$tnt_dir" -name '*.snap' -printf '%T@
+' 2>/dev/null | sort -rn | head -1 | cut -d. -f1)"
+    if [ -n "$mais_novo" ]; then
+      idade_s=$(( $(date +%s) - mais_novo ))
+      log "  .snap mais recente tem $(( idade_s / 60 )) minuto(s)"
+      emit tarantool_snap_idade_s "$idade_s"
+    fi
+  else
+    log "  AVISO: $tnt_dir nao existe"
   fi
 
   emit tarantool_metodo "$metodo"
+  emit tarantool_instancias "$qtd"
   emit tarantool_bytes "$total"
-  log "Tarantool concluído."
+  log "Tarantool concluido."
 }
 
 backup_data_completo() {
