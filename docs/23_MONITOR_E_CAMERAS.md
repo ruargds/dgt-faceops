@@ -142,6 +142,45 @@ Editar → API do FindFace**.
 **Câmera "sem eventos" pode estar offline.** É o sinal mais útil da tela:
 uma câmera que sempre gerou e parou merece atenção.
 
+### Licenciamento
+
+O cartão no topo da aba responde a pergunta que abre toda conversa de
+expansão: **cabem quantas câmeras ainda?** Antes ela só tinha resposta
+entrando na interface da NtechLab.
+
+Vem pela API HTTP (`GET /api/dispositivos/{id}/licenca`), é leitura barata
+e carrega sozinha ao trocar de servidor — diferente da contagem de
+eventos, que continua no clique.
+
+Para cada recurso licenciado: **liberado**, **em uso**, **livre** e a
+ocupação em barra. Limite negativo aparece como `ilimitado`. O número de
+câmeras cadastradas é lido de `/cameras/count/` e confronta o limite
+licenciado — limite sem uso ao lado não responde nada.
+
+Dois detalhes de honestidade:
+
+* **O caminho da licença muda entre versões.** O painel tenta
+  `/licenses/ffsecurity/`, `/license/`, `/licenses/` e
+  `/licenses/ffsecurity/current/`, nessa ordem, e usa o primeiro que
+  responder. Se nenhum responder, a tela diz **o que foi tentado e o erro
+  de cada tentativa**.
+* **Não existe contrato público para o corpo da licença.** Em vez de fixar
+  um formato, o painel percorre o JSON e reconhece campos de limite
+  (`limit`, `max`, `quota`, `total`…) e de uso (`used`, `current`,
+  `count`…) onde eles estiverem. O botão **Ver resposta bruta** mostra o
+  JSON como veio — melhor mostrar JSON do que esconder o dado.
+
+Sem URL e token cadastrados, o cartão diz isso e aponta para **Servidores
+→ Editar → API do FindFace**. O limite de licença **não** existe no banco
+lido por SSH; é a única informação desta tela que exige a API.
+
+### Quando as duas vias falham
+
+A tela mostra os **dois** erros — o da API e o da leitura direta do banco.
+Antes, a falha da API ficava só no log do painel e a mensagem na tela era
+a do `psql`: alguém investigava banco quando o problema era token de API
+vencido.
+
 ### Por que é sob demanda
 
 Contar evento em tabela grande custa. Por isso a consulta é **no clique**,

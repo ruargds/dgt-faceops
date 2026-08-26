@@ -82,11 +82,26 @@ class Gravador:
 class SessaoTerminal:
     """Uma sessão viva. Vive enquanto o WebSocket estiver aberto."""
 
-    def __init__(self, host, usuario: str, ip: str, permite_sudo: bool) -> None:
+    def __init__(
+        self,
+        host,
+        usuario: str,
+        ip: str,
+        permite_sudo: bool,
+        ssh_usuario: str = "",
+        ssh_senha: str = "",
+    ) -> None:
         self.host = host
         self.usuario = usuario
         self.ip = ip
         self.permite_sudo = permite_sudo
+
+        # Credencial digitada na tela, válida só para esta sessão. Fica em
+        # memória, é descartada no instante em que o SSH autentica e não
+        # entra no banco, na auditoria nem na gravação da sessão.
+        self.login = (ssh_usuario or host.ssh_user).strip() or host.ssh_user
+        self.credencial_propria = bool(ssh_senha)
+        self._senha_sessao = ssh_senha
 
         self.conn: asyncssh.SSHClientConnection | None = None
         self.processo: asyncssh.SSHClientProcess | None = None
@@ -105,9 +120,16 @@ class SessaoTerminal:
 
         # Conexão dedicada, fora do pool: o PTY fica ocupado a sessão
         # inteira e não pode disputar canal com a coleta de métricas.
-        opcoes = SSHService._build_options(self.host)
+        opcoes = SSHService._build_options(
+            self.host, credencial=(self.login, self._senha_sessao)
+        )
         try:
             self.conn = await asyncssh.connect(self.host.address, **opcoes)
+        except asyncssh.PermissionDenied as exc:
+            raise SSHError(
+                f"login recusado em '{self.host.name}' para o usuario "
+                f"'{self.login}'. Confira usuario e senha da sessao."
+            ) from exc
         except asyncssh.HostKeyNotVerifiable as exc:
             raise SSHError(
                 f"a chave de '{self.host.name}' nao confere com a cadastrada — "
@@ -115,6 +137,10 @@ class SessaoTerminal:
             ) from exc
         except (OSError, asyncssh.Error) as exc:
             raise SSHError(f"nao foi possivel abrir sessao em '{self.host.name}': {exc}") from exc
+        finally:
+            # Autenticou ou não, a senha digitada não tem mais uso. Some da
+            # memória do painel antes de qualquer outra coisa acontecer.
+            self._senha_sessao = ""
 
         try:
             self.processo = await self.conn.create_process(

@@ -87,6 +87,21 @@ else
     echo "[1/4] Sem remote configurado — usando o código local"
 fi
 
+# ── Selo da versão ─────────────────────────────────────────────────────
+# Grava a revisão do git no .env (o backend a devolve em /api/saude e ela
+# aparece no rodapé da barra lateral) e passa o mesmo selo ao build do
+# frontend. Sem isto o painel diz "desconhecida" e "qual versão está no
+# ar?" volta a ser respondido de memória.
+REVISAO="$(git rev-parse --short HEAD 2>/dev/null || echo local)"
+export FACEOPS_REVISAO="$REVISAO"
+if grep -q '^FACEOPS_REVISAO=' .env 2>/dev/null; then
+    sed -i "s|^FACEOPS_REVISAO=.*|FACEOPS_REVISAO=$REVISAO|" .env
+else
+    echo "FACEOPS_REVISAO=$REVISAO" >> .env
+fi
+export BUILD_STAMP="$REVISAO $(date '+%d/%m %H:%M')"
+echo "  selo deste deploy: $BUILD_STAMP"
+
 # ── Containers fantasma ────────────────────────────────────────────────
 # "container name already in use" acontece quando um deploy anterior
 # morreu no meio. Remover na força é mais rápido que investigar.

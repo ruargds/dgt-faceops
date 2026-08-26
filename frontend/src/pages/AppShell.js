@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api, setToken } from "../api";
 import {
   IconAgenda,
@@ -69,6 +69,40 @@ export default function AppShell() {
   const { has } = usePermissions();
   const [aba, setAba] = useState("painel");
   const [trocandoSenha, setTrocandoSenha] = useState(false);
+  const [saude, setSaude] = useState(null);
+
+  // Leitura única, na montagem. O rodapé responde "qual versão está no
+  // ar?" e nada nele muda enquanto a tela está aberta — intervalo aqui
+  // seria consulta de graça (regra 24 das regras de desenvolvimento).
+  useEffect(() => {
+    let vivo = true;
+    api
+      .saude()
+      .then((s) => {
+        if (vivo) setSaude(s);
+      })
+      .catch(() => {
+        // Rodapé sem versão é cosmético; erro aqui não vira alerta na tela.
+      });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  // Selo do bundle que ESTE navegador carregou, carimbado no build pelo
+  // deploy.sh. Serve a um caso só: index.html em cache apontando para o
+  // bundle antigo, que faz "corrigi / não resolveu" render várias voltas.
+  // Se o commit do bundle não bate com o do servidor, a tela diz isso em
+  // vez de deixar a pessoa investigar o backend.
+  const seloBundle = (process.env.REACT_APP_BUILD_STAMP || "").split(" ")[0];
+  const revisao = saude && saude.revisao;
+  const bundleDefasado = Boolean(
+    seloBundle &&
+      seloBundle !== "desenvolvimento" &&
+      revisao &&
+      revisao !== "desconhecida" &&
+      revisao !== seloBundle
+  );
 
   // Monta o menu escondendo o que o perfil não pode ver. Um cabeçalho de
   // grupo só aparece se sobrou pelo menos um item embaixo dele — título
@@ -121,6 +155,28 @@ export default function AppShell() {
           >
             <IconSair size={15} /> Sair
           </button>
+
+          {/* SELO DA VERSÃO — herdado do InfraCore. "Qual versão está no
+              ar?" respondido de memória é a origem de meia hora de
+              confusão em qualquer incidente, e até aqui a resposta só
+              existia no `curl /api/saude` da VM ou no fim do
+              atualizar.sh. Quem está com o painel aberto não tem nenhum
+              dos dois à mão. */}
+          <div
+            className="sidebar-versao"
+            title="Versão do painel no ar. A revisão é o commit curto do git, carimbado pelo deploy."
+          >
+            {saude ? `v${saude.versao} · ${saude.revisao}` : "—"}
+          </div>
+
+          {bundleDefasado && (
+            <div
+              className="sidebar-versao sidebar-versao-alerta"
+              title={`Este navegador carregou o bundle ${seloBundle}, mas o servidor está em ${revisao}. É cache do index.html — recarregue com Ctrl+F5 antes de investigar qualquer outra coisa.`}
+            >
+              bundle {seloBundle} — recarregue (Ctrl+F5)
+            </div>
+          )}
         </div>
       </aside>
 

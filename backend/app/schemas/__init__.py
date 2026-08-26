@@ -368,6 +368,22 @@ class AuditOut(BaseModel):
     detail: dict
 
 
+class CredencialTerminalIn(BaseModel):
+    """
+    Login e senha válidos APENAS para uma sessão de terminal.
+
+    Vem por corpo JSON, nunca por query param (regra 2 — query string vai
+    para o log de acesso do nginx). Nada disto é gravado: vive no ticket em
+    memória por 30 segundos e some da sessão assim que o SSH autentica.
+
+    Senha vazia significa "usar a credencial do cofre" — é o caminho dos
+    servidores cadastrados com chave PEM, que não têm senha para digitar.
+    """
+
+    usuario: str = Field(default="", max_length=120)
+    senha: str = Field(default="", max_length=256)
+
+
 class SessaoTerminalOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

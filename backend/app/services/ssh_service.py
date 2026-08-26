@@ -126,8 +126,17 @@ class SSHService:
         return self._locks[host_id]
 
     @staticmethod
-    def _build_options(host) -> dict:
-        """Monta os parâmetros do asyncssh a partir do host + cofre."""
+    def _build_options(host, credencial: tuple[str, str] | None = None) -> dict:
+        """
+        Monta os parâmetros do asyncssh a partir do host + cofre.
+
+        `credencial` é o par (usuário, senha) digitado na tela para uma
+        sessão de terminal. Com senha preenchida, ela substitui o cofre —
+        que nem é aberto — e é assim que alguém entra no servidor com a
+        própria conta em vez da conta de serviço do painel. A pinagem da
+        chave do host continua valendo em qualquer caso (regra 5): senha
+        digitada não viaja para servidor que não é o cadastrado.
+        """
         if not host.host_key_pub:
             raise SSHError(
                 f"host '{host.name}' sem chave de identidade fixada. "
@@ -147,6 +156,17 @@ class SSHService:
             "connect_timeout": 15,
             "keepalive_interval": 30,
         }
+
+        # Usuário digitado vale mesmo sem senha: host com chave PEM aceita
+        # a mesma chave para outra conta do servidor.
+        if credencial and credencial[0]:
+            opts["username"] = credencial[0]
+        if credencial and credencial[1]:
+            opts["password"] = credencial[1]
+            # Sem isto o asyncssh tentaria a PEM do cofre primeiro, e o
+            # servidor recusaria a sessão antes de ver a senha digitada.
+            opts["client_keys"] = None
+            return opts
 
         if host.auth_method == "key":
             pem = decrypt_secret(host.ssh_key_enc)

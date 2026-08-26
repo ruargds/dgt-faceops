@@ -40,6 +40,29 @@ log = logging.getLogger("faceops.faxina")
 # trás. 24h é folga suficiente para o backup mais longo terminar.
 STAGING_HORAS = 24
 
+# ── Limpeza pontual ────────────────────────────────────────────────────
+# A faxina diária é boa para o regime, e ruim para o caso pontual: "o disco
+# do painel encheu por causa das gravações de terminal, quero só elas, e só
+# as de mais de 180 dias". Mexer na retenção configurada para conseguir
+# isso muda o comportamento de TODO dia — e alguém esquece de voltar.
+#
+# Daí esta lista. Cada categoria age em um lugar só, e nenhuma delas toca em
+# artefato de backup, cadastro de servidor, usuário, agendamento ou destino:
+# o que sai daqui é histórico e sobra de disco, nunca configuração.
+CATEGORIAS_PONTUAIS = {
+    "gravacoes": "Gravações do InTerminal (.cast)",
+    "staging": "Sobras de staging de backup",
+    "auditoria": "Registros de auditoria não críticos",
+    "sessoes": "Linhas de sessão de terminal já encerradas",
+    "logs_execucao": "Texto do log das execuções de backup",
+    "amostras": "Amostras do monitor",
+}
+
+# Piso de idade da limpeza pontual. Existe porque o estrago de um clique
+# errado aqui é irreversível: com sete dias de piso, nenhuma investigação
+# em curso, backup em execução ou sessão aberta entra na conta.
+DIAS_MINIMO_PONTUAL = 7
+
 
 class FaxinaService:
     def __init__(self, config=None) -> None:
@@ -201,6 +224,146 @@ class FaxinaService:
         async with AsyncSessionLocal() as db:
             r["amostras_removidas"] = await MonitorService.limpar(db, dias)
             await db.commit()
+
+    # ── Limpeza pontual, por categoria e período ───────────────────────
+
+    async def pontual(
+        self, categorias: list[str], dias: int, aplicar: bool = False
+    ) -> dict:
+        """
+        Conta (e, se `aplicar`, remove) só o que foi escolhido na tela.
+
+        Duas garantias que fazem esta ação ser aceitável ao lado da faxina
+        automática:
+
+        * **Piso de idade.** `dias` nunca cai abaixo de
+          `DIAS_MINIMO_PONTUAL`, mesmo que a requisição peça zero.
+        * **Nada de configuração sai.** Auditoria crítica, execução de
+          backup em andamento, artefato de backup, cadastro, agendamento e
+          destino ficam fora — sempre, independente da seleção.
+
+        A retenção configurada não é tocada: a faxina de amanhã continua
+        exatamente como estava.
+        """
+        pedidas = [c for c in categorias if c in CATEGORIAS_PONTUAIS]
+        dias = max(int(dias), DIAS_MINIMO_PONTUAL)
+        corte_ts = time.time() - dias * 86400
+        corte_dt = datetime.now(timezone.utc) - timedelta(days=dias)
+
+        r: dict = {
+            "aplicado": bool(aplicar),
+            "dias": dias,
+            "minimo": DIAS_MINIMO_PONTUAL,
+            "categorias": pedidas,
+            "gravacoes": 0,
+            "gravacoes_bytes": 0,
+            "staging": 0,
+            "staging_bytes": 0,
+            "auditoria": 0,
+            "sessoes": 0,
+            "logs_execucao": 0,
+            "amostras": 0,
+            "erros": [],
+        }
+        if not pedidas:
+            return r
+
+        if "gravacoes" in pedidas:
+            pasta = Path(settings.TERMINAL_SESSION_DIR)
+            if pasta.exists():
+                for arquivo in pasta.glob("*.cast"):
+                    try:
+                        st = arquivo.stat()
+                        if st.st_mtime >= corte_ts:
+                            continue
+                        r["gravacoes"] += 1
+                        r["gravacoes_bytes"] += st.st_size
+                        if aplicar:
+                            arquivo.unlink()
+                    except OSError as exc:
+                        r["erros"].append(f"gravacao {arquivo.name}: {exc}")
+
+        if "staging" in pedidas:
+            pasta = Path(settings.LOCAL_BACKUP_DIR) / "_staging"
+            if pasta.exists():
+                for arquivo in pasta.iterdir():
+                    try:
+                        if not arquivo.is_file():
+                            continue
+                        st = arquivo.stat()
+                        if st.st_mtime >= corte_ts:
+                            continue
+                        r["staging"] += 1
+                        r["staging_bytes"] += st.st_size
+                        if aplicar:
+                            arquivo.unlink()
+                    except OSError as exc:
+                        r["erros"].append(f"staging {arquivo.name}: {exc}")
+
+        precisa_banco = {"auditoria", "sessoes", "logs_execucao", "amostras"} & set(pedidas)
+        if precisa_banco:
+            from sqlalchemy import func
+
+            async with AsyncSessionLocal() as db:
+                if "auditoria" in pedidas:
+                    # Crítico nunca sai por aqui: é justamente o registro
+                    # que uma investigação vai procurar.
+                    onde = (AuditLog.ts < corte_dt, AuditLog.level != "critical")
+                    if aplicar:
+                        res = await db.execute(delete(AuditLog).where(*onde))
+                        r["auditoria"] = res.rowcount or 0
+                    else:
+                        r["auditoria"] = (await db.execute(
+                            select(func.count(AuditLog.id)).where(*onde)
+                        )).scalar() or 0
+
+                if "sessoes" in pedidas:
+                    # Só sessão encerrada. Uma sessão aberta ainda tem PTY
+                    # vivo do outro lado.
+                    onde = (
+                        TerminalSession.started_at < corte_dt,
+                        TerminalSession.ended_at.isnot(None),
+                    )
+                    if aplicar:
+                        res = await db.execute(delete(TerminalSession).where(*onde))
+                        r["sessoes"] = res.rowcount or 0
+                    else:
+                        r["sessoes"] = (await db.execute(
+                            select(func.count(TerminalSession.id)).where(*onde)
+                        )).scalar() or 0
+
+                if "logs_execucao" in pedidas:
+                    # A LINHA do histórico fica; só o texto do log sai. E
+                    # execução em curso está fora: o log dela ainda cresce.
+                    onde = (
+                        BackupRun.started_at < corte_dt,
+                        BackupRun.log != "",
+                        BackupRun.status.notin_(("executando", "pendente")),
+                    )
+                    if aplicar:
+                        res = await db.execute(
+                            update(BackupRun)
+                            .where(*onde)
+                            .values(log="[log removido pela limpeza pontual]")
+                        )
+                        r["logs_execucao"] = res.rowcount or 0
+                    else:
+                        r["logs_execucao"] = (await db.execute(
+                            select(func.count(BackupRun.id)).where(*onde)
+                        )).scalar() or 0
+
+                if "amostras" in pedidas:
+                    from app.services.monitor_service import MonitorService
+
+                    if aplicar:
+                        r["amostras"] = await MonitorService.limpar(db, dias)
+                    else:
+                        r["amostras"] = await MonitorService.contar_antigas(db, dias)
+
+                if aplicar:
+                    await db.commit()
+
+        return r
 
     # ── Prévia, sem alterar nada ───────────────────────────────────────
 

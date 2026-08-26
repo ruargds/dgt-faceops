@@ -189,6 +189,11 @@ grep -q '^FACEOPS_REVISAO=' .env 2>/dev/null \
     && sed -i "s|^FACEOPS_REVISAO=.*|FACEOPS_REVISAO=$FACEOPS_REVISAO|" .env \
     || echo "FACEOPS_REVISAO=$FACEOPS_REVISAO" >> .env
 
+# Mesmo selo dentro do bundle do frontend: com ele o rodape da barra
+# lateral denuncia navegador servindo bundle antigo por cache, em vez
+# de deixar alguem investigar o backend por causa disso.
+export BUILD_STAMP="$FACEOPS_REVISAO $(date '+%d/%m %H:%M')"
+
 # ── 5. Construir, com prioridade mínima ────────────────────────────────
 passo "5/6" "Aplicando..."
 
@@ -247,6 +252,7 @@ if [ -d .git ] && [ "$REVERTER_PARA" != "$FACEOPS_REVISAO" ] && [ "$REVERTER_PAR
     echo "  voltando para $REVERTER_PARA..."
     git reset --hard "$REVERTER_PARA" --quiet
     export FACEOPS_REVISAO="$REVERTER_PARA"
+    export BUILD_STAMP="$REVERTER_PARA $(date '+%d/%m %H:%M')"
     sed -i "s|^FACEOPS_REVISAO=.*|FACEOPS_REVISAO=$REVERTER_PARA|" .env 2>/dev/null
     [ "$BUILD" = "1" ] && nice -n 19 $SUDO docker compose build >/dev/null 2>&1
     $SUDO docker compose up -d >/dev/null 2>&1

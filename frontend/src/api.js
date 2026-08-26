@@ -147,6 +147,9 @@ export const api = {
   atualizarUsuario: (id, d) => patch(`/auth/usuarios/${id}`, d),
   removerUsuario: (id) => del(`/auth/usuarios/${id}`),
 
+  // Estado do painel — versão e revisão do que está no ar
+  saude: () => get("/saude"),
+
   // Configuração do painel
   config: () => get("/config"),
   configPublico: () => get("/config/publico"),
@@ -154,6 +157,10 @@ export const api = {
   removerLogo: (tipo) => del(`/marca/${tipo}`),
   salvarConfig: (valores) => patch("/config", { valores }),
   restaurarConfig: (chave) => del(`/config/${chave}`),
+
+  // Licenciamento do FindFace — liberado, em uso, restante. Vai pela API
+  // HTTP da NtechLab; o limite de licença não existe no banco lido por SSH.
+  licencaFindFace: (id) => get(`/dispositivos/${id}/licenca`),
 
   // Servidores
   hosts: () => get("/hosts"),
@@ -184,6 +191,9 @@ export const api = {
   arquivarLog: (id, d) => post(`/manutencao/${id}/arquivar`, d),
   faxinaPrevia: () => get("/manutencao/faxina/previa"),
   faxinaExecutar: () => post("/manutencao/faxina/executar"),
+  // Limpeza pontual do painel: categorias marcadas, acima de N dias.
+  // simular:true so conta; aplicar exige a palavra de confirmacao.
+  faxinaPontual: (d) => post("/manutencao/faxina/pontual", d),
   limpezaOpcoes: (id) => get(`/manutencao/${id}/limpeza/opcoes`),
   limpezaExecutar: (id, d) => post(`/manutencao/${id}/limpeza`, d),
 
@@ -244,7 +254,9 @@ export const api = {
   urlExportarDispositivos: (id, periodo = "mes") => `/api/exportar/dispositivos/${id}?periodo=${periodo}`,
 
   // InTerminal
-  ticketTerminal: (hostId) => post(`/terminal/ticket/${hostId}`),
+  // Credencial da sessão vai no CORPO, nunca na query string (regra 2).
+  ticketTerminal: (hostId, credencial) =>
+    post(`/terminal/ticket/${hostId}`, credencial || {}),
   sessoesAtivas: () => get("/terminal/ativas"),
   sessoesTerminal: (params = "") => get(`/terminal/sessoes${params}`),
   urlGravacao: (id) => `/api/terminal/sessoes/${id}/gravacao`,

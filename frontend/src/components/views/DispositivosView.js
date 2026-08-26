@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatBytes, formatData } from "../../api";
-import { Carregando, Erro, SeletorHost, Vazio, useHosts } from "../Comuns";
+import { Carregando, Erro, Medidor, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { BarraMetrica } from "../Graficos";
 import { IconAtualizar, IconDownload, IconAlerta, IconOk } from "../Icons";
 
@@ -18,6 +18,125 @@ const PERIODOS = [
  * fica atualizando sozinha: contar evento a cada minuto seria o peso que
  * o painel promete não criar.
  */
+/**
+ * Licenciamento do FindFace.
+ *
+ * "Cabem quantas câmeras ainda?" era pergunta que só a interface da
+ * NtechLab respondia, e que aparece em toda conversa de expansão. Vem da
+ * API HTTP: limite, uso e o que sobra, com o número real de câmeras
+ * cadastradas confrontando o limite licenciado.
+ *
+ * Quando a instalação devolve a licença num formato que o achatamento do
+ * servidor não reconhece, o corpo bruto fica acessível ali mesmo — melhor
+ * mostrar JSON do que esconder o dado.
+ */
+function Licenciamento({ dados, erro }) {
+  const [verBruto, setVerBruto] = useState(false);
+
+  if (erro) {
+    return (
+      <div className="card card-tight">
+        <div className="section-title" style={{ marginBottom: 4 }}>
+          Licenciamento
+        </div>
+        <div className="small muted">{erro}</div>
+      </div>
+    );
+  }
+  if (!dados) return null;
+
+  const itens = dados.itens || [];
+
+  return (
+    <div className="card">
+      <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+        <div className="section-title">Licenciamento</div>
+        <span className="small muted mono">
+          {dados.url}
+          {dados.caminho}
+        </span>
+      </div>
+
+      {itens.length === 0 ? (
+        <div className="small muted">
+          A licença respondeu, mas nenhum limite reconhecível veio no corpo.
+          Veja o conteúdo bruto abaixo.
+        </div>
+      ) : (
+        <div className="table-wrap" style={{ marginTop: 10 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Recurso</th>
+                <th className="right">Liberado</th>
+                <th className="right">Em uso</th>
+                <th className="right">Livre</th>
+                <th style={{ width: 160 }}>Ocupação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itens.map((i, idx) => {
+                const pct =
+                  i.limite && i.limite > 0 && i.usado !== null && i.usado !== undefined
+                    ? (i.usado / i.limite) * 100
+                    : null;
+                return (
+                  <tr key={`${i.recurso}-${idx}`}>
+                    <td className="mono">{i.recurso}</td>
+                    <td className="right mono">
+                      {i.ilimitado ? "ilimitado" : i.limite === null ? "—" : i.limite.toLocaleString("pt-BR")}
+                    </td>
+                    <td className="right mono">
+                      {i.usado === null || i.usado === undefined
+                        ? "—"
+                        : i.usado.toLocaleString("pt-BR")}
+                    </td>
+                    <td className="right mono">
+                      {i.restante === null || i.restante === undefined
+                        ? "—"
+                        : i.restante.toLocaleString("pt-BR")}
+                    </td>
+                    <td>
+                      {pct === null ? (
+                        <span className="small muted">—</span>
+                      ) : (
+                        <div className="stack-h" style={{ gap: 8 }}>
+                          <Medidor pct={pct} />
+                          <span className="small mono">{pct.toFixed(0)}%</span>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="stack-h" style={{ marginTop: 10 }}>
+        <span className="small muted" style={{ flex: 1 }}>
+          {dados.cameras_cadastradas === null || dados.cameras_cadastradas === undefined
+            ? "Contagem de câmeras indisponível pela API."
+            : `${dados.cameras_cadastradas} câmera(s) cadastrada(s) no servidor agora.`}
+        </span>
+        <button className="btn btn-ghost btn-sm" onClick={() => setVerBruto((v) => !v)}>
+          {verBruto ? "Esconder resposta bruta" : "Ver resposta bruta"}
+        </button>
+      </div>
+
+      {verBruto && (
+        <pre
+          className="mono small"
+          style={{ marginTop: 8, maxHeight: 260, overflow: "auto", whiteSpace: "pre-wrap" }}
+        >
+          {JSON.stringify(dados.bruto, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 export default function DispositivosView() {
   const { hosts, hostId, setHostId, carregando: carregandoHosts } = useHosts();
   const [dados, setDados] = useState(null);
@@ -25,6 +144,8 @@ export default function DispositivosView() {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [filtro, setFiltro] = useState("");
+  const [licenca, setLicenca] = useState(null);
+  const [erroLicenca, setErroLicenca] = useState("");
 
   const consultar = useCallback(async () => {
     if (!hostId) return;
@@ -42,6 +163,24 @@ export default function DispositivosView() {
 
   useEffect(() => {
     setDados(null);
+  }, [hostId]);
+
+  // Licença é leitura barata (um GET, sem SSH e sem varrer evento), então
+  // carrega sozinha ao trocar de servidor — diferente da contagem de
+  // eventos, que continua sob demanda. Assim a tela responde algo útil
+  // antes de alguém clicar em Consultar.
+  useEffect(() => {
+    if (!hostId) return;
+    let vivo = true;
+    setLicenca(null);
+    setErroLicenca("");
+    api
+      .licencaFindFace(hostId)
+      .then((r) => vivo && setLicenca(r))
+      .catch((ex) => vivo && setErroLicenca(ex.message));
+    return () => {
+      vivo = false;
+    };
   }, [hostId]);
 
   if (carregandoHosts) return <Carregando />;
@@ -90,6 +229,8 @@ export default function DispositivosView() {
       </div>
 
       <Erro mensagem={erro} onTentar={consultar} />
+
+      <Licenciamento dados={licenca} erro={erroLicenca} />
 
       {!dados && !carregando && (
         <Vazio titulo="Clique em Consultar">

@@ -58,6 +58,44 @@ as duas coisas.
 A mesma pinagem de chave de host vale aqui — sessão em servidor cuja chave
 mudou é recusada.
 
+## Login da sessão
+
+Ao clicar em **Abrir terminal**, o painel pergunta **usuário e senha** —
+como o PuTTY faz. É o que permite entrar no servidor com a conta da
+pessoa, e não com a conta de serviço guardada no cofre; o `login_ssh` de
+cada sessão vai para a auditoria junto com quem abriu.
+
+* **Senha em branco** usa a credencial cadastrada do servidor. É o caminho
+  de quem entra por chave PEM, que não tem senha para digitar.
+* **Usuário diferente com senha em branco** vale: a mesma chave PEM serve
+  para outra conta do servidor.
+* A senha digitada vai no **corpo** do pedido de ticket (nunca na query
+  string), vive em memória por até 30 segundos, e é apagada no instante em
+  que o SSH autentica. Não entra no banco, na auditoria nem na gravação.
+* A **pinagem da chave do host continua valendo**: senha digitada não
+  viaja para um servidor cuja chave não é a cadastrada.
+
+## Copiar e colar
+
+Comportamento do PuTTY, porque é a mão que quem opera já tem:
+
+| Gesto | O que faz |
+|---|---|
+| Selecionar com o mouse | copia na hora |
+| Clique direito | cola |
+| `Ctrl+Shift+C` / `Ctrl+Insert` | copia a seleção |
+| `Ctrl+Shift+V` / `Shift+Insert` | cola |
+| `Ctrl+C` | **interrompe o comando** — segue sendo o SIGINT |
+
+`Ctrl+C` não foi sequestrado para "copiar" de propósito: quem opera
+servidor conta com ele para matar comando travado, e perder isso seria
+pior que não ter atalho de cópia.
+
+O Firefox não deixa script **ler** a área de transferência. Quando a
+leitura é negada, o botão **Colar** abre uma janelinha onde o texto entra
+com o `Ctrl+V` do próprio navegador e segue para o shell — em vez de
+"colar" falhar em silêncio e parecer defeito do painel.
+
 ## Protocolo
 
 JSON em texto, nos dois sentidos.

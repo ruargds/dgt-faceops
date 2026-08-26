@@ -25,7 +25,7 @@ from app.db.database import AsyncSessionLocal, get_db
 from app.models.audit import TerminalSession
 from app.models.host import Host
 from app.models.user import User
-from app.schemas import SessaoTerminalOut
+from app.schemas import CredencialTerminalIn, SessaoTerminalOut
 from app.services import audit_service
 from app.services.ssh_service import SSHError
 from app.services.terminal_service import SessaoTerminal
@@ -36,7 +36,11 @@ router = APIRouter(prefix="/api/terminal", tags=["terminal"])
 
 TICKET_TTL = 30  # segundos
 
-# ticket -> {usuario, host_id, permite_sudo, expira_em}
+# ticket -> {usuario, host_id, permite_sudo, ssh_usuario, ssh_senha, expira_em}
+#
+# A senha da sessão mora AQUI e em nenhum outro lugar: memória do processo,
+# 30 segundos, um uso. Não vai para o banco, para a auditoria nem para a
+# gravação da sessão.
 _tickets: dict[str, dict] = {}
 
 
@@ -50,15 +54,26 @@ def _limpar_tickets() -> None:
 async def emitir_ticket(
     host_id: int,
     request: Request,
+    credencial: CredencialTerminalIn | None = None,
     autor: User = Depends(require_permission("terminal.use")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Emite o ticket que o WebSocket vai consumir."""
+    """
+    Emite o ticket que o WebSocket vai consumir.
+
+    Aceita o login e a senha digitados na tela para ESTA sessão — quem
+    opera entra com a própria conta no servidor, como faria no PuTTY, em
+    vez de herdar a conta de serviço do painel. Senha vazia mantém o
+    comportamento antigo: credencial do cofre.
+    """
     host = await db.get(Host, host_id)
     if host is None:
         raise HTTPException(status_code=404, detail="servidor não encontrado")
     if not host.enabled:
         raise HTTPException(status_code=400, detail=f"servidor '{host.name}' está desativado")
+
+    ssh_usuario = (credencial.usuario if credencial else "").strip() or host.ssh_user
+    ssh_senha = credencial.senha if credencial else ""
 
     _limpar_tickets()
     ticket = secrets.token_urlsafe(32)
@@ -68,9 +83,16 @@ async def emitir_ticket(
         "host_id": host_id,
         "permite_sudo": "terminal.sudo" in permissoes,
         "ip": client_ip(request),
+        "ssh_usuario": ssh_usuario,
+        "ssh_senha": ssh_senha,
         "expira_em": time.monotonic() + TICKET_TTL,
     }
-    return {"ticket": ticket, "expira_em_s": TICKET_TTL, "host": host.name}
+    return {
+        "ticket": ticket,
+        "expira_em_s": TICKET_TTL,
+        "host": host.name,
+        "usuario_ssh": ssh_usuario,
+    }
 
 
 @router.websocket("/ws")
@@ -115,7 +137,12 @@ async def terminal_ws(
             usuario=info["usuario"],
             ip=info["ip"],
             permite_sudo=info["permite_sudo"],
+            ssh_usuario=info.get("ssh_usuario", ""),
+            ssh_senha=info.get("ssh_senha", ""),
         )
+        # O ticket já foi consumido; a senha não tem mais motivo para
+        # continuar no dicionário enquanto a sessão vive.
+        info["ssh_senha"] = ""
 
         try:
             await sessao.abrir(colunas, linhas)
@@ -131,7 +158,7 @@ async def terminal_ws(
                 target=host.name,
                 ip=info["ip"],
                 success=False,
-                detail={"erro": str(exc)[:400]},
+                detail={"erro": str(exc)[:400], "login_ssh": sessao.login},
             )
             return
 
@@ -151,7 +178,14 @@ async def terminal_ws(
             action="terminal.open",
             target=host.name,
             ip=info["ip"],
-            detail={"sessao_id": registro.id, "gravacao": bool(sessao.caminho_gravacao)},
+            detail={
+                "sessao_id": registro.id,
+                "gravacao": bool(sessao.caminho_gravacao),
+                # Sob que conta a pessoa entrou no servidor, e se usou a
+                # credencial dela ou a do cofre. Nunca a senha.
+                "login_ssh": sessao.login,
+                "credencial": "sessao" if sessao.credencial_propria else "cofre",
+            },
         )
 
         chave = f"{info['usuario']}@{host.name}:{registro.id}"
@@ -161,7 +195,7 @@ async def terminal_ws(
         await websocket.send_text(json.dumps({
             "tipo": "pronto",
             "host": host.name,
-            "usuario_ssh": host.ssh_user,
+            "usuario_ssh": sessao.login,
             "sudo": info["permite_sudo"],
             "gravando": bool(sessao.caminho_gravacao),
         }))

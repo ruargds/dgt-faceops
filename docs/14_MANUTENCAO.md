@@ -153,6 +153,41 @@ vfs.fs.size[/,pfree]               trigger em 15%
 O segundo é o que faltou. Um disco levou semanas para encher; houve
 tempo de sobra para alertar.
 
+## Limpeza pontual do painel
+
+A faxina diária resolve o regime. Não resolve o caso pontual: "o disco do
+painel encheu por causa das gravações de terminal, quero só elas, e só as
+de mais de 180 dias". O caminho antigo era mexer na retenção configurada
+— que vale para **todo dia**, e alguém esquece de voltar.
+
+Em **Manutenção → Limpeza pontual**: marque as categorias, informe a
+idade, veja a conta, confirme.
+
+| Categoria | O que sai |
+|---|---|
+| Gravações do InTerminal | arquivos `.cast` no disco do painel |
+| Sobras de staging de backup | arquivo deixado por execução que falhou no meio |
+| Registros de auditoria | linhas de auditoria **não críticas** |
+| Sessões de terminal encerradas | a linha do histórico da sessão |
+| Texto do log das execuções | o texto; a linha da execução fica |
+| Amostras do monitor | os pontos dos gráficos da aba Monitor |
+
+As cercas, porque apagar histórico não tem volta:
+
+1. **Simulação primeiro.** O botão `Ver o que sai` só conta. Mudar a
+   seleção descarta a conta anterior — número velho ao lado de um botão de
+   apagar é o jeito mais fácil de apagar o que não se queria.
+2. **Piso de sete dias, no servidor.** Mesmo que a requisição peça zero.
+3. **Confirmação por digitação** (`LIMPAR`) e registro de auditoria em
+   nível crítico.
+4. **Fora de alcance, sempre:** auditoria de nível crítico, artefato de
+   backup, execução de backup em andamento, sessão de terminal aberta,
+   cadastro de servidor, usuário, agendamento e destino. A retenção
+   automática também não é tocada — a faxina de amanhã roda igual.
+
+Requer `maintenance.view` para simular e `maintenance.apply` para
+aplicar.
+
 ## Permissões
 
 | Ação | Permissão |

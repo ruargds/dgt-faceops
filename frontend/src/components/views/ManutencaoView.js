@@ -395,6 +395,249 @@ function Faxina() {
   );
 }
 
+/**
+ * Limpeza pontual do painel.
+ *
+ * A faxina diária resolve o regime; não resolve o caso pontual — "o disco
+ * encheu por causa das gravações de terminal, quero só elas, e só as de mais
+ * de 180 dias". Sem esta tela, o caminho era mexer na retenção configurada,
+ * que vale para TODO dia — e alguém esquece de voltar.
+ *
+ * Três cercas, porque apagar histórico não tem volta: simulação primeiro,
+ * piso de idade no servidor e confirmação por digitação.
+ */
+const CATEGORIAS_LIMPEZA = [
+  {
+    id: "gravacoes",
+    rotulo: "Gravações do InTerminal",
+    nota: "arquivos .cast no disco do painel",
+    campo: "gravacoes",
+    bytes: "gravacoes_bytes",
+  },
+  {
+    id: "staging",
+    rotulo: "Sobras de staging de backup",
+    nota: "arquivo deixado por execução que falhou no meio",
+    campo: "staging",
+    bytes: "staging_bytes",
+  },
+  {
+    id: "auditoria",
+    rotulo: "Registros de auditoria",
+    nota: "nível crítico NUNCA sai por aqui",
+    campo: "auditoria",
+  },
+  {
+    id: "sessoes",
+    rotulo: "Sessões de terminal encerradas",
+    nota: "a linha do histórico; sessão aberta fica de fora",
+    campo: "sessoes",
+  },
+  {
+    id: "logs_execucao",
+    rotulo: "Texto do log das execuções",
+    nota: "a execução continua no histórico, sem o texto do log",
+    campo: "logs_execucao",
+  },
+  {
+    id: "amostras",
+    rotulo: "Amostras do monitor",
+    nota: "os pontos dos gráficos da aba Monitor",
+    campo: "amostras",
+  },
+];
+
+function LimpezaPontual() {
+  const { has } = usePermissions();
+  const [marcadas, setMarcadas] = useState({});
+  const [dias, setDias] = useState(90);
+  const [previa, setPrevia] = useState(null);
+  const [erro, setErro] = useState("");
+  const [simulando, setSimulando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
+  const [feito, setFeito] = useState(null);
+
+  const selecionadas = CATEGORIAS_LIMPEZA.filter((c) => marcadas[c.id]).map((c) => c.id);
+
+  function alternar(id) {
+    setMarcadas((atual) => ({ ...atual, [id]: !atual[id] }));
+    // A prévia vale para a seleção que a gerou. Mudou a seleção, a conta
+    // anterior deixou de valer — número velho ao lado de um botão de apagar
+    // é o jeito mais fácil de alguém apagar o que não queria.
+    setPrevia(null);
+    setFeito(null);
+  }
+
+  async function simular() {
+    setSimulando(true);
+    setErro("");
+    setFeito(null);
+    try {
+      setPrevia(
+        await api.faxinaPontual({
+          categorias: selecionadas,
+          dias: Number(dias) || 0,
+          simular: true,
+        })
+      );
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setSimulando(false);
+    }
+  }
+
+  const marcadasComPrevia = CATEGORIAS_LIMPEZA.filter((c) => marcadas[c.id]);
+  const total = previa
+    ? marcadasComPrevia.reduce((s, c) => s + (previa[c.campo] || 0), 0)
+    : 0;
+  const bytes = previa
+    ? marcadasComPrevia.reduce((s, c) => s + (c.bytes ? previa[c.bytes] || 0 : 0), 0)
+    : 0;
+
+  return (
+    <div className="card">
+      <div className="section-title" style={{ marginBottom: 4 }}>
+        Limpeza pontual
+      </div>
+      <div className="small muted" style={{ marginBottom: 14 }}>
+        Escolha o que sai e a partir de quantos dias. Não mexe na retenção
+        automática, não toca em artefato de backup e não apaga cadastro,
+        agendamento, destino nem usuário — só histórico e sobra de disco.
+      </div>
+
+      <Erro mensagem={erro} />
+
+      <div className="stack-v" style={{ gap: 6, marginBottom: 14 }}>
+        {CATEGORIAS_LIMPEZA.map((c) => (
+          <label key={c.id} className="stack-h" style={{ alignItems: "flex-start", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(marcadas[c.id])}
+              onChange={() => alternar(c.id)}
+              style={{ marginTop: 3 }}
+            />
+            <span style={{ flex: 1 }}>
+              {c.rotulo}
+              <div className="small muted">{c.nota}</div>
+            </span>
+            {previa && marcadas[c.id] && (
+              <span className="mono small">
+                {previa[c.campo] || 0}
+                {c.bytes ? " (" + formatBytes(previa[c.bytes] || 0) + ")" : ""}
+              </span>
+            )}
+          </label>
+        ))}
+      </div>
+
+      <div className="stack-h" style={{ marginBottom: 12 }}>
+        <span className="small">Mais velho que</span>
+        <input
+          type="number"
+          min={7}
+          max={3650}
+          value={dias}
+          onChange={(e) => {
+            setDias(e.target.value);
+            setPrevia(null);
+            setFeito(null);
+          }}
+          style={{ width: 90 }}
+        />
+        <span className="small muted">
+          dias — o servidor não aceita menos de 7, mesmo que a tela peça
+        </span>
+      </div>
+
+      {previa && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--amber-bg)", borderColor: "#f5d9a8", marginBottom: 12 }}
+        >
+          <span className="small" style={{ color: "#8a4b00" }}>
+            {total > 0 ? (
+              <>
+                Sairiam <strong>{total}</strong> item(ns) com mais de{" "}
+                <strong>{previa.dias}</strong> dias
+                {bytes > 0 ? <> e {formatBytes(bytes)} de disco</> : null}.
+              </>
+            ) : (
+              <>Nada com mais de {previa.dias} dias nas categorias marcadas.</>
+            )}
+          </span>
+        </div>
+      )}
+
+      {feito && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 12 }}
+        >
+          <span className="small" style={{ color: "#06694a" }}>
+            <IconOk size={13} /> Limpeza concluída — {feito.gravacoes} gravação(ões),{" "}
+            {feito.staging} sobra(s) de staging, {feito.auditoria} registro(s) de
+            auditoria, {feito.sessoes} sessão(ões), {feito.logs_execucao} log(s)
+            esvaziado(s), {feito.amostras} amostra(s).
+            {feito.erros && feito.erros.length > 0 && (
+              <div style={{ color: "#8c1c1c", marginTop: 4 }}>{feito.erros.join(" · ")}</div>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="stack-h">
+        <span className="small muted" style={{ flex: 1 }}>
+          {selecionadas.length
+            ? selecionadas.length + " categoria(s) marcada(s)."
+            : "Marque ao menos uma categoria."}
+        </span>
+        <button
+          className="btn btn-secondary"
+          onClick={simular}
+          disabled={!selecionadas.length || simulando}
+        >
+          {simulando ? "Contando\u2026" : "Ver o que sai"}
+        </button>
+        {has("maintenance.apply") && (
+          <button
+            className="btn btn-danger"
+            onClick={() => setConfirmando(true)}
+            disabled={!previa || total === 0}
+          >
+            Limpar
+          </button>
+        )}
+      </div>
+
+      {confirmando && previa && (
+        <ConfirmarDigitando
+          titulo="Limpeza pontual do painel"
+          palavra="LIMPAR"
+          rotuloBotao="Limpar"
+          aviso={
+            "Remove " + total + " item(ns) com mais de " + previa.dias +
+            " dias em " + selecionadas.length + " categoria(s). Não há lixeira: " +
+            "o que for apagado não volta. Auditoria crítica, artefato de backup " +
+            "e execução em andamento ficam de fora."
+          }
+          onConfirmar={async () => {
+            const r = await api.faxinaPontual({
+              categorias: selecionadas,
+              dias: Number(dias) || 0,
+              simular: false,
+              confirmar: "LIMPAR",
+            });
+            setFeito(r);
+            setPrevia(null);
+          }}
+          onFechar={() => setConfirmando(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function ManutencaoView() {
   const { has } = usePermissions();
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
@@ -767,6 +1010,8 @@ export default function ManutencaoView() {
       {diag && <Limpeza hostId={hostId} hostNome={host ? host.name : ""} />}
 
       <Faxina />
+
+      <LimpezaPontual />
 
       {confirmando && host && (
         <ConfirmarDigitando

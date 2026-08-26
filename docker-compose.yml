@@ -81,6 +81,10 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        # Carimbado pelo deploy.sh / atualizar.sh com a revisao do git.
+        # Sem eles (build manual), fica "desenvolvimento".
+        BUILD_STAMP: ${BUILD_STAMP:-desenvolvimento}
     container_name: faceops_frontend
     restart: unless-stopped
     depends_on:

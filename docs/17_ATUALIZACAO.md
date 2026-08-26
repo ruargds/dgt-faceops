@@ -105,8 +105,16 @@ Migrações de banco rodam sozinhas na subida.
 curl -s http://localhost:8080/api/saude
 ```
 
-O campo `revisao` traz o commit curto do git. Também aparece no
-`atualizar.sh` ao final.
+O campo `revisao` traz o commit curto do git. Aparece em três lugares:
+no fim do `atualizar.sh`, neste `/api/saude`, e **no rodapé da barra
+lateral do painel**, embaixo do usuário — que é onde alguém com a tela
+aberta consegue olhar sem pedir acesso à VM.
+
+O `deploy.sh` e o `atualizar.sh` carimbam a mesma revisão no bundle do
+frontend (`BUILD_STAMP`). Quando o navegador está com `index.html` em
+cache apontando para um bundle antigo, o rodapé mostra um aviso âmbar com
+o selo do bundle e o pedido de `Ctrl+F5` — antes disso, esse caso custava
+rodadas de "corrigi / não resolveu".
 
 Isso existe porque "qual versão está rodando?" respondido por memória é
 a origem de meia hora de confusão em qualquer incidente.

@@ -102,6 +102,24 @@ diagnóstico.
 | GET | `/metrics/{id}` | `metrics.view` |
 | GET | `/metrics/{id}/armazenamento` | `metrics.view` |
 
+`GET /api/dispositivos/{host_id}/licenca` (`metrics.view`) devolve o
+licenciamento do FindFace daquele servidor: `itens[]` com `recurso`,
+`limite`, `usado`, `restante` e `ilimitado`, mais `cameras_cadastradas`,
+o `caminho` que respondeu e o corpo `bruto`. Exige URL e token da API
+cadastrados no host — responde 400 explicando quando não há.
+
+`POST /api/manutencao/faxina/pontual` (`maintenance.view` para simular,
+`maintenance.apply` para aplicar) faz a limpeza pontual do painel:
+`{categorias: [...], dias: 90, simular: true}`. Aplicar exige
+`simular: false` e `confirmar: "LIMPAR"`; o piso de sete dias é do
+servidor, não da tela. Categorias: `gravacoes`, `staging`, `auditoria`,
+`sessoes`, `logs_execucao`, `amostras`.
+
+`POST /api/terminal/ticket/{host_id}` (`terminal.use`) aceita, no corpo,
+`{usuario, senha}` — a credencial daquela sessão de terminal. Senha vazia
+usa a credencial do cofre. A senha vai no corpo, nunca na query string, e
+não é gravada em lugar nenhum.
+
 `GET /metrics` coleta de todos os hosts ativos em paralelo. Host fora do ar
 vira `{"ok": false, "erro": "…"}` no seu item, sem derrubar a resposta.
 

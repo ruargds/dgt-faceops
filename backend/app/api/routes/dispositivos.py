@@ -13,6 +13,42 @@ from app.services.ssh_service import SSHError
 router = APIRouter(prefix="/api/dispositivos", tags=["dispositivos"])
 
 
+@router.get("/{host_id}/licenca")
+async def licenca(
+    host_id: int,
+    request: Request,
+    _: User = Depends(require_permission("metrics.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Licenciamento do FindFace daquele servidor: liberado, em uso, restante.
+
+    Consulta barata e só leitura — vai pela API HTTP da NtechLab, sem SSH.
+    Exige URL e token cadastrados no servidor (aba Servidores → API do
+    FindFace); sem isso responde 400 dizendo o que falta, porque o limite
+    de licença não está no banco lido por SSH.
+    """
+    from app.services.ffapi_service import FFApiError, configurado
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+    if not configurado(host):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"'{host.name}' não tem a API do FindFace cadastrada. Informe URL "
+                "e token em Servidores → editar → API do FindFace; o limite de "
+                "licença só existe por essa via."
+            ),
+        )
+
+    try:
+        return await request.app.state.ffapi.licenca(host)
+    except FFApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.get("/{host_id}")
 async def listar(
     host_id: int,

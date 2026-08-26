@@ -394,6 +394,19 @@ class MonitorService:
         return saida
 
     @staticmethod
+    async def contar_antigas(db, dias: int) -> int:
+        """Quantas amostras a limpeza removeria. Só leitura."""
+        if dias <= 0:
+            return 0
+        from sqlalchemy import func
+
+        corte = datetime.now(timezone.utc) - timedelta(days=dias)
+        r = await db.execute(
+            select(func.count(Amostra.id)).where(Amostra.ts < corte)
+        )
+        return int(r.scalar() or 0)
+
+    @staticmethod
     async def limpar(db, dias: int) -> int:
         """Chamada pela faxina."""
         if dias <= 0:

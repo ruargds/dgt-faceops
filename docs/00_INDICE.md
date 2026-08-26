@@ -81,6 +81,10 @@
   sobrevive a cada operação, onde cada dado mora, por que não há volume
   fantasma e qual é o único comando que apaga o banco.
 
+- **[23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md)** — monitor contínuo
+  sem onerar servidor, alertas com ação, câmeras e licenciamento do
+  FindFace, e as exportações em CSV.
+
 ### Segurança e acesso
 
 - **[05_PERMISSOES](05_PERMISSOES.md)** — os quatro perfis, o catálogo

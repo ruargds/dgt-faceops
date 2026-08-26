@@ -12,6 +12,13 @@ RUN npm install --no-audit --no-fund
 COPY frontend/src ./src
 COPY frontend/public ./public
 
+# Selo do build: entra no bundle e aparece no rodape da barra lateral
+# quando nao bate com a revisao do backend. Serve para descobrir em um
+# olhar que o navegador esta com index.html em cache apontando para o
+# bundle antigo — a causa mais chata de "corrigi / nao resolveu".
+ARG BUILD_STAMP=desenvolvimento
+ENV REACT_APP_BUILD_STAMP=$BUILD_STAMP
+
 # CI=false porque o CRA trata aviso como erro quando CI=true.
 # INLINE_RUNTIME_CHUNK=false tira o script inline do index.html — e o que
 # permite a CSP usar script-src 'self' sem unsafe-inline.

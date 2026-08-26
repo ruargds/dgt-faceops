@@ -184,6 +184,11 @@ input[type="checkbox"] { width: auto; }
 }
 .sidebar-user { color: var(--white); font-weight: 600; }
 .sidebar-role { color: #62748C; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.sidebar-versao {
+  margin-top: 8px; text-align: center; font-size: 10px;
+  color: rgba(255,255,255,0.28); letter-spacing: .2px;
+}
+.sidebar-versao-alerta { color: #E8A33D; margin-top: 3px; }
 
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .content { flex: 1; overflow-y: auto; padding: 22px 26px 40px; }

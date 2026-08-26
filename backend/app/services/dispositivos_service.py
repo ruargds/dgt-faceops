@@ -283,16 +283,29 @@ echo "{SEP}END"
 
         # Preferência: API HTTP do FindFace quando cadastrada. Cai para
         # SSH+psql se não houver credencial de API ou se a API falhar.
+        erro_api = ""
         if self.ffapi is not None:
             from app.services.ffapi_service import FFApiError, configurado
             if configurado(host):
                 try:
                     return await self.ffapi.listar(host, periodo)
                 except FFApiError as exc:
+                    erro_api = str(exc)
                     log.warning("API do FindFace falhou em %s, caindo para SSH: %s",
                                 host.name, exc)
 
-        esq = await self.descobrir(host, stack)
+        # Quando os DOIS caminhos falham, a tela precisa ver os dois erros.
+        # Mostrar só o do psql mandava investigar banco quando o problema
+        # era token de API vencido — e ninguém adivinha isso.
+        try:
+            esq = await self.descobrir(host, stack)
+        except (DispositivosError, SSHError) as exc:
+            if erro_api:
+                raise DispositivosError(
+                    f"a API do FindFace falhou ({erro_api}) e a leitura direta "
+                    f"do banco também: {exc}"
+                ) from exc
+            raise
         intervalo, rotulo = PERIODOS[periodo]
         sudo = await self.ssh.docker_needs_sudo(host)
 

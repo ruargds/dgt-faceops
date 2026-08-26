@@ -16,6 +16,10 @@ from app.services import audit_service
 from app.services.maintenance_service import ManutencaoError
 from app.services.ssh_service import SSHError
 
+# Palavra da confirmação por digitação da limpeza pontual. Não é o nome de
+# um servidor porque a ação é do PAINEL — não há servidor para nomear.
+PALAVRA_LIMPEZA = "LIMPAR"
+
 router = APIRouter(prefix="/api/manutencao", tags=["manutencao"])
 
 
@@ -33,6 +37,21 @@ class ItemLimpezaIn(BaseModel):
 class LimpezaIn(BaseModel):
     itens: list[ItemLimpezaIn]
     confirmar_host: str = ""
+
+
+class FaxinaPontualIn(BaseModel):
+    """
+    Limpeza pontual do painel: o que sai e a partir de quantos dias.
+
+    `simular` (padrão) só conta. Aplicar exige a palavra de confirmação —
+    apagar histórico não tem volta, e "tem certeza? [OK]" vira reflexo na
+    terceira vez (regra 25).
+    """
+
+    categorias: list[str] = Field(default_factory=list, max_length=12)
+    dias: int = Field(default=90, ge=1, le=3650)
+    simular: bool = True
+    confirmar: str = ""
 
 
 class ArquivarIn(BaseModel):
@@ -268,6 +287,80 @@ async def faxina_executar(
         detail={"acao": "faxina manual", **{
             k: v for k, v in resultado.items() if isinstance(v, (int, float))
         }},
+    )
+    return resultado
+
+
+@router.post("/faxina/pontual")
+async def faxina_pontual(
+    dados: FaxinaPontualIn,
+    request: Request,
+    autor: User = Depends(require_permission("maintenance.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Limpeza pontual do painel — só o que foi marcado, só acima da idade dada.
+
+    Serve ao caso que a faxina diária não resolve sem efeito colateral:
+    liberar disco AGORA de uma categoria específica sem mexer na retenção
+    configurada, que vale para todo dia.
+
+    `simular` (padrão) apenas conta. Aplicar exige `maintenance.apply` e a
+    palavra de confirmação; o piso de idade do serviço vale nos dois casos.
+    """
+    from app.services.faxina_service import CATEGORIAS_PONTUAIS
+
+    desconhecidas = [c for c in dados.categorias if c not in CATEGORIAS_PONTUAIS]
+    if desconhecidas:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "categoria desconhecida: " + ", ".join(desconhecidas) + ". "
+                "Aceitas: " + ", ".join(CATEGORIAS_PONTUAIS)
+            ),
+        )
+    if not dados.categorias:
+        raise HTTPException(status_code=400, detail="selecione ao menos uma categoria")
+
+    if dados.simular:
+        return await request.app.state.faxina.pontual(dados.categorias, dados.dias)
+
+    from app.core.permissions import permissions_for
+
+    if "maintenance.apply" not in permissions_for(autor.role, autor.is_super_admin):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Seu perfil ({autor.role}) pode simular, mas não aplicar.",
+        )
+    if dados.confirmar.strip() != PALAVRA_LIMPEZA:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"confirmação necessária: digite exatamente '{PALAVRA_LIMPEZA}'. "
+                "Esta ação apaga histórico do painel e não tem volta."
+            ),
+        )
+
+    resultado = await request.app.state.faxina.pontual(
+        dados.categorias, dados.dias, aplicar=True
+    )
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="maintenance.apply",
+        target="painel",
+        ip=client_ip(request),
+        level="critical",
+        detail={
+            "acao": "limpeza pontual",
+            "categorias": resultado["categorias"],
+            "dias": resultado["dias"],
+            **{
+                k: v
+                for k, v in resultado.items()
+                if isinstance(v, int) and k not in ("dias", "minimo")
+            },
+        },
     )
     return resultado
 
