@@ -228,13 +228,28 @@ ocupação em barra. Limite negativo aparece como `ilimitado`. O número de
 câmeras cadastradas é lido de `/cameras/count/` e confronta o limite
 licenciado — limite sem uso ao lado não responde nada.
 
-Dois detalhes de honestidade:
+**A licença não vem da API do FindFace.** Ela é servida pelo **NTLS**, um
+serviço à parte, e por isso os caminhos saem da *raiz* do site — se a API
+foi cadastrada como `https://ip/api`, a licença continua em
+`https://ip/ntls/...`:
 
-* **O caminho da licença muda entre versões.** O painel tenta
-  `/licenses/ffsecurity/`, `/license/`, `/licenses/` e
-  `/licenses/ffsecurity/current/`, nessa ordem, e usa o primeiro que
-  responder. Se nenhum responder, a tela diz **o que foi tentado e o erro
-  de cada tentativa**.
+| Caminho | O que traz |
+|---|---|
+| `GET /ntls/v1/licenses.json` | a licença: `license_id`, `expire_date` (epoch), `valid.valid` e os recursos |
+| `GET /ntls/v1/usage-report.json` | o consumo por intervalo — o que explica um recurso estourado |
+
+Cada recurso traz **`current`** (em uso) e **`value`** (liberado); a tela
+do fabricante rotula `source` como "File" e `type` como "Type of license".
+Isso não está no swagger da API: saiu da leitura do bundle da própria
+interface do FindFace da instalação, que é quem chama esses endereços.
+
+Um detalhe de honestidade:
+
+* **O caminho pode mudar entre versões.** Depois do endereço do NTLS, o
+  painel ainda tenta `/licenses/ffsecurity/`, `/license/` e `/licenses/`.
+  Se nenhum responder, a tela diz **o que foi tentado e o erro de cada
+  tentativa** — foi assim que se descobriu que os quatro primeiros
+  candidatos devolviam 404 nesta instalação.
 * **Não existe contrato público para o corpo da licença.** Em vez de fixar
   um formato, o painel percorre o JSON e reconhece campos de limite
   (`limit`, `max`, `quota`, `total`…) e de uso (`used`, `current`,

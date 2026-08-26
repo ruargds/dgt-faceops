@@ -64,12 +64,20 @@ PERIODOS = {
 # tenta-se em ordem e o primeiro que responder ganha. O que foi tentado
 # volta na resposta: quando nenhum responde, a tela diz exatamente onde
 # procurou em vez de dizer só "não encontrei".
+# O primeiro é o que a interface do FindFace realmente usa — está escrito
+# no bundle dela (`Paths.License`). Os demais ficam como rede de segurança
+# para instalação de outra versão. Todos saem da RAIZ do site: o NTLS é um
+# serviço à parte, não fica sob o prefixo da API do ffsecurity.
 CAMINHOS_LICENCA = (
+    "/ntls/v1/licenses.json",
     "/licenses/ffsecurity/",
     "/license/",
     "/licenses/",
-    "/licenses/ffsecurity/current/",
 )
+
+# Relatório de uso do mesmo serviço. Complementa a licença: traz o consumo
+# por intervalo, que é o que explica um recurso estourado.
+CAMINHO_USO = "/ntls/v1/usage-report.json"
 
 # Nomes de campo que carregam limite e uso. Não existe contrato público
 # para o corpo da licença, então em vez de fixar um formato o serviço
@@ -106,8 +114,22 @@ def _cabecalho_licenca(dados) -> dict:
     nomes possíveis e vence o primeiro que existir. O que não for
     encontrado volta vazio — a tela mostra "—" em vez de sumir com a linha.
     """
+    if isinstance(dados, list) and dados:
+        dados = dados[0]
     if not isinstance(dados, dict):
         return {}
+
+    # `licenses.json` pode trazer a licença aninhada (lista `licenses`, ou
+    # um objeto por produto). Desce até achar quem tem `license_id`.
+    if "license_id" not in dados and "id" not in dados:
+        for valor in dados.values():
+            if isinstance(valor, list) and valor and isinstance(valor[0], dict):
+                if "license_id" in valor[0] or "valid" in valor[0]:
+                    dados = valor[0]
+                    break
+            elif isinstance(valor, dict) and ("license_id" in valor or "valid" in valor):
+                dados = valor
+                break
 
     def primeiro(*nomes):
         for nome in nomes:
@@ -126,13 +148,29 @@ def _cabecalho_licenca(dados) -> dict:
     if isinstance(valido, (int, float)) and not isinstance(valido, bool):
         valido = valido > 0
 
+    # `expire_date` vem em epoch (segundos) no NTLS — a interface do
+    # FindFace faz `expire_date * 1000`. Data legível aqui, para a tela não
+    # mostrar 1779667201 como validade.
+    validade = primeiro(
+        "expiry_date", "expiryDate", "valid_until", "expire_date", "expires"
+    )
+    try:
+        if validade.isdigit() and len(validade) >= 9:
+            validade = datetime.fromtimestamp(
+                int(validade), tz=timezone.utc
+            ).strftime("%d/%m/%Y %H:%M")
+    except (ValueError, OSError, OverflowError):
+        pass
+
     return {
-        "id": primeiro("id", "license_id", "licenseId", "uuid"),
-        "validade": primeiro(
-            "expiry_date", "expiryDate", "valid_until", "expire_date", "expires"
-        ),
-        "tipo": primeiro("type", "type_of_license", "license_type", "source"),
-        "arquivo": primeiro("file", "path", "filename"),
+        "id": primeiro("license_id", "id", "licenseId", "uuid"),
+        "validade": validade,
+        # No NTLS o campo do ARQUIVO chama `source` -- a interface do
+        # FindFace rotula `source` como "File" e `type` como "Type of
+        # license". Trocar os dois faria a tela mostrar o caminho do .lic
+        # onde deveria estar "online".
+        "tipo": primeiro("type", "type_of_license", "license_type"),
+        "arquivo": primeiro("source", "file", "path", "filename"),
         "valido": bool(valido) if valido is not None else None,
     }
 
@@ -542,16 +580,26 @@ class FFApiService:
         auth = await self._credenciais(host)
         base = await self._base(host)
 
+        # O NTLS atende na RAIZ do site. Se a API foi cadastrada como
+        # `https://ip/api`, a licenca continua em `https://ip/ntls/...`.
+        raiz = base[: -len("/api")] if base.endswith("/api") else base
+
         bruto = None
         caminho_ok = ""
         tentativas: list[dict] = []
-        for caminho in CAMINHOS_LICENCA:
-            try:
-                bruto = await self._get(f"{base}{caminho}", auth)
-                caminho_ok = caminho
+        for onde in ((raiz, base) if raiz != base else (base,)):
+            for caminho in CAMINHOS_LICENCA:
+                try:
+                    bruto = await self._get(f"{onde}{caminho}", auth)
+                    caminho_ok = caminho
+                    base = onde
+                    break
+                except FFApiError as exc:
+                    tentativas.append(
+                        {"caminho": f"{onde}{caminho}", "erro": str(exc)[:200]}
+                    )
+            if bruto is not None:
                 break
-            except FFApiError as exc:
-                tentativas.append({"caminho": caminho, "erro": str(exc)[:200]})
 
         if bruto is None:
             raise FFApiError(
@@ -561,6 +609,14 @@ class FFApiService:
 
         # Câmeras cadastradas de verdade. É o número que confronta o limite
         # licenciado — e é barato: /count/ devolve só o total.
+        # Relatorio de uso do mesmo servico: consumo por intervalo, que e o
+        # que explica um recurso estourado. Falha aqui nao derruba a licenca.
+        uso = None
+        try:
+            uso = await self._get(f"{raiz}{CAMINHO_USO}", auth)
+        except FFApiError:
+            uso = None
+
         cameras = None
         try:
             dados = await self._get(f"{base}/cameras/count/", auth)
@@ -601,6 +657,7 @@ class FFApiService:
             "cameras_cadastradas": cameras,
             "itens": itens,
             "bruto": bruto,
+            "relatorio_uso": uso,
         }
 
     async def listar(self, host, periodo: str = "dia") -> dict:
