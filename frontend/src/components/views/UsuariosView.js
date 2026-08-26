@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
 import { useSessao } from "../../usePermissions";
-import { Carregando, Erro } from "../Comuns";
+import {
+  fecharSeForaLimpo, Carregando, Erro,
+} from "../Comuns";
 import { IconLixeira, IconMais } from "../Icons";
 
 export default function UsuariosView() {
@@ -209,7 +211,7 @@ function ModalUsuario({ inicial, perfis, onFechar, onPronto }) {
   }
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <div className="modal-head">
           <div className="modal-title">

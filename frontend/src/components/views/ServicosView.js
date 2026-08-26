@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
 import { usePermissions } from "../../usePermissions";
 import {
+  fecharSeForaLimpo,
   Carregando,
   ConfirmarDigitando,
   Erro,
@@ -237,7 +238,7 @@ export default function ServicosView() {
       )}
 
       {logs && (
-        <div className="modal-bg" onClick={() => setLogs(null)}>
+        <div className="modal-bg" {...fecharSeForaLimpo(() => setLogs(null))}>
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <div className="modal-title mono">{logs.container}</div>

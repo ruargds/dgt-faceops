@@ -85,13 +85,13 @@ $COMPOSE up -d $BUILD --remove-orphans
 
 echo "[4/4] Aguardando o backend responder..."
 PORTA="$(grep -E '^PORTA_HTTP=' .env | cut -d= -f2 || true)"
-PORTA="${PORTA:-8080}"
+PORTA_S="${PORTA_S:-30333}"
 
 for i in $(seq 1 30); do
-    if curl -fsS "http://localhost:${PORTA}/api/saude" >/dev/null 2>&1; then
+    if curl -fsSk "https://localhost:${PORTA_S}/api/saude" >/dev/null 2>&1; then
         echo ""
         echo "════════════════════════════════════════════════════"
-        echo "  Pronto — http://localhost:${PORTA}"
+        echo "  Pronto — https://localhost:${PORTA_S}"
         echo "  Primeiro acesso: admin / admin123 (troque a senha)"
         echo "════════════════════════════════════════════════════"
         exit 0

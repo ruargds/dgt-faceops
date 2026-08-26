@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
 import { usePermissions } from "../../usePermissions";
 import {
+  fecharSeForaLimpo,
   Carregando,
   Erro,
   SeletorDestinos,
@@ -279,7 +280,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
   }
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <div className="modal-head">
           <div className="modal-title">

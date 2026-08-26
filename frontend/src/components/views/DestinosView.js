@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatBytes, formatData } from "../../api";
 import { usePermissions } from "../../usePermissions";
-import { Carregando, Erro, Vazio } from "../Comuns";
+import {
+  fecharSeForaLimpo, Carregando, Erro, Vazio,
+} from "../Comuns";
 import { IconAlerta, IconChave, IconLixeira, IconMais, IconOk } from "../Icons";
 
 const TIPOS = [
@@ -266,7 +268,7 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
   const tipoInfo = TIPOS.find((t) => t.id === f.tipo);
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <form className="modal modal-wide" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <div className="modal-head">
           <div className="modal-title">

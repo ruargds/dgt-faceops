@@ -201,6 +201,31 @@ export function Selo({ status }) {
 }
 
 /**
+ * Props para o fundo de janela flutuante fechar só por gesto deliberado.
+ *
+ * Uso: <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
+ *
+ * Fecha apenas se o clique COMEÇOU e TERMINOU no próprio fundo. Sem isso,
+ * arrastar uma seleção de texto de dentro do modal para fora fecha a
+ * janela — o mouseup cai no fundo e dispara o onClick. O gesto de fechar
+ * continua natural (clique limpo no fundo), mas arrastar não fecha mais.
+ */
+export function fecharSeForaLimpo(onFechar) {
+  return {
+    onMouseDown: (e) => {
+      e.currentTarget.dataset.iniciouNoFundo =
+        e.target === e.currentTarget ? "1" : "0";
+    },
+    onClick: (e) => {
+      if (e.target === e.currentTarget && e.currentTarget.dataset.iniciouNoFundo === "1") {
+        onFechar();
+      }
+      e.currentTarget.dataset.iniciouNoFundo = "0";
+    },
+  };
+}
+
+/**
  * Confirmação por digitação, para ações destrutivas.
  *
  * Um "tem certeza?" com botão OK vira reflexo depois da terceira vez.
@@ -224,7 +249,7 @@ export function ConfirmarDigitando({ titulo, aviso, palavra, rotuloBotao, onConf
   }
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
         <div className="modal-head">
           <div className="modal-title">{titulo}</div>

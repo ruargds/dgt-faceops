@@ -49,9 +49,9 @@ done
 command -v docker >/dev/null 2>&1 || { erro "docker não encontrado"; exit 1; }
 SUDO=""; [ "$(id -u)" != "0" ] && SUDO="sudo"
 
-PORTA="$(grep -E '^PORTA_HTTP=' .env 2>/dev/null | cut -d= -f2)"
-PORTA="${PORTA:-8080}"
-BASE="http://localhost:${PORTA}"
+PORTA_S="$(grep -E '^PORTA_HTTPS=' .env 2>/dev/null | cut -d= -f2)"
+PORTA_S="${PORTA_S:-30333}"
+BASE="https://localhost:${PORTA_S}"
 
 echo "════════════════════════════════════════════════════"
 echo "  DGT FaceOps — atualização"
@@ -94,7 +94,7 @@ fi
 # ── 2. Tem alguém trabalhando? ─────────────────────────────────────────
 passo "2/6" "Conferindo se há trabalho em curso..."
 
-SAUDE="$(curl -fsS --max-time 8 "${BASE}/api/saude" 2>/dev/null)"
+SAUDE="$(curl -fsSk --max-time 8 "${BASE}/api/saude" 2>/dev/null)"
 if [ -z "$SAUDE" ]; then
     aviso "o painel não respondeu — pode estar parado. Seguindo."
 else
@@ -207,7 +207,7 @@ passo "6/6" "Confirmando..."
 
 PRONTO=0
 for i in $(seq 1 40); do
-    if curl -fsS --max-time 5 "${BASE}/api/saude" >/dev/null 2>&1; then
+    if curl -fsSk --max-time 5 "${BASE}/api/saude" >/dev/null 2>&1; then
         PRONTO=1; break
     fi
     sleep 2
@@ -242,7 +242,7 @@ if [ -d .git ] && [ "$REVERTER_PARA" != "$FACEOPS_REVISAO" ] && [ "$REVERTER_PAR
     [ "$BUILD" = "1" ] && nice -n 19 $SUDO docker compose build >/dev/null 2>&1
     $SUDO docker compose up -d >/dev/null 2>&1
     sleep 10
-    if curl -fsS --max-time 5 "${BASE}/api/saude" >/dev/null 2>&1; then
+    if curl -fsSk --max-time 5 "${BASE}/api/saude" >/dev/null 2>&1; then
         ok "revertido para $REVERTER_PARA — o painel voltou"
         echo
         echo "  A versão nova não subiu. Veja o motivo:"

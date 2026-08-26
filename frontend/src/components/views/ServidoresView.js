@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
 import { usePermissions } from "../../usePermissions";
-import { Carregando, Erro, Vazio } from "../Comuns";
+import {
+  fecharSeForaLimpo, Carregando, Erro, Vazio,
+} from "../Comuns";
 import { IconAlerta, IconChave, IconGPU, IconLixeira, IconMais, IconOk } from "../Icons";
 
 const PAPEIS = [
@@ -273,7 +275,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
   }
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <form className="modal modal-wide" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <div className="modal-head">
           <div className="modal-title">
@@ -363,9 +365,42 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
           {f.auth_method === "key" ? (
             <>
               <div className="field">
-                <label className={`label ${editando ? "" : "label-required"}`}>
-                  Chave privada (PEM)
-                </label>
+                <div className="stack-h" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+                  <label className={`label ${editando ? "" : "label-required"}`} style={{ marginBottom: 0 }}>
+                    Chave privada (PEM)
+                  </label>
+                  <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer", margin: 0 }}>
+                    Carregar arquivo .pem
+                    <input
+                      type="file"
+                      accept=".pem,.key,.txt,application/x-pem-file,text/plain"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const arq = e.target.files && e.target.files[0];
+                        if (!arq) return;
+                        // Lê o arquivo NO NAVEGADOR e joga no campo. A chave
+                        // nunca sobe como arquivo: segue o mesmo caminho da
+                        // colagem — vai cifrada no corpo JSON ao salvar.
+                        const leitor = new FileReader();
+                        leitor.onload = (ev) => {
+                          const txt = String(ev.target.result || "").trim();
+                          if (!txt.includes("PRIVATE KEY")) {
+                            setErro(
+                              "O arquivo não parece uma chave privada (falta a linha " +
+                                "BEGIN ... PRIVATE KEY). Se for .ppk do PuTTY, converta " +
+                                "para OpenSSH antes."
+                            );
+                            return;
+                          }
+                          setErro("");
+                          setSegredos((a) => ({ ...a, ssh_key: txt }));
+                        };
+                        leitor.readAsText(arq);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
                 <textarea
                   rows={6}
                   value={segredos.ssh_key}
@@ -373,11 +408,13 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
                   placeholder={
                     editando
                       ? "Deixe em branco para manter a chave já guardada"
-                      : "-----BEGIN OPENSSH PRIVATE KEY-----\n…"
+                      : "-----BEGIN OPENSSH PRIVATE KEY-----\n…  (ou use Carregar arquivo)"
                   }
                   required={!editando}
+                  style={{ marginTop: 6 }}
                 />
                 <div className="field-help">
+                  Cole a chave ou carregue o arquivo <span className="mono">.pem</span>.
                   Guardada cifrada (Fernet AES-128) no cofre. Nunca é exibida nem
                   devolvida pela API depois de salva.
                   {editando && inicial.key_fingerprint && (

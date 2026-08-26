@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, formatData, formatDuracao } from "../../api";
 import { usePermissions } from "../../usePermissions";
 import {
+  fecharSeForaLimpo,
   Carregando,
   Erro,
   SeletorDestinos,
@@ -354,7 +355,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
   }
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <div className="modal-head">
           <div className="modal-title">Novo backup</div>
@@ -486,7 +487,7 @@ function ModalDetalhe({ runId, onFechar }) {
   }, [runId]);
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div className="modal-title">

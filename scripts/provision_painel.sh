@@ -89,7 +89,7 @@ fi
 echo "[7/8] Firewall (ufw)..."
 if command -v ufw &> /dev/null; then
     sudo ufw allow 22/tcp comment 'SSH'
-    sudo ufw allow 8080/tcp comment 'FaceOps painel'
+    sudo ufw allow 30333/tcp comment 'FaceOps painel'
     sudo ufw --force enable
     sudo ufw status numbered
 else

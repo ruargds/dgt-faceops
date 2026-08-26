@@ -30,6 +30,7 @@ import ServicosView from "../components/views/ServicosView";
 import ServidoresView from "../components/views/ServidoresView";
 import TerminalView from "../components/views/TerminalView";
 import UsuariosView from "../components/views/UsuariosView";
+import { fecharSeForaLimpo } from "../components/Comuns";
 import { MARCA_PADRAO, urlLogo } from "../marca";
 import { useSessao, usePermissions } from "../usePermissions";
 
@@ -188,7 +189,7 @@ function ModalTrocarSenha({ onFechar, onPronto }) {
   }
 
   return (
-    <div className="modal-bg" onClick={onFechar}>
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <div className="modal-head">
           <div className="modal-title">Trocar senha</div>

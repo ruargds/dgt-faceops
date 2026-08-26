@@ -85,11 +85,9 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    environment:
-      # Usada pelo envsubst do nginx no redirecionamento HTTP -> HTTPS
-      PORTA_HTTPS: ${PORTA_HTTPS:-30333}
     ports:
-      - "${PORTA_HTTP:-8080}:80"
+      # Somente HTTPS. Nenhuma porta HTTP e exposta — usuario e senha
+      # nunca trafegam em claro, e nao ha porta 80 para esquecer aberta.
       - "${PORTA_HTTPS:-30333}:443"
     volumes:
       # Certificado autoassinado, gerado pelo instalador. Somente leitura:

@@ -141,8 +141,6 @@ else
     echo "  assim usuario e senha nao trafegam em claro na rede."
     read -r -p "  Porta HTTPS [30333]: " PORTA_S
     PORTA_S="${PORTA_S:-30333}"
-    read -r -p "  Porta HTTP (redireciona) [8080]: " PORTA
-    PORTA="${PORTA:-8080}"
 
     echo
     echo "  Onde guardar os artefatos de backup?"
@@ -152,14 +150,13 @@ else
 
     sed -e "s|^SECRET_KEY=.*|SECRET_KEY=$CHAVE|" \
         -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$SENHA_BD|" \
-        -e "s|^PORTA_HTTP=.*|PORTA_HTTP=$PORTA|" \
         -e "s|^PORTA_HTTPS=.*|PORTA_HTTPS=$PORTA_S|" \
         .env.example > .env
     chmod 600 .env
 
     ok "SECRET_KEY gerada (64 bytes aleatórios)"
     ok "senha do banco gerada"
-    ok "painel em HTTPS na porta $PORTA_S (HTTP $PORTA redireciona)"
+    ok "painel configurado"
 
     if [ "$DISCO" != "$RAIZ/data/backups" ]; then
         $SUDO mkdir -p "$DISCO"
@@ -171,8 +168,6 @@ else
     fi
 fi
 
-PORTA="$(grep -E '^PORTA_HTTP=' .env | cut -d= -f2)"
-PORTA="${PORTA:-8080}"
 PORTA_S="$(grep -E '^PORTA_HTTPS=' .env | cut -d= -f2)"
 PORTA_S="${PORTA_S:-30333}"
 
@@ -213,7 +208,7 @@ $SUDO docker compose up -d --remove-orphans || falha "falha ao subir os containe
 echo "  aguardando o painel responder..."
 PRONTO=0
 for i in $(seq 1 45); do
-    if curl -fsS "http://localhost:${PORTA}/api/saude" >/dev/null 2>&1; then
+    if curl -fsSk "https://localhost:${PORTA_S}/api/saude" >/dev/null 2>&1; then
         PRONTO=1
         break
     fi
@@ -232,9 +227,8 @@ ok "painel respondendo"
 # ── 9. Firewall ────────────────────────────────────────────────────────
 passo "9/9" "Firewall..."
 if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
-    $SUDO ufw allow "${PORTA}/tcp" comment 'DGT FaceOps (redireciona)' >/dev/null 2>&1
     $SUDO ufw allow "${PORTA_S}/tcp" comment 'DGT FaceOps' >/dev/null 2>&1
-    ok "portas ${PORTA} e ${PORTA_S} liberadas no ufw"
+    ok "porta ${PORTA_S} liberada no ufw"
 else
     ok "ufw inativo — nada a fazer"
 fi
@@ -247,7 +241,7 @@ echo "════════════════════════�
 echo "  ${V}Painel no ar${Z}"
 echo
 echo "  Endereço.........: ${C}https://${IP}:${PORTA_S}${Z}"
-echo "  Primeiro acesso..: ${A}admin / admin123${Z}"
+echo "  Primeiro acesso..: ${A}consulte o manual de operacao${Z}"
 echo "════════════════════════════════════════════════════"
 echo
 echo "  ${A}TROQUE A SENHA no primeiro acesso.${Z} Enquanto ela for a de"
