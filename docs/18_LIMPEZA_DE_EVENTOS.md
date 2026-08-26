@@ -1,4 +1,20 @@
-# Limpeza de eventos antigos
+# Limpeza de eventos
+
+> **Agendar** esta limpeza: em Agendamentos, escolha o tipo
+> **Limpeza de eventos**. O modo recomendado é *"usar a política
+> configurada na plataforma"*, que roda `cleanup --as-configured` — o
+> manual descreve a opção como *"Apply config age options for events,
+> counter records and clusters"*. Assim a idade mora num lugar só
+> (Manutenção → Rotatividade do FindFace) e o agendamento não carrega uma
+> segunda verdade.
+>
+> A limpeza agendada **se adia sozinha** se houver backup em andamento
+> naquele servidor. O manual é explícito: *"Do not restart any FindFace
+> Multi service containers or the Docker daemon while manually purging old
+> data from the database as this will cause system errors!"* — e backup de
+> perfil completo para o stack. Adiar custa nada; corromper o banco custa o
+> ambiente.
+ antigos
 
 A ação que realmente libera disco num servidor de reconhecimento facial —
 e a mais destrutiva do painel.

@@ -235,15 +235,41 @@ class BackupDetalheOut(BackupOut):
 # ── Agendamentos ───────────────────────────────────────────────────────
 
 
+class ItemLimpezaAgendada(BaseModel):
+    opcao: str = Field(min_length=4, max_length=64)
+    dias: int = Field(ge=0, le=3650)
+
+
 class ScheduleIn(BaseModel):
+    """
+    Agendamento. Dois tipos convivem na mesma tabela.
+
+    `backup` usa perfil e destinos. `limpeza` usa `como_configurado` — o
+    `--as-configured` do manual da NtechLab, que aplica as idades já
+    configuradas na plataforma — ou uma lista explícita de tipos e prazos.
+    Preferir `como_configurado` evita o agendamento carregar uma segunda
+    verdade sobre quanto tempo cada coisa fica.
+    """
+
     name: str = Field(min_length=1, max_length=120)
     host_id: int
-    perfil: str
+    perfil: str = "essencial"
     cron: str = Field(min_length=1, max_length=64)
     destinos: list[int] = []
     retencao_dias: int = Field(default=30, ge=0, le=3650)
     enabled: bool = True
     allow_downtime: bool = False
+
+    tipo: str = "backup"
+    como_configurado: bool = True
+    itens: list[ItemLimpezaAgendada] = Field(default_factory=list)
+
+    @field_validator("tipo")
+    @classmethod
+    def _validar_tipo(cls, v: str) -> str:
+        if v not in ("backup", "limpeza"):
+            raise ValueError("tipo deve ser 'backup' ou 'limpeza'")
+        return v
 
     @field_validator("perfil")
     @classmethod
@@ -270,6 +296,8 @@ class ScheduleOut(BaseModel):
     name: str
     host_id: int | None
     profile: str
+    tipo: str = "backup"
+    parametros: dict = {}
     cron: str
     destinations: list
     retention_days: int

@@ -117,24 +117,78 @@ class LimpezaService:
     # ── Descoberta ─────────────────────────────────────────────────────
 
     async def _container_legacy(self, host, stack) -> str:
-        """Acha o container do findface-multi-legacy naquele host."""
-        projeto = await stack._projeto(host)
+        """
+        Acha o container do findface-multi-legacy naquele host.
+
+        Três tentativas, da mais específica para a mais tolerante, porque o
+        nome muda com a forma de instalar. O manual da NtechLab chama o
+        container de `findface-multi-findface-multi-legacy-1` — projeto
+        `findface-multi`, serviço `findface-multi-legacy`, sufixo do
+        compose v2. Casar só pelo rótulo do projeto detectado falha quando
+        a instalação usa outro nome de projeto, e foi o que aconteceu.
+
+        A busca por nome vem por último e exige `legacy` no nome: é
+        tolerante o suficiente para achar, e específica o suficiente para
+        não pegar outro container por engano — o que rodaria uma limpeza
+        destrutiva no lugar errado.
+        """
         sudo = await self.ssh.docker_needs_sudo(host)
-        r = await self.ssh.run(
-            host,
-            f"docker ps --filter label=com.docker.compose.project={shlex.quote(projeto)} "
-            "--filter label=com.docker.compose.service=findface-multi-legacy "
-            "--format '{{.Names}}' | head -1",
-            sudo=sudo,
-            timeout=40,
-        )
-        nome = (r.stdout or "").strip()
-        if not nome:
-            raise LimpezaError(
-                "container 'findface-multi-legacy' não encontrado neste servidor. "
-                "A limpeza roda onde a aplicação do FindFace está."
+
+        tentativas = []
+        try:
+            projeto = await stack._projeto(host)
+        except Exception:
+            projeto = ""
+
+        if projeto:
+            tentativas.append(
+                f"docker ps --filter label=com.docker.compose.project={shlex.quote(projeto)} "
+                "--filter label=com.docker.compose.service=findface-multi-legacy "
+                "--format '{{.Names}}' | head -1"
             )
-        return nome
+        tentativas.append(
+            "docker ps --filter label=com.docker.compose.service=findface-multi-legacy "
+            "--format '{{.Names}}' | head -1"
+        )
+        tentativas.append(
+            "docker ps --format '{{.Names}}' | grep -i -E 'legacy' | head -1"
+        )
+
+        for comando in tentativas:
+            try:
+                r = await self.ssh.run(host, comando, sudo=sudo, timeout=40)
+            except SSHError:
+                continue
+            nome = (r.stdout or "").strip().splitlines()
+            nome = nome[0].strip() if nome else ""
+            if nome:
+                return nome
+
+        # Não achou: dizer o que existe ali vale mais que dizer que não
+        # existe. Se o legacy roda em outra máquina, o operador precisa
+        # saber em qual — e não descobrir isso por eliminação.
+        presentes = ""
+        try:
+            r = await self.ssh.run(
+                host,
+                "docker ps --format '{{.Names}}' | grep -i findface | head -10",
+                sudo=sudo,
+                timeout=40,
+            )
+            presentes = " ".join((r.stdout or "").split())
+        except SSHError:
+            presentes = ""
+
+        raise LimpezaError(
+            f"não achei o container do findface-multi-legacy em '{host.name}'. "
+            + (
+                f"Containers do FindFace aqui: {presentes}. "
+                if presentes
+                else "Nenhum container do FindFace roda aqui. "
+            )
+            + "A limpeza precisa rodar no servidor onde a aplicação está — "
+            "veja em Topologia qual é."
+        )
 
     async def opcoes(self, host, stack) -> dict:
         """
@@ -192,14 +246,23 @@ class LimpezaService:
 
     # ── Execução ───────────────────────────────────────────────────────
 
-    async def executar(self, host, stack, itens: list[dict]) -> dict:
+    async def executar(
+        self, host, stack, itens: list[dict], como_configurado: bool = False
+    ) -> dict:
         """
         Roda a limpeza. `itens` = [{"opcao": "...", "dias": 30}, ...].
 
         Dias viram segundos aqui. `dias = 0` apaga TUDO daquele tipo — o
         manual permite, e a tela avisa em vermelho antes de deixar.
+
+        `como_configurado` usa o `--as-configured` do manual: a idade sai
+        da política já configurada na plataforma ("Apply config age options
+        for events, counter records and clusters"). É o modo certo para
+        recorrência — sem ele, o agendamento carregaria uma segunda verdade
+        sobre quanto tempo cada coisa fica, e as duas divergiriam no dia em
+        que alguém mexesse só numa.
         """
-        if not itens:
+        if not itens and not como_configurado:
             raise LimpezaError("informe ao menos um tipo de dado para limpar")
 
         if self.em_andamento(host.id):
@@ -227,6 +290,17 @@ class LimpezaService:
                 "dias": dias,
                 "segundos": segundos,
                 "descricao": DESCRICOES.get(opcao, "—"),
+            })
+
+        if como_configurado:
+            # Sem valor: o manual descreve `--as-configured` como opção
+            # solta, e ela convive com as idades explícitas.
+            argumentos.insert(0, "--as-configured")
+            resumo.insert(0, {
+                "opcao": "as-configured",
+                "dias": None,
+                "segundos": None,
+                "descricao": "Idades da política configurada na plataforma",
             })
 
         container = await self._container_legacy(host, stack)

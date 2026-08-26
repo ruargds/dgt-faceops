@@ -236,6 +236,16 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
   const [nome, setNome] = useState(inicial.name || "");
   const [hostId, setHostId] = useState(inicial.host_id || (hosts[0] && hosts[0].id));
   const [perfil, setPerfil] = useState(inicial.profile || "essencial");
+  // Dois tipos na mesma tabela: backup e limpeza de eventos. A limpeza
+  // usa o `--as-configured` do manual da NtechLab por padrão — as idades
+  // saem da política já configurada na plataforma, e o agendamento não
+  // carrega uma segunda verdade sobre quanto tempo cada coisa fica.
+  const [tipo, setTipo] = useState(inicial.tipo || "backup");
+  const [comoConfigurado, setComoConfigurado] = useState(
+    inicial.parametros && inicial.parametros.como_configurado !== undefined
+      ? inicial.parametros.como_configurado
+      : true
+  );
   const [cron, setCron] = useState(inicial.cron || "0 2 * * *");
   const [destinos, setDestinos] = useState(inicial.destinations || []);
   const [retencao, setRetencao] = useState(inicial.retention_days ?? 30);
@@ -258,6 +268,9 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
       retencao_dias: Number(retencao),
       allow_downtime: aceito,
       enabled: inicial.enabled !== undefined ? inicial.enabled : true,
+      tipo,
+      como_configurado: comoConfigurado,
+      itens: [],
     };
     try {
       if (editando) {
@@ -282,6 +295,63 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
         </div>
         <div className="modal-body">
           {erro && <div className="login-err">{erro}</div>}
+
+          <div className="field">
+            <label className="label label-required">O que este agendamento faz</label>
+            <div className="stack-h" style={{ gap: 8 }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${tipo === "backup" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setTipo("backup")}
+              >
+                Backup
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${tipo === "limpeza" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setTipo("limpeza")}
+              >
+                Limpeza de eventos
+              </button>
+            </div>
+            <div className="field-help">
+              {tipo === "backup"
+                ? "Copia os dados do servidor para os destinos escolhidos."
+                : "Apaga eventos antigos no servidor, pelo procedimento oficial da NtechLab. Libera disco de verdade — e não tem volta."}
+            </div>
+          </div>
+
+          {tipo === "limpeza" && (
+            <div
+              className="card card-tight"
+              style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 14 }}
+            >
+              <span className="small" style={{ color: "var(--amber-fg)" }}>
+                A limpeza <strong>apaga eventos de produção</strong> e não tem
+                lixeira. Ela é adiada sozinha se houver backup em andamento
+                naquele servidor — o manual proíbe parar container durante a
+                purga, e backup completo para o stack.
+              </span>
+            </div>
+          )}
+
+          {tipo === "limpeza" && (
+            <label className="check" title="Aplica as idades já configuradas na plataforma (--as-configured, do manual da NtechLab)">
+              <input
+                type="checkbox"
+                checked={comoConfigurado}
+                onChange={(e) => setComoConfigurado(e.target.checked)}
+              />
+              <span>
+                Usar a política configurada na plataforma
+                <div className="small muted">
+                  Roda <span className="mono">cleanup --as-configured</span>: as
+                  idades saem de Manutenção → Rotatividade do FindFace. É o modo
+                  recomendado — mexer no prazo num lugar só vale para os dois.
+                </div>
+              </span>
+            </label>
+          )}
 
           <div className="row row-2">
             <div className="field">
@@ -312,6 +382,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
             </div>
           </div>
 
+          {tipo === "backup" && (
           <div className="row row-2">
             <div className="field">
               <label className="label label-required">{t("Perfil")}</label>
@@ -338,6 +409,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
               </div>
             </div>
           </div>
+          )}
 
           <div className="field">
             <label className="label label-required">{t("Recorrência")}</label>
@@ -366,6 +438,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
             </div>
           </div>
 
+          {tipo === "backup" && (
           <div className="field">
             <label className="label">{t("Destinos")}</label>
             <SeletorDestinos
@@ -379,8 +452,9 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
               padrão mudar depois.
             </div>
           </div>
+          )}
 
-          {perfil === "completo" && (
+          {tipo === "backup" && perfil === "completo" && (
             <div
               className="card card-tight"
               style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)" }}
@@ -403,7 +477,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
         </div>
         <div className="modal-foot">
           <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
-          <button className="btn btn-primary" disabled={enviando || (perfil === "completo" && !aceito)}>
+          <button className="btn btn-primary" disabled={enviando || (tipo === "backup" && perfil === "completo" && !aceito)}>
             {enviando ? "Salvando…" : editando ? "Salvar" : "Criar agendamento"}
           </button>
         </div>

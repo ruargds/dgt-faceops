@@ -193,6 +193,46 @@ Rotatividade e limpeza convivem: a política evita o disco encher de novo, a
 limpeza resolve o passado que já está lá. É por isso que as duas ficam
 nesta tela, nessa ordem.
 
+## Configuração em arquivo do FindFace
+
+Parte do que decide o volume gravado não está na interface nem na API: está
+no arquivo do serviço legacy, e o procedimento do manual é editar com `vi` e
+reiniciar os containers:
+
+```
+sudo vi /opt/findface-multi/configs/findface-multi-legacy/findface-multi-legacy.py
+cd /opt/findface-multi/ && sudo docker compose restart
+```
+
+O painel faz isso em **Manutenção → Configuração em arquivo do FindFace**,
+com lista fechada de chaves:
+
+| Chave | O que é |
+|---|---|
+| `CLEANUP_SCHEDULE` | quando a plataforma roda a própria limpeza, em RRULE. Padrão de fábrica: `RRULE:FREQ=DAILY;BYHOUR=1;BYMINUTE=17` |
+| `vms_cleanup` | liga a limpeza do arquivo de vídeo — sem ela os prazos de vídeo não valem |
+
+As cercas, na ordem em que agem:
+
+1. **Não existe edição livre.** Chave fora da lista é recusada antes de
+   qualquer coisa acontecer, e o painel **não cria chave nova** em arquivo
+   de fabricante.
+2. **RRULE é validada** contra o formato do manual. `todo dia` ou texto com
+   ponto-e-vírgula solto não passam.
+3. **Cópia antes de escrever**, com carimbo de data, ao lado do original.
+4. **Compila depois de escrever.** O arquivo é Python; se
+   `python3 -m py_compile` recusar, a cópia volta ao lugar e nada é
+   reiniciado — um arquivo quebrado ali derruba o FindFace na próxima subida.
+5. **O reinício é decisão sua.** O painel não reinicia junto: o manual manda
+   reiniciar todos os containers, e isso para o reconhecimento.
+
+A tela mostra a linha exata antes e depois, e exige digitar o nome do
+servidor.
+
+> O manual avisa que **a configuração pela interface/API sobrescreve o
+> arquivo**. Então o que dá para ajustar em *Rotatividade do FindFace* deve
+> ser ajustado lá; aqui ficam só as chaves que a API não expõe.
+
 ## Limpeza pontual do painel
 
 A faxina diária resolve o regime. Não resolve o caso pontual: "o disco do

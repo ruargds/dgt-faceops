@@ -84,6 +84,13 @@ class Schedule(Base):
     )
     profile: Mapped[str] = mapped_column(String(16))
 
+    # "backup" | "limpeza". Nasceu só com backup; a coluna tem padrão para
+    # que agendamento antigo continue sendo o que sempre foi.
+    tipo: Mapped[str] = mapped_column(String(16), nullable=False, default="backup")
+    # Parâmetros do tipo. Para limpeza:
+    #   {"como_configurado": true, "itens": [{"opcao": "...", "dias": 30}]}
+    parametros: Mapped[dict] = mapped_column(JSONB, default=dict)
+
     # Expressão cron de 5 campos (min hora dia mês diadasemana), fuso do painel
     cron: Mapped[str] = mapped_column(String(64))
 

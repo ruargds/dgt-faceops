@@ -282,3 +282,109 @@ async def salvar_retencao(
         detail={"dias": dados.dias, "chaves": dados.chaves},
     )
     return resultado
+
+
+class ConfigFFIn(BaseModel):
+    """
+    Uma chave do arquivo de configuracao do FindFace.
+
+    Lista fechada no servico -- nao existe edicao livre de arquivo.
+    """
+
+    chave: str = Field(min_length=3, max_length=64)
+    valor: str = Field(default="", max_length=200)
+    simular: bool = True
+    confirmar_host: str = ""
+
+
+@router.get("/{host_id}/configff")
+async def configff(
+    host_id: int,
+    request: Request,
+    _: User = Depends(require_permission("maintenance.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Chaves do FindFace que so existem em arquivo. So leitura.
+
+    O que a plataforma expoe pela API deve ser ajustado em Rotatividade do
+    FindFace -- o manual avisa que a configuracao pela interface/API
+    sobrescreve o arquivo. Aqui ficam as que a API nao expoe.
+    """
+    from app.services.configff_service import ConfigFFError
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor nao encontrado")
+
+    try:
+        return await request.app.state.configff.ler(host)
+    except ConfigFFError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/{host_id}/configff")
+async def salvar_configff(
+    host_id: int,
+    dados: ConfigFFIn,
+    request: Request,
+    autor: User = Depends(require_permission("maintenance.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Grava uma chave no arquivo de configuracao. `simular` mostra o que
+    mudaria, sem tocar em nada.
+
+    Aplicar exige `maintenance.apply` e o nome do servidor digitado: o
+    arquivo e do fabricante, e um erro ali derruba o FindFace na proxima
+    subida. O servico faz copia antes, compila depois e restaura sozinho
+    se nao compilar -- e nao reinicia nada, porque reiniciar para o
+    reconhecimento e a hora e escolha de quem opera.
+    """
+    from app.services.configff_service import ConfigFFError
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor nao encontrado")
+
+    if not dados.simular:
+        from app.core.permissions import permissions_for
+
+        if "maintenance.apply" not in permissions_for(autor.role, autor.is_super_admin):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Seu perfil ({autor.role}) pode simular, mas nao aplicar.",
+            )
+        if dados.confirmar_host.strip() != host.name:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"confirmacao necessaria: digite exatamente '{host.name}'. "
+                    "Isto escreve no arquivo de configuracao da plataforma."
+                ),
+            )
+
+    try:
+        resultado = await request.app.state.configff.aplicar(
+            host, dados.chave, dados.valor, simular=dados.simular
+        )
+    except ConfigFFError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if not dados.simular:
+        await audit_service.registrar(
+            db,
+            usuario=autor.username,
+            action="maintenance.apply",
+            target=host.name,
+            ip=client_ip(request),
+            level="critical",
+            detail={
+                "acao": "configuracao do FindFace",
+                "chave": dados.chave,
+                "antes": resultado.get("antes"),
+                "depois": resultado.get("depois"),
+                "copia": resultado.get("copia"),
+            },
+        )
+    return resultado

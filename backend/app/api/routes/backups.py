@@ -432,7 +432,7 @@ async def criar_agendamento(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if dados.perfil == "completo" and not dados.allow_downtime:
+    if dados.tipo == "backup" and dados.perfil == "completo" and not dados.allow_downtime:
         raise HTTPException(
             status_code=400,
             detail=(
@@ -441,10 +441,29 @@ async def criar_agendamento(
             ),
         )
 
+    if dados.tipo == "limpeza" and not dados.como_configurado and not dados.itens:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Limpeza agendada precisa de ao menos um tipo de dado, ou do modo "
+                "'como configurado na plataforma'. O manual da NtechLab é claro: "
+                "'You must provide at least one of the mentioned arguments'."
+            ),
+        )
+
+    parametros: dict = {}
+    if dados.tipo == "limpeza":
+        parametros = {
+            "como_configurado": dados.como_configurado,
+            "itens": [i.model_dump() for i in dados.itens],
+        }
+
     agendamento = Schedule(
         name=dados.name,
         host_id=dados.host_id,
         profile=dados.perfil,
+        tipo=dados.tipo,
+        parametros=parametros,
         cron=dados.cron,
         destinations=dados.destinos,
         retention_days=dados.retencao_dias,
@@ -466,9 +485,11 @@ async def criar_agendamento(
         ip=client_ip(request),
         detail={
             "acao": "criar",
+            "tipo": dados.tipo,
             "cron": dados.cron,
             "legivel": cron_legivel(dados.cron),
-            "perfil": dados.perfil,
+            "perfil": dados.perfil if dados.tipo == "backup" else "—",
+            "limpeza": parametros or None,
         },
     )
 

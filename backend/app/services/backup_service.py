@@ -279,7 +279,30 @@ class BackupService:
         run.progress = 95
         await db.commit()
 
-        resultados = await self.storage.distribuir(destino_local, host.name, destinos)
+        # `destinos` chega como lista de IDs (é o que a tela manda) e o
+        # storage trabalha com o objeto do destino. Sem esta resolução,
+        # toda execução com destino morria em
+        # "'int' object has no attribute 'tipo'" DEPOIS de já ter copiado o
+        # artefato do servidor de produção — o pior lugar para falhar.
+        #
+        # Lista vazia significa "usar os destinos padrão", igual ao backup
+        # do painel: assim o agendamento continua valendo quando o padrão
+        # muda depois.
+        from app.models.destino import Destino
+
+        consulta = select(Destino).where(Destino.enabled.is_(True))
+        consulta = (
+            consulta.where(Destino.id.in_(destinos)) if destinos
+            else consulta.where(Destino.padrao.is_(True))
+        )
+        objetos = list((await db.execute(consulta)).scalars().all())
+        if not objetos:
+            raise BackupError(
+                "nenhum destino ativo para receber o artefato. Marque um destino "
+                "como padrão em Destinos, ou escolha um ao disparar o backup."
+            )
+
+        resultados = await self.storage.distribuir(destino_local, host.name, objetos)
         run.destinations = [r.as_dict() for r in resultados]
 
         sucessos = [r for r in resultados if r.ok]

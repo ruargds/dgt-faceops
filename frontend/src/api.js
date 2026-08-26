@@ -166,6 +166,9 @@ export const api = {
   // E a resposta de causa para o disco que enche toda semana -- a limpeza
   // de eventos ataca o sintoma.
   retencao: (id) => get(`/dispositivos/${id}/retencao`),
+  // Chaves que so existem no arquivo de configuracao do FindFace.
+  configFF: (id) => get(`/dispositivos/${id}/configff`),
+  salvarConfigFF: (id, d) => post(`/dispositivos/${id}/configff`, d),
   salvarRetencao: (id, d) => patch(`/dispositivos/${id}/retencao`, d),
 
   // Servidores

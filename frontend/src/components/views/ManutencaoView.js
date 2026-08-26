@@ -863,6 +863,239 @@ function Retencao({ hostId, hostNome }) {
   );
 }
 
+/**
+ * Chaves do FindFace que só existem em arquivo.
+ *
+ * Parte do que decide o volume gravado não está na interface nem na API da
+ * NtechLab: está no arquivo de configuração do serviço legacy, e o
+ * procedimento oficial do manual é editar com `vi` e reiniciar os
+ * containers. Isso significava abrir shell no servidor de produção para
+ * mudar a hora da limpeza automática.
+ *
+ * O manual também avisa que **a configuração pela interface/API sobrescreve
+ * o arquivo** — por isso o que dá para ajustar em Rotatividade do FindFace
+ * deve ser ajustado lá, e aqui ficam só as chaves que a API não expõe.
+ *
+ * A tela mostra a linha exata antes e depois. O painel copia o arquivo
+ * antes, compila depois e restaura sozinho se não compilar; e não reinicia
+ * nada — reiniciar para o reconhecimento, e a hora é escolha de quem opera.
+ */
+function ConfigFindFace({ hostId, hostNome }) {
+  const { has } = usePermissions();
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [valores, setValores] = useState({});
+  const [previa, setPrevia] = useState(null);
+  const [confirmando, setConfirmando] = useState(null);
+  const [feito, setFeito] = useState(null);
+
+  const carregar = useCallback(async () => {
+    if (!hostId) return;
+    setCarregando(true);
+    setErro("");
+    try {
+      const r = await api.configFF(hostId);
+      setDados(r);
+      setValores({});
+      setPrevia(null);
+    } catch (ex) {
+      setDados(null);
+      setErro(ex.message);
+    } finally {
+      setCarregando(false);
+    }
+  }, [hostId]);
+
+  useEffect(() => {
+    setFeito(null);
+    carregar();
+  }, [carregar]);
+
+  if (carregando && !dados) return null;
+  if (erro) {
+    return (
+      <div className="card card-tight">
+        <div className="section-title" style={{ marginBottom: 4 }}>
+          Configuração em arquivo do FindFace
+        </div>
+        <div className="small muted">{erro}</div>
+      </div>
+    );
+  }
+  if (!dados) return null;
+
+  const valorDe = (campo) =>
+    valores[campo.chave] !== undefined ? valores[campo.chave] : campo.valor;
+
+  async function simular(campo) {
+    setErro("");
+    setFeito(null);
+    try {
+      setPrevia(
+        await api.salvarConfigFF(hostId, {
+          chave: campo.chave,
+          valor: String(valorDe(campo)),
+          simular: true,
+        })
+      );
+    } catch (ex) {
+      setPrevia(null);
+      setErro(ex.message);
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+        <div className="section-title" style={{ marginBottom: 0 }}>
+          Configuração em arquivo do FindFace
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={carregar} disabled={carregando}>
+          <IconAtualizar size={14} /> Recarregar
+        </button>
+      </div>
+      <div className="small muted" style={{ marginBottom: 12 }}>
+        O que a plataforma não expõe pela interface nem pela API. Editar aqui é
+        editar <span className="mono">{dados.arquivo}</span> — o painel copia
+        antes, confere a sintaxe depois e restaura sozinho se algo sair errado.
+        <strong> Nada é reiniciado automaticamente.</strong>
+      </div>
+
+      {feito && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 12 }}
+        >
+          <span className="small" style={{ color: "var(--amber-fg)" }}>
+            <IconAlerta size={13} /> Gravado. Cópia em{" "}
+            <span className="mono">{feito.copia}</span>. {feito.aviso_reinicio}
+          </span>
+        </div>
+      )}
+
+      {dados.campos.map((campo) => (
+        <div className="field" key={campo.chave}>
+          <label className="label" title={campo.chave}>
+            {campo.rotulo}
+          </label>
+          {campo.presente ? (
+            <>
+              <div className="stack-h" style={{ gap: 8 }}>
+                {campo.tipo === "booleano" ? (
+                  <select
+                    value={valorDe(campo)}
+                    disabled={!has("maintenance.apply")}
+                    onChange={(e) =>
+                      setValores((a) => ({ ...a, [campo.chave]: e.target.value }))
+                    }
+                    style={{ width: 160 }}
+                  >
+                    <option value="True">Ligada</option>
+                    <option value="False">Desligada</option>
+                  </select>
+                ) : (
+                  <input
+                    className="mono"
+                    value={valorDe(campo)}
+                    disabled={!has("maintenance.apply")}
+                    placeholder={campo.exemplo}
+                    onChange={(e) =>
+                      setValores((a) => ({ ...a, [campo.chave]: e.target.value }))
+                    }
+                  />
+                )}
+                {has("maintenance.apply") && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => simular(campo)}
+                  >
+                    Ver o que muda
+                  </button>
+                )}
+              </div>
+              <div className="field-help">{campo.ajuda}</div>
+              <div className="small muted mono" style={{ marginTop: 4 }}>
+                linha {campo.linha}: {campo.conteudo}
+              </div>
+            </>
+          ) : (
+            <div className="small muted">
+              Não existe no arquivo desta instalação — o painel não cria chave
+              nova em arquivo de fabricante.
+            </div>
+          )}
+        </div>
+      ))}
+
+      {previa && previa.mudou && previa.simulado && (
+        <div className="card card-tight" style={{ marginTop: 10 }}>
+          <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>
+            Linha {previa.linha} de {previa.arquivo}
+          </div>
+          <div className="mono small" style={{ color: "var(--red)" }}>
+            − {previa.antes}
+          </div>
+          <div className="mono small" style={{ color: "var(--green)" }}>
+            + {previa.depois}
+          </div>
+          <div className="stack-h" style={{ marginTop: 10, justifyContent: "flex-end" }}>
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={() => setConfirmando(previa)}
+            >
+              Aplicar no servidor
+            </button>
+          </div>
+        </div>
+      )}
+
+      {previa && !previa.mudou && (
+        <div className="small muted" style={{ marginTop: 8 }}>
+          {previa.mensagem || "Nada mudaria."}
+        </div>
+      )}
+
+      {dados.copias.length > 0 && (
+        <div className="small muted" style={{ marginTop: 10 }}>
+          Cópias anteriores no servidor: {dados.copias.length}. A mais recente é{" "}
+          <span className="mono">{dados.copias[0]}</span>.
+        </div>
+      )}
+
+      {confirmando && (
+        <ConfirmarDigitando
+          titulo="Escrever na configuração do FindFace"
+          palavra={hostNome}
+          rotuloBotao="Aplicar"
+          aviso={
+            `Isto altera ${confirmando.arquivo} em ${hostNome}. O painel copia o ` +
+            "arquivo antes e restaura sozinho se ele não compilar. Depois de " +
+            "gravar, o FindFace só passa a valer a mudança quando os containers " +
+            "forem reiniciados — o que PARA o reconhecimento por alguns minutos, " +
+            "e fica por sua conta escolher a hora."
+          }
+          onConfirmar={async (confirmacao) => {
+            const r = await api.salvarConfigFF(hostId, {
+              chave: confirmando.chave || Object.keys(valores)[0],
+              valor: String(
+                valores[confirmando.chave || Object.keys(valores)[0]] ?? ""
+              ),
+              simular: false,
+              confirmar_host: confirmacao,
+            });
+            setFeito(r);
+            setPrevia(null);
+            await carregar();
+          }}
+          onFechar={() => setConfirmando(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function ManutencaoView() {
   const { has } = usePermissions();
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
@@ -1215,6 +1448,8 @@ export default function ManutencaoView() {
       )}
 
       {hostId && <Retencao hostId={hostId} hostNome={host ? host.name : ""} />}
+
+      {hostId && <ConfigFindFace hostId={hostId} hostNome={host ? host.name : ""} />}
 
       {diag && <Limpeza hostId={hostId} hostNome={host ? host.name : ""} />}
 

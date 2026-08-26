@@ -29,6 +29,7 @@ from app.services.descoberta_service import DescobertaService
 from app.services.dispositivos_service import DispositivosService
 from app.services.faxina_service import FaxinaService
 from app.services.ffapi_service import FFApiService
+from app.services.configff_service import ConfigFFService
 from app.services.licenca_service import LicencaService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
@@ -68,6 +69,8 @@ COLUNAS_NOVAS = [
     ("amostras", "cpu_uso_pct", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
     ("hosts", "ff_api_user", "VARCHAR(120) NOT NULL DEFAULT ''"),
     ("hosts", "ff_api_pass_enc", "TEXT NOT NULL DEFAULT ''"),
+    ("schedules", "tipo", "VARCHAR(16) NOT NULL DEFAULT 'backup'"),
+    ("schedules", "parametros", "JSONB NOT NULL DEFAULT '{}'::jsonb"),
 ]
 
 # Alterações que não são "coluna nova". Escritas para serem idempotentes:
@@ -270,6 +273,9 @@ async def iniciar() -> None:
     # o painel ja tem SSH em todos os hosts, e o NTLS atende localhost sem
     # pedir login -- uma credencial a menos para alguem errar.
     app.state.licenca = LicencaService(ssh)
+    # Chaves do FindFace que so existem em arquivo (CLEANUP_SCHEDULE,
+    # vms_cleanup). Lista fechada, copia antes, compila depois.
+    app.state.configff = ConfigFFService(ssh)
     app.state.dispositivos = DispositivosService(ssh, ffapi=app.state.ffapi)
     app.state.descoberta = DescobertaService(ssh)
     app.state.processos = ProcessosService(ssh)
@@ -282,7 +288,13 @@ async def iniciar() -> None:
     app.state.painel_backup = PainelBackupService(storage, config)
     app.state.monitor = MonitorService(app.state.metrics, app.state.stack, config)
     app.state.scheduler = SchedulerService(
-        app.state.backups, faxina=app.state.faxina, config=config
+        app.state.backups,
+        faxina=app.state.faxina,
+        config=config,
+        # Limpeza agendada: o agendador precisa do serviço de limpeza e do
+        # de stack (para achar o container legacy do FindFace).
+        limpeza=app.state.limpeza,
+        stack=app.state.stack,
     )
 
     await app.state.scheduler.start()
