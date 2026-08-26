@@ -80,6 +80,13 @@ function Acoes() {
         <button className="btn btn-secondary" onClick={carregar}>
           <IconAtualizar size={15} /> Atualizar
         </button>
+        <a
+          className="btn btn-secondary"
+          href={api.urlExportarAuditoria(90)}
+          title="Baixar 90 dias de auditoria em CSV"
+        >
+          <IconDownload size={15} /> Exportar 90 dias
+        </a>
       </div>
 
       <Erro mensagem={erro} onTentar={carregar} />

@@ -66,6 +66,7 @@ class FaxinaService:
             "auditoria_removida": 0,
             "sessoes_removidas": 0,
             "logs_esvaziados": 0,
+            "amostras_removidas": 0,
             "erros": [],
         }
 
@@ -73,6 +74,7 @@ class FaxinaService:
             ("gravações", self._gravacoes),
             ("staging", self._staging),
             ("banco", self._banco),
+            ("amostras", self._amostras),
         ):
             try:
                 await tarefa(resultado)
@@ -187,6 +189,17 @@ class FaxinaService:
                 )
                 r["logs_esvaziados"] = res.rowcount or 0
 
+            await db.commit()
+
+    async def _amostras(self, r: dict) -> None:
+        """Histórico de monitoramento, com retenção própria."""
+        dias = int(self._cfg("monitor.retencao_dias", 30))
+        if dias <= 0:
+            return
+        from app.services.monitor_service import MonitorService
+
+        async with AsyncSessionLocal() as db:
+            r["amostras_removidas"] = await MonitorService.limpar(db, dias)
             await db.commit()
 
     # ── Prévia, sem alterar nada ───────────────────────────────────────

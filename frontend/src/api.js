@@ -160,6 +160,23 @@ export const api = {
   ticketLog: (id, container, tail) =>
     post(`/logs/ticket/${id}?container=${encodeURIComponent(container)}&tail=${tail}`),
 
+  // Monitor contínuo
+  monitorResumo: () => get("/monitor/resumo"),
+  monitorSerie: (id, horas) => get(`/monitor/serie/${id}?horas=${horas}`),
+  monitorAlertas: () => get("/monitor/alertas"),
+
+  // Dispositivos (câmeras)
+  dispositivos: (id, periodo) => get(`/dispositivos/${id}?periodo=${periodo}`),
+  redescobrirDispositivos: (id) => post(`/dispositivos/${id}/redescobrir`),
+
+  // Exportações (CSV) — URLs para <a href>
+  urlExportarAuditoria: (dias = 30) => `/api/exportar/auditoria?dias=${dias}`,
+  urlExportarBackups: (dias = 90) => `/api/exportar/backups?dias=${dias}`,
+  urlExportarAgendamentos: () => "/api/exportar/agendamentos",
+  urlExportarSessoes: (dias = 90) => `/api/exportar/sessoes?dias=${dias}`,
+  urlExportarMonitor: (id, horas = 168) => `/api/exportar/monitor/${id}?horas=${horas}`,
+  urlExportarDispositivos: (id, periodo = "mes") => `/api/exportar/dispositivos/${id}?periodo=${periodo}`,
+
   // InTerminal
   ticketTerminal: (hostId) => post(`/terminal/ticket/${hostId}`),
   sessoesAtivas: () => get("/terminal/ativas"),

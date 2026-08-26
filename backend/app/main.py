@@ -14,21 +14,26 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from app.api.routes import (
-    audit, auth, backups, configuracoes, destinos, hosts, logs, maintenance,
-    marca, ops, terminal,
+    audit, auth, backups, configuracoes, dispositivos, destinos, exportar,
+    hosts, logs, maintenance, marca, monitor, ops, terminal,
 )
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
-from app.models import Destino, User, VisaoLog  # noqa: F401 — registra os modelos
+from app.models import (  # noqa: F401 — registra todos os modelos
+    Amostra, Destino, User, VisaoLog,
+)
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
+from app.services.dispositivos_service import DispositivosService
 from app.services.faxina_service import FaxinaService
+from app.services.ffapi_service import FFApiService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
 from app.services.logs_service import LogManager
 from app.services.maintenance_service import MaintenanceService
 from app.services.metrics_service import MetricsService
+from app.services.monitor_service import MonitorService
 from app.services.scheduler_service import SchedulerService
 from app.services.ssh_service import SSHService
 from app.services.stack_service import StackService
@@ -54,6 +59,9 @@ COLUNAS_NOVAS = [
     ("users", "senha_padrao", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("users", "token_version", "INTEGER NOT NULL DEFAULT 1"),
     ("hosts", "host_key_pub", "TEXT NOT NULL DEFAULT ''"),
+    ("hosts", "monitorar", "BOOLEAN NOT NULL DEFAULT TRUE"),
+    ("hosts", "ff_api_url", "VARCHAR(255) NOT NULL DEFAULT ''"),
+    ("hosts", "ff_api_token_enc", "TEXT NOT NULL DEFAULT ''"),
 ]
 
 # Alterações que não são "coluna nova". Escritas para serem idempotentes:
@@ -244,6 +252,8 @@ async def iniciar() -> None:
     app.state.storage = storage
     app.state.metrics = MetricsService(ssh)
     app.state.limpeza = LimpezaService(ssh)
+    app.state.ffapi = FFApiService()
+    app.state.dispositivos = DispositivosService(ssh, ffapi=app.state.ffapi)
     app.state.stack = StackService(ssh, config, limpeza=app.state.limpeza)
     app.state.manutencao = MaintenanceService(ssh)
     app.state.backups = BackupService(ssh, storage, config)
@@ -251,11 +261,13 @@ async def iniciar() -> None:
     app.state.logs = LogManager()
     app.state.faxina = FaxinaService(config)
     app.state.painel_backup = PainelBackupService(storage, config)
+    app.state.monitor = MonitorService(app.state.metrics, app.state.stack, config)
     app.state.scheduler = SchedulerService(
         app.state.backups, faxina=app.state.faxina, config=config
     )
 
     await app.state.scheduler.start()
+    await app.state.monitor.iniciar()
     app.state.tarefa_varredura = asyncio.create_task(_varredor_de_ociosas(app))
 
     log.info("DGT FaceOps pronto — fuso %s", settings.TZ)
@@ -267,6 +279,8 @@ async def encerrar() -> None:
     if tarefa is not None:
         tarefa.cancel()
 
+    if hasattr(app.state, "monitor"):
+        await app.state.monitor.parar()
     if hasattr(app.state, "scheduler"):
         await app.state.scheduler.shutdown()
     if hasattr(app.state, "terminals"):
@@ -339,6 +353,9 @@ async def saude():
 app.include_router(auth.router)
 app.include_router(configuracoes.router)
 app.include_router(marca.router)
+app.include_router(monitor.router)
+app.include_router(dispositivos.router)
+app.include_router(exportar.router)
 app.include_router(hosts.router)
 app.include_router(ops.router)
 app.include_router(backups.router)

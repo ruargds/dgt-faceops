@@ -22,6 +22,7 @@ def _para_out(host: Host) -> HostOut:
     saida = HostOut.model_validate(host)
     saida.tem_credencial = bool(host.ssh_key_enc or host.ssh_password_enc)
     saida.tem_sudo = bool(host.sudo_password_enc)
+    saida.tem_api = bool(host.ff_api_url and host.ff_api_token_enc)
     return saida
 
 
@@ -112,6 +113,9 @@ async def criar(
         compose_file=dados.compose_file or settings.FFMULTI_COMPOSE,
         has_gpu=dados.has_gpu,
         enabled=dados.enabled,
+        monitorar=dados.monitorar,
+        ff_api_url=dados.ff_api_url,
+        ff_api_token_enc=encrypt_secret(dados.ff_api_token or ""),
     )
     db.add(host)
     await db.commit()
@@ -151,7 +155,8 @@ async def atualizar(
 
     for campo in (
         "name", "description", "role", "ssh_user", "auth_method",
-        "ffmulti_dir", "compose_file", "has_gpu", "enabled", "ssh_port",
+        "ffmulti_dir", "compose_file", "has_gpu", "enabled", "monitorar",
+        "ff_api_url", "ssh_port",
     ):
         valor = getattr(dados, campo)
         if valor is not None and getattr(host, campo) != valor:
@@ -186,6 +191,9 @@ async def atualizar(
     if dados.sudo_password is not None:
         host.sudo_password_enc = encrypt_secret(dados.sudo_password)
         alterados.append("sudo_password")
+    if dados.ff_api_token is not None:
+        host.ff_api_token_enc = encrypt_secret(dados.ff_api_token)
+        alterados.append("ff_api_token")
 
     await db.commit()
     await db.refresh(host)

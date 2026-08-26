@@ -19,6 +19,8 @@ import AgendamentosView from "../components/views/AgendamentosView";
 import ConfiguracoesView from "../components/views/ConfiguracoesView";
 import DestinosView from "../components/views/DestinosView";
 import LogsView from "../components/views/LogsView";
+import MonitorView from "../components/views/MonitorView";
+import DispositivosView from "../components/views/DispositivosView";
 import ManutencaoView from "../components/views/ManutencaoView";
 import AuditoriaView from "../components/views/AuditoriaView";
 import BackupsView from "../components/views/BackupsView";
@@ -34,8 +36,10 @@ import { useSessao, usePermissions } from "../usePermissions";
 const MENU = [
   { grupo: "Operação" },
   { id: "painel", rotulo: "Painel", icone: IconPainel, perm: "hosts.view" },
+  { id: "monitor", rotulo: "Monitor", icone: IconRecursos, perm: "metrics.view" },
   { id: "recursos", rotulo: "Recursos", icone: IconRecursos, perm: "metrics.view" },
   { id: "servicos", rotulo: "Serviços", icone: IconServicos, perm: "services.view" },
+  { id: "dispositivos", rotulo: "Câmeras", icone: IconServidor, perm: "metrics.view" },
   { id: "logs", rotulo: "Logs ao vivo", icone: IconLogs, perm: "services.view" },
   { id: "manutencao", rotulo: "Manutenção", icone: IconAlerta, perm: "maintenance.view" },
   { id: "terminal", rotulo: "InTerminal", icone: IconTerminal, perm: "terminal.use" },
@@ -126,6 +130,8 @@ export default function AppShell() {
 
         <div className="content">
           {abaValida === "painel" && <PainelView />}
+          {abaValida === "monitor" && <MonitorView />}
+          {abaValida === "dispositivos" && <DispositivosView />}
           {abaValida === "recursos" && <RecursosView />}
           {abaValida === "servicos" && <ServicosView />}
           {abaValida === "logs" && <LogsView />}

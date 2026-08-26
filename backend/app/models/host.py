@@ -53,6 +53,15 @@ class Host(Base):
     compose_file: Mapped[str] = mapped_column(String(255), default="")
 
     has_gpu: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Entra no coletor continuo. Ligado por padrao: cadastrar um
+    # servidor e querer acompanha-lo sao a mesma coisa na pratica.
+    monitorar: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # API HTTP do FindFace (opcional). Quando preenchida, a consulta de
+    # cameras usa a API oficial em vez de ler o Postgres via SSH — mais
+    # limpo e sem depender de acesso ao banco. O token vai cifrado.
+    ff_api_url: Mapped[str] = mapped_column(String(255), default="")
+    ff_api_token_enc: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     last_seen_at: Mapped[datetime | None] = mapped_column(

@@ -139,6 +139,19 @@ CATEGORIAS = {
         "Sessão e acesso",
         "Duração do login e alerta de disco.",
     ),
+    "monitor": (
+        "Monitoramento contínuo",
+        "O coletor de fundo que alimenta os gráficos. Uma execução SSH por "
+        "servidor por ciclo, sequencial, e só nos servidores marcados para "
+        "monitorar. Intervalo curto demais não traz informação nova — a "
+        "carga de uma máquina não muda a cada 5 segundos.",
+    ),
+    "alerta": (
+        "Limiares de alerta",
+        "Acima destes valores o painel avisa na tela, e toca um som se a "
+        "aba estiver aberta. Valores conservadores geram ruído; valores "
+        "altos demais avisam tarde.",
+    ),
     "faxina": (
         "Faxina automática",
         "Impede o painel de crescer sem fim. Roda uma vez por dia, no "
@@ -276,6 +289,59 @@ CATALOGO: list[ItemConfig] = [
                90,
                "Acima disso o cartão do servidor fica vermelho no Painel.",
                minimo=50, maximo=99),
+
+    # Monitor
+    ItemConfig("monitor.ativo", "monitor",
+               "Coletor contínuo ligado", "booleano",
+               True,
+               "Desligar para de alimentar os gráficos. A coleta sob "
+               "demanda, no botão Atualizar, continua funcionando."),
+    ItemConfig("monitor.intervalo_s", "monitor",
+               "Intervalo entre coletas (segundos)", "numero",
+               60,
+               "Com 4 servidores a 60 s, o custo é ~1,5% de um núcleo no "
+               "painel e nada mensurável nos servidores.",
+               minimo=15, maximo=3600),
+    ItemConfig("monitor.retencao_dias", "monitor",
+               "Guardar histórico por (dias)", "numero",
+               30,
+               "Uma amostra ocupa ~80 bytes. 4 servidores a 60 s por 30 "
+               "dias dão alguns MB.",
+               minimo=1, maximo=365),
+    ItemConfig("monitor.som_alerta", "monitor",
+               "Alerta sonoro", "booleano",
+               True,
+               "Toca um som quando surge alerta novo, se a aba estiver "
+               "aberta. O som é gerado pelo navegador — não há arquivo."),
+
+    # Limiares
+    ItemConfig("alerta.disco_pct", "alerta",
+               "Disco acima de (%)", "numero", 90,
+               "Acima de 95% vira crítico automaticamente.",
+               minimo=50, maximo=99),
+    ItemConfig("alerta.mem_pct", "alerta",
+               "Memória acima de (%)", "numero", 90,
+               "Descontando cache e buffers, como deve ser.",
+               minimo=50, maximo=99),
+    ItemConfig("alerta.swap_pct", "alerta",
+               "Swap acima de (%)", "numero", 50,
+               "Swap em uso num servidor de reconhecimento facial "
+               "significa latência de disco no caminho dos dados.",
+               minimo=1, maximo=99),
+    ItemConfig("alerta.cpu_pct", "alerta",
+               "Carga por núcleo acima de (%)", "numero", 90,
+               "90% equivale a 0,90 de carga por núcleo. Acima de 1,00 há "
+               "processo esperando CPU.",
+               minimo=50, maximo=200),
+    ItemConfig("alerta.gpu_mem_pct", "alerta",
+               "Memória de vídeo acima de (%)", "numero", 92,
+               "Perto do limite, a próxima câmera causa falha de alocação "
+               "e o worker entra em ciclo de reinício.",
+               minimo=50, maximo=99),
+    ItemConfig("alerta.gpu_temp", "alerta",
+               "Temperatura da GPU acima de (°C)", "numero", 85,
+               "Acima de 85 °C costuma haver throttling.",
+               minimo=50, maximo=110),
 
     # Faxina
     ItemConfig("faxina.hora", "faxina",

@@ -85,6 +85,9 @@ class HostIn(BaseModel):
     compose_file: str = ""
     has_gpu: bool = False
     enabled: bool = True
+    monitorar: bool = True
+    ff_api_url: str = ""
+    ff_api_token: str | None = None  # segredo — so entra
 
     @field_validator("auth_method")
     @classmethod
@@ -110,6 +113,9 @@ class HostUpdate(BaseModel):
     compose_file: str | None = None
     has_gpu: bool | None = None
     enabled: bool | None = None
+    monitorar: bool | None = None
+    ff_api_url: str | None = None
+    ff_api_token: str | None = None
 
 
 class HostOut(BaseModel):
@@ -127,6 +133,8 @@ class HostOut(BaseModel):
     compose_file: str
     has_gpu: bool
     enabled: bool
+    monitorar: bool
+    ff_api_url: str
     last_seen_at: datetime | None
     last_status: str
     last_error: str
@@ -136,6 +144,7 @@ class HostOut(BaseModel):
     key_fingerprint: str
     tem_credencial: bool = False
     tem_sudo: bool = False
+    tem_api: bool = False
 
 
 class ScanChaveIn(BaseModel):

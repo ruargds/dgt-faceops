@@ -192,6 +192,7 @@ Docker Desktop instalado → botão direito em `windows\instalar.bat` →
 | [20_PERSISTENCIA](docs/20_PERSISTENCIA.md) | O que sobrevive a quê, e por que não há volume fantasma |
 | [21_REQUISITOS](docs/21_REQUISITOS.md) | Especificações de máquina, medições de campo e dimensionamento |
 | [22_REFERENCIAS](docs/22_REFERENCIAS.md) | Manuais consultados e o que cada página entregou |
+| [23_MONITOR_E_CAMERAS](docs/23_MONITOR_E_CAMERAS.md) | Monitor contínuo, alertas com ação, câmeras e exportações |
 
 ## Scripts
 
