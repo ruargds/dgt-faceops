@@ -104,6 +104,26 @@ CAMINHO_USO = "/ntls/v1/usage-report.json"
 CHAVES_LIMITE = ("limit", "limits", "max", "maximum", "allowed", "quota", "total", "value")
 CHAVES_USADO = ("used", "current", "in_use", "usage", "actual", "count")
 
+# Nome de cada recurso, como a interface do FindFace escreve. Sem isto a
+# tela mostra `objects_tntapi` — que não diz nada a quem opera — ou, pior,
+# o caminho inteiro dentro do JSON.
+NOMES_RECURSO = {
+    "cameras": "Câmeras",
+    "extapi": "Extraction API",
+    "objects_tntapi": "Objects TNT API",
+    "objects_slonapi": "Objects Slon API",
+    "cameras_face": "Fluxos: face",
+    "cameras_body": "Fluxos: corpo",
+    "cameras_car": "Fluxos: veículo",
+    "cameras_video_recording": "Fluxos: gravação de vídeo",
+    "replicated_cameras": "Câmeras replicadas",
+    "replicated_streams_face": "Fluxos replicados: face",
+    "replicated_streams_body": "Fluxos replicados: corpo",
+    "replicated_streams_car": "Fluxos replicados: veículo",
+    "extractor_streams_frame_action_carcrash": "Fluxos: acidente de trânsito",
+    "extractor_streams_frame_action_fights": "Fluxos: briga",
+}
+
 # Sob estas chaves, cada número folha é um recurso licenciado
 # ("limits": {"cameras": 100, "faces": 500000}).
 CHAVES_MAPA = ("limits", "features", "modules", "products", "counts", "quotas")
@@ -179,9 +199,23 @@ def _cabecalho_licenca(dados) -> dict:
     except (ValueError, OSError, OverflowError):
         pass
 
+    # Dias que faltam. A propria interface do FindFace avisa com 60 dias de
+    # antecedencia (1440 horas no codigo dela); manter o mesmo limiar evita
+    # duas verdades sobre a mesma licenca.
+    dias = None
+    try:
+        epoch = primeiro("expire_date", "expiry_date", "valid_until")
+        if epoch.isdigit() and len(epoch) >= 9:
+            resta = int(epoch) - datetime.now(tz=timezone.utc).timestamp()
+            dias = int(resta // 86400)
+    except (ValueError, OSError, OverflowError):
+        dias = None
+
     return {
         "id": primeiro("license_id", "id", "licenseId", "uuid"),
         "validade": validade,
+        "dias_para_expirar": dias,
+        "expira_em_breve": dias is not None and dias <= 60,
         # No NTLS o campo do ARQUIVO chama `source` -- a interface do
         # FindFace rotula `source` como "File" e `type` como "Type of
         # license". Trocar os dois faria a tela mostrar o caminho do .lic
@@ -192,15 +226,94 @@ def _cabecalho_licenca(dados) -> dict:
     }
 
 
+def _recursos_licenca(dados) -> list[dict]:
+    """
+    Recursos licenciados, no formato do NTLS.
+
+    O corpo traz a mesma informação duas vezes: o **total** em
+    `products.<produto>.resources` e o pedaço de cada licença em
+    `licenses[].products.<produto>.resources`. A tela do fabricante mostra
+    o total; é o que interessa a quem pergunta "cabe mais câmera?". A linha
+    por licença vira ruído — três linhas `objects_tntapi` com limites
+    diferentes, e nenhuma delas o limite real.
+
+    Devolve `[]` quando o corpo não tem `resources`, e aí o achatamento
+    genérico assume.
+    """
+    achados: dict[str, dict] = {}
+
+    def visitar(no, caminho: str, dentro_de_licenca: bool) -> None:
+        if isinstance(no, list):
+            for item in no:
+                visitar(item, caminho, dentro_de_licenca)
+            return
+        if not isinstance(no, dict):
+            return
+
+        for chave, valor in no.items():
+            if chave == "resources" and isinstance(valor, dict):
+                for recurso, dado in valor.items():
+                    usado = limite = None
+                    if isinstance(dado, dict):
+                        usado = _num(dado.get("current", dado.get("used")))
+                        limite = _num(dado.get("value", dado.get("limit")))
+                    else:
+                        limite = _num(dado)
+                    if usado is None and limite is None:
+                        continue
+                    # Total ganha da linha por licença, sempre.
+                    anterior = achados.get(recurso)
+                    if anterior and anterior["agregado"] and dentro_de_licenca:
+                        continue
+                    achados[recurso] = {
+                        "chave": recurso,
+                        "usado": usado,
+                        "limite": limite,
+                        "agregado": not dentro_de_licenca,
+                    }
+                continue
+            if isinstance(valor, (dict, list)):
+                visitar(
+                    valor,
+                    f"{caminho}.{chave}" if caminho else chave,
+                    dentro_de_licenca or chave == "licenses",
+                )
+
+    visitar(dados, "", False)
+
+    itens = []
+    for chave, dado in achados.items():
+        limite, usado = dado["limite"], dado["usado"]
+        ilimitado = limite is not None and limite < 0
+        restante = None
+        if limite is not None and usado is not None and not ilimitado:
+            restante = limite - usado
+        itens.append({
+            "recurso": NOMES_RECURSO.get(chave, chave),
+            "chave": chave,
+            "limite": limite,
+            "usado": usado,
+            "restante": restante,
+            "ilimitado": ilimitado,
+        })
+    itens.sort(key=lambda i: i["recurso"].lower())
+    return itens
+
+
 def _itens_licenca(dados) -> list[dict]:
     """
-    Achata o corpo da licença em linhas (recurso, limite, usado).
+    Achata a licença em linhas (recurso, limite, usado).
 
-    Escrito para não depender do formato: qualquer nó que tenha um campo de
-    limite ou de uso vira uma linha, e mapa de número puro vira uma linha
-    por chave. O corpo bruto vai junto na resposta, para o caso de a
-    instalação trazer algo que este achatamento não reconheça.
+    Primeiro tenta o formato do NTLS, que é o desta instalação. Se o corpo
+    não tiver `resources`, cai no achatamento genérico — qualquer nó com
+    campo de limite ou de uso vira uma linha —, que é o que segura
+    instalação de outra versão sem exigir que alguém descubra o formato
+    antes de a tela funcionar.
     """
+    do_ntls = _recursos_licenca(dados)
+    if do_ntls:
+        return do_ntls
+
     itens: list[dict] = []
     vistos: set[str] = set()
 
@@ -215,6 +328,7 @@ def _itens_licenca(dados) -> list[dict]:
             restante = limite - usado
         itens.append({
             "recurso": nome,
+            "chave": nome,
             "limite": limite,
             "usado": usado,
             "restante": restante,
@@ -243,10 +357,6 @@ def _itens_licenca(dados) -> list[dict]:
                 if isinstance(valor, (dict, list)):
                     visitar(valor, f"{caminho}.{chave}" if caminho else chave)
                 elif ultimo in CHAVES_MAPA and not virou_linha:
-                    # So quando o no NAO virou linha. Sem esta condicao, um
-                    # item {"name": "Extraction API", "used": 1, "value": 128}
-                    # dentro de "limits" viraria tres linhas: a certa, mais
-                    # uma chamada "used" e outra chamada "value".
                     n = _num(valor)
                     if n is not None:
                         registrar(str(chave), n, None)
@@ -256,6 +366,51 @@ def _itens_licenca(dados) -> list[dict]:
 
     visitar(dados, "")
     return itens
+
+
+def _funcionalidades(dados) -> list[dict]:
+    """
+    Módulos licenciados: o que está habilitado e o que não está.
+
+    A interface do FindFace lê isso de `products.<produto>.features[x].value`
+    para decidir se mostra reconhecimento de placa, contagem de linha,
+    análise de comportamento. Saber que um módulo existe mas está desligado
+    na licença evita a conversa de "o sistema não faz isso" quando ele faz,
+    e só falta comprar.
+    """
+    saida: list[dict] = []
+
+    def visitar(no) -> None:
+        if isinstance(no, list):
+            for item in no:
+                visitar(item)
+            return
+        if not isinstance(no, dict):
+            return
+        for chave, valor in no.items():
+            if chave in ("features", "extra") and isinstance(valor, dict):
+                for nome, dado in valor.items():
+                    ligado = dado
+                    if isinstance(dado, dict):
+                        ligado = dado.get("value", dado.get("enabled"))
+                    saida.append({
+                        "nome": NOMES_RECURSO.get(nome, nome),
+                        "chave": nome,
+                        "ligado": bool(ligado),
+                    })
+            elif isinstance(valor, (dict, list)):
+                visitar(valor)
+
+    visitar(dados)
+
+    # Mesma funcionalidade pode aparecer no total e por licença; vale
+    # ligada em qualquer uma.
+    juntas: dict[str, dict] = {}
+    for f in saida:
+        atual = juntas.get(f["chave"])
+        if atual is None or (f["ligado"] and not atual["ligado"]):
+            juntas[f["chave"]] = f
+    return sorted(juntas.values(), key=lambda f: (not f["ligado"], f["nome"].lower()))
 
 
 class FFApiError(Exception):
@@ -656,14 +811,11 @@ class FFApiService:
                 and item["usado"] > item["limite"]
             )
 
-        # Fecha a conta da câmera quando a licença dá o limite e não diz o
-        # uso: quem olha a tela quer "42 de 100", não "limite 100".
-        if cameras is not None:
-            for item in itens:
-                if "camera" in item["recurso"].lower() and item["usado"] is None:
-                    item["usado"] = cameras
-                    if item["limite"] is not None and not item["ilimitado"]:
-                        item["restante"] = item["limite"] - cameras
+        # A contagem de câmeras do painel NÃO entra na tabela da licença.
+        # Ela entrava, quando a licença não informava uso, e o resultado foi
+        # uma linha dizendo "425 em uso de 5 liberados, 8500%" — número real
+        # ao lado de número inventado, sem aviso de qual era qual. O total
+        # de câmeras aparece no cartão ao lado, onde é só o que é.
 
         return {
             "via": "api",
@@ -674,6 +826,7 @@ class FFApiService:
             "tentativas": tentativas,
             "cameras_cadastradas": cameras,
             "itens": itens,
+            "funcionalidades": _funcionalidades(bruto),
             "bruto": bruto,
             "relatorio_uso": uso,
         }

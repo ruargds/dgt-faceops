@@ -318,9 +318,19 @@ echo "{SEP}END"
             (c for c in ("group_id", "camera_group_id", "group") if c in cols), ""
         )
 
+        # Detector externo é câmera que não é câmera: um sistema de fora
+        # empurrando evento pela API. Conta na licença e some da conta de
+        # "câmeras" de quem só olha o total.
+        col_externo = next(
+            (c for c in ("external_detector", "is_external_detector") if c in cols), ""
+        )
+
         sel = [f"c.id", f"c.{col_nome} AS nome"]
         sel.append(f"c.{col_ativo}::text AS ativo" if col_ativo else "'?' AS ativo")
         sel.append(f"c.{col_grupo}::text AS grupo" if col_grupo else "'' AS grupo")
+        sel.append(
+            f"c.{col_externo}::text AS externo" if col_externo else "'' AS externo"
+        )
 
         # Uma consulta por tabela de evento: elas têm colunas diferentes e
         # unir tudo num UNION exigiria assumir esquema igual.
@@ -374,12 +384,17 @@ echo "{SEP}END"
             if len(campos) < 4:
                 continue
             cid = campos[0]
+            externo = campos[4] if len(campos) > 4 else ""
             cameras[cid] = {
                 "id": cid,
                 "nome": campos[1] or f"camera {cid}",
                 "ativo": campos[2] in ("t", "true", "1", "?"),
                 "ativo_conhecido": campos[2] != "?",
                 "grupo": campos[3],
+                # Detector externo: sistema de fora empurrando evento pela
+                # API. Aparece como camera no banco e conta na licenca, mas
+                # nao e camera nenhuma -- separar evita a conta errada.
+                "externo": externo in ("t", "true", "1"),
                 "eventos": 0,
                 "por_tipo": {},
                 "ultimo_evento": None,
@@ -450,6 +465,7 @@ echo "{SEP}END"
             "periodo": periodo,
             "periodo_rotulo": rotulo,
             "total_cameras": len(lista),
+            "detectores_externos": sum(1 for c in lista if c.get("externo")),
             "cameras_com_evento": len(lista) - len(mudas),
             "cameras_mudas": len(mudas),
             "total_eventos": total_eventos,

@@ -89,36 +89,61 @@ function Licenciamento({ dados, erro, lendo, onAtualizar }) {
         </button>
       </div>
 
+      {/* A explicação de cada número fica no `title`, não na tela: três
+          linhas de legenda por cartão viram parede de texto, e quem opera
+          já sabe o que é "validade". Quem não sabe para o mouse em cima. */}
       <div className="grid-stats" style={{ marginBottom: 12 }}>
-        <div className="card card-tight stat">
+        <div
+          className="card card-tight stat"
+          title={`Identificador da licença no FindFace${cab.tipo ? ` · tipo ${cab.tipo}` : ""}`}
+        >
           <span className="stat-label">{t("Identificação")}</span>
           <div className="mono small" style={{ wordBreak: "break-all" }}>
             {cab.id || "—"}
           </div>
-          <span className="stat-sub">{cab.tipo ? `tipo ${cab.tipo}` : "—"}</span>
         </div>
-        <div className="card card-tight stat">
+        <div
+          className="card card-tight stat"
+          title={
+            cab.valido === false
+              ? "Esta licença está inválida"
+              : cab.dias_para_expirar != null
+              ? `Faltam ${cab.dias_para_expirar} dia(s) para expirar`
+              : "Data de expiração da licença"
+          }
+        >
           <span className="stat-label">{t("Validade")}</span>
-          <div className="stat-value">{cab.validade || "—"}</div>
-          <span className="stat-sub">
-            {cab.valido === false ? "licença inválida" : "data de expiração"}
-          </span>
+          <div
+            className="stat-value"
+            style={cab.expira_em_breve ? { color: "var(--amber)" } : undefined}
+          >
+            {cab.validade || "—"}
+          </div>
+          {cab.expira_em_breve && (
+            <span className="stat-sub" style={{ color: "var(--amber)" }}>
+              expira em {cab.dias_para_expirar} dia(s)
+            </span>
+          )}
         </div>
-        <div className="card card-tight stat">
+        <div
+          className="card card-tight stat"
+          title="Arquivo .lic no servidor do FindFace"
+        >
           <span className="stat-label">{t("Arquivo")}</span>
           <div className="mono small" style={{ wordBreak: "break-all" }}>
             {cab.arquivo || "—"}
           </div>
-          <span className="stat-sub">{t("no servidor do FindFace")}</span>
         </div>
-        <div className="card card-tight stat">
+        <div
+          className="card card-tight stat"
+          title="Câmeras cadastradas no FindFace, contadas no momento desta leitura"
+        >
           <span className="stat-label">{t("Câmeras cadastradas")}</span>
           <div className="stat-value">
             {dados.cameras_cadastradas === null || dados.cameras_cadastradas === undefined
               ? "—"
               : dados.cameras_cadastradas}
           </div>
-          <span className="stat-sub">{t("contadas agora, pela API")}</span>
         </div>
       </div>
 
@@ -188,9 +213,41 @@ function Licenciamento({ dados, erro, lendo, onAtualizar }) {
         </div>
       )}
 
-      <div className="stack-h" style={{ marginTop: 10 }}>
-        <span className="small muted" style={{ flex: 1 }}>{t("Lido de")} <span className="mono">{dados.url}{dados.caminho}</span>. O uso é o
-          do instante da leitura — clique em Atualizar uso para o número de agora.
+      {dados.funcionalidades && dados.funcionalidades.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="section-title" style={{ marginBottom: 6 }}>
+            {t("Módulos licenciados")}
+          </div>
+          <div className="stack-h" style={{ flexWrap: "wrap", gap: 6 }}>
+            {dados.funcionalidades.map((f) => (
+              <span
+                key={f.chave}
+                className={`pill ${f.ligado ? "pill-ok" : "pill-idle"}`}
+                title={
+                  f.ligado
+                    ? "Habilitado nesta licença"
+                    : "Existe no produto, mas não está habilitado nesta licença"
+                }
+              >
+                {f.nome}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="stack-h" style={{ marginTop: 12 }}>
+        <span
+          className="small muted"
+          style={{ flex: 1 }}
+          title={
+            dados.via === "ssh"
+              ? "Lido de dentro do servidor, por SSH — o serviço de licença atende em localhost sem pedir login"
+              : "Lido pela API HTTP do FindFace, com a credencial cadastrada"
+          }
+        >
+          {t("Lido de")} <span className="mono">{dados.caminho}</span>
+          {dados.via === "ssh" ? " (pelo servidor)" : " (pela API)"}
         </span>
         <button className="btn btn-ghost btn-sm" onClick={() => setVerBruto((v) => !v)}>
           {verBruto ? "Esconder resposta bruta" : "Ver resposta bruta"}

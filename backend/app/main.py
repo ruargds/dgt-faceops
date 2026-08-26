@@ -29,6 +29,7 @@ from app.services.descoberta_service import DescobertaService
 from app.services.dispositivos_service import DispositivosService
 from app.services.faxina_service import FaxinaService
 from app.services.ffapi_service import FFApiService
+from app.services.licenca_service import LicencaService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
 from app.services.processos_service import ProcessosService
@@ -265,6 +266,10 @@ async def iniciar() -> None:
     app.state.metrics = MetricsService(ssh)
     app.state.limpeza = LimpezaService(ssh)
     app.state.ffapi = FFApiService()
+    # Licenca lida de dentro do servidor, por SSH. Preferida sobre a API:
+    # o painel ja tem SSH em todos os hosts, e o NTLS atende localhost sem
+    # pedir login -- uma credencial a menos para alguem errar.
+    app.state.licenca = LicencaService(ssh)
     app.state.dispositivos = DispositivosService(ssh, ffapi=app.state.ffapi)
     app.state.descoberta = DescobertaService(ssh)
     app.state.processos = ProcessosService(ssh)

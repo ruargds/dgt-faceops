@@ -1,5 +1,6 @@
 """Câmeras do FindFace: quantas, quando falaram, quanto geram."""
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import client_ip, require_permission
@@ -29,24 +30,39 @@ async def licenca(
     de licença não está no banco lido por SSH.
     """
     from app.services.ffapi_service import FFApiError, configurado
+    from app.services.licenca_service import LicencaError
 
     host = await db.get(Host, host_id)
     if host is None:
         raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    # SSH primeiro: o NTLS atende em localhost sem pedir login, e o painel
+    # já tem SSH com sudo neste servidor. A API fica como alternativa para
+    # quem preferir não abrir shell — e para o caso de o NTLS rodar em
+    # outra máquina que não esta.
+    erro_ssh = ""
+    try:
+        return await request.app.state.licenca.ler(host)
+    except (LicencaError, SSHError) as exc:
+        erro_ssh = str(exc)
+
     if not configurado(host):
         raise HTTPException(
-            status_code=400,
+            status_code=502,
             detail=(
-                f"'{host.name}' não tem a API do FindFace cadastrada. Informe URL "
-                "e token em Servidores → editar → API do FindFace; o limite de "
-                "licença só existe por essa via."
+                f"{erro_ssh} E a API do FindFace não está cadastrada neste "
+                "servidor: informe usuário e senha em Servidores → editar → "
+                "API do FindFace para tentar por lá."
             ),
         )
 
     try:
         return await request.app.state.ffapi.licenca(host)
     except FFApiError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"pelo servidor: {erro_ssh} | pela API: {exc}",
+        ) from exc
 
 
 @router.get("/{host_id}")
@@ -80,8 +96,37 @@ async def listar(
         dados = await request.app.state.dispositivos.listar(
             host, request.app.state.stack, periodo
         )
+        dados["lido_de"] = host.name
+        dados["aviso"] = ""
     except (SSHError, DispositivosError) as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # O FindFace desta instalacao e distribuido: o servidor escolhido na
+        # tela pode nao ser o que roda o PostgreSQL. O painel tem SSH em
+        # todos, entao procura nos outros em vez de mandar o operador achar
+        # o host certo na Topologia e voltar aqui.
+        erros = [f"{host.name}: {exc}"]
+        dados = None
+        resultado = await db.execute(
+            select(Host).where(Host.enabled.is_(True), Host.id != host.id)
+        )
+        for alternativo in resultado.scalars().all():
+            try:
+                dados = await request.app.state.dispositivos.listar(
+                    alternativo, request.app.state.stack, periodo
+                )
+            except (SSHError, DispositivosError) as outro:
+                erros.append(f"{alternativo.name}: {outro}")
+                continue
+            dados["lido_de"] = alternativo.name
+            dados["aviso"] = (
+                f"'{host.name}' nao tem o banco do FindFace; estes numeros "
+                f"vieram de '{alternativo.name}'."
+            )
+            break
+
+        if dados is None:
+            raise HTTPException(
+                status_code=502, detail=" | ".join(erros)
+            ) from exc
 
     await audit_service.registrar(
         db,

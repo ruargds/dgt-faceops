@@ -228,6 +228,30 @@ ocupação em barra. Limite negativo aparece como `ilimitado`. O número de
 câmeras cadastradas é lido de `/cameras/count/` e confronta o limite
 licenciado — limite sem uso ao lado não responde nada.
 
+**A licença é lida de dentro do servidor, por SSH.** O NTLS atende em
+`localhost` sem exigir login — quem já está dentro da máquina não precisa
+provar de novo quem é —, e o painel já tem SSH com sudo em todos os
+servidores. Depender também de uma senha de aplicação para ler licença é
+uma credencial a mais para alguém errar, e foi o que aconteceu aqui: a
+senha da API voltou `Invalid username/password` enquanto o SSH funcionava
+o tempo todo. A API fica como alternativa, para quem preferir não abrir
+shell.
+
+A tabela mostra o **total** (`products.<produto>.resources`), que é o que a
+aba General do fabricante mostra — e não a linha de cada licença
+(`licenses[].products…`), que repetia o mesmo recurso com limites
+parciais. Os nomes saem do mapa da própria interface: `objects_tntapi`
+vira "Objects TNT API", `extapi` vira "Extraction API".
+
+A contagem de câmeras do painel **não** entra nessa tabela. Ela entrava
+quando a licença não informava uso, e o resultado foi uma linha dizendo
+"425 em uso de 5 liberados, 8500%" — número real ao lado de número
+inventado, sem aviso de qual era qual. O total de câmeras fica no cartão
+ao lado, onde é só o que é.
+
+O aviso de vencimento usa o mesmo limiar da interface do fabricante: 60
+dias.
+
 **A licença não vem da API do FindFace.** Ela é servida pelo **NTLS**, um
 serviço à parte, e por isso os caminhos saem da *raiz* do site — se a API
 foi cadastrada como `https://ip/api`, a licença continua em
