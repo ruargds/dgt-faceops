@@ -76,8 +76,29 @@ def require_permission(codigo: str):
 def client_ip(request: Request) -> str:
     """
     IP real do cliente. O painel roda atrás do nginx, então o socket
-    sempre mostraria o IP do proxy — o log de auditoria ficaria inútil.
+    sempre mostraria o IP do proxy — o log de auditoria e o freio de força
+    bruta ficariam inúteis (todos os acessos com o mesmo IP).
+
+    Com o painel exposto pela Cloudflare, a ordem de confiança importa:
+
+    1. **CF-Connecting-IP** — a Cloudflare grava o IP real do visitante e
+       SOBRESCREVE qualquer valor que o cliente tente injetar. É a fonte
+       mais confiável quando o tráfego entra pela Cloudflare.
+    2. **X-Forwarded-For** — só como reserva (acesso interno direto ao
+       nginx). O primeiro item é o cliente por convenção, mas é forjável
+       por quem alcança a origem sem passar pela Cloudflare.
+    3. Socket — último recurso.
+
+    IMPORTANTE (infra, não código): expor a origem direto na internet
+    torna 1 e 2 forjáveis — basta bater no IP da máquina sem passar pela
+    Cloudflare e mandar o cabeçalho na mão. A origem PRECISA aceitar
+    conexão só da Cloudflare (Cloudflare Tunnel/cloudflared, ou firewall
+    liberando apenas as faixas da Cloudflare). Sem isso, o freio de força
+    bruta por IP é contornável.
     """
+    cf = request.headers.get("cf-connecting-ip", "")
+    if cf:
+        return cf.strip()[:64]
     encaminhado = request.headers.get("x-forwarded-for", "")
     if encaminhado:
         return encaminhado.split(",")[0].strip()[:64]

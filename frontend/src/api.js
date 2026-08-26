@@ -35,6 +35,9 @@ async function request(caminho, opcoes = {}) {
   try {
     resposta = await fetch(`/api${caminho}`, { ...opcoes, headers: cabecalhos });
   } catch (e) {
+    // Cancelamento explícito (AbortController) não é falha de rede: deixa
+    // o chamador distinguir "operador clicou em Parar" de "painel caiu".
+    if (e && e.name === "AbortError") throw e;
     throw new ApiError("Sem resposta do servidor. O painel está no ar?", 0, null);
   }
 
@@ -66,7 +69,7 @@ async function request(caminho, opcoes = {}) {
   return corpo;
 }
 
-const get = (c) => request(c);
+const get = (c, opts) => request(c, opts);
 const post = (c, corpo) => request(c, { method: "POST", body: JSON.stringify(corpo || {}) });
 const patch = (c, corpo) => request(c, { method: "PATCH", body: JSON.stringify(corpo || {}) });
 const del = (c) => request(c, { method: "DELETE" });
@@ -121,7 +124,7 @@ export const api = {
   acaoStack: (id, acao, confirmar_host) => post(`/services/${id}/stack`, { acao, confirmar_host }),
 
   // Manutenção de disco e log
-  diagnostico: (id) => get(`/manutencao/${id}`),
+  diagnostico: (id, opts) => get(`/manutencao/${id}`, opts),
   contencaoLog: (id, d) => post(`/manutencao/${id}/contencao`, d),
   arquivarLog: (id, d) => post(`/manutencao/${id}/arquivar`, d),
   faxinaPrevia: () => get("/manutencao/faxina/previa"),
@@ -168,6 +171,14 @@ export const api = {
   // Dispositivos (câmeras)
   dispositivos: (id, periodo) => get(`/dispositivos/${id}?periodo=${periodo}`),
   redescobrirDispositivos: (id) => post(`/dispositivos/${id}/redescobrir`),
+
+  // Descoberta (inventário do servidor)
+  descoberta: (id) => get(`/descoberta/${id}`),
+  reiniciarCloudflared: (id) => post(`/descoberta/${id}/cloudflared/reiniciar`),
+  topologia: () => get(`/descoberta/topologia/mapa`),
+
+  // Processos ao vivo (htop didático)
+  processos: (id, limite = 25) => get(`/processos/${id}?limite=${limite}`),
 
   // Exportações (CSV) — URLs para <a href>
   urlExportarAuditoria: (dias = 30) => `/api/exportar/auditoria?dias=${dias}`,

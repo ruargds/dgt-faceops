@@ -77,54 +77,94 @@ export function GraficoLinha({
 
   const idGrad = `g${rotulo.replace(/\W/g, "")}${Math.round(altura)}`;
 
+  // O SVG estica horizontalmente (preserveAspectRatio="none") para
+  // preencher a largura variável. Isso distorceria texto e círculos —
+  // então DENTRO do SVG vão só linhas e áreas (que esticam bem), e os
+  // rótulos ficam como HTML por cima, que não distorce. Como a altura do
+  // viewBox é igual à altura real, py() já dá o pixel vertical certo.
+  //
+  // Em gráfico pequeno (mini/faísca) os rótulos poluem — só aparecem no
+  // gráfico grande.
+  const mini = altura < 60;
+  const topLimite = limite !== null && limite <= maximo ? py(limite) : null;
+
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      style={{ width: "100%", height: altura, display: "block" }}
-      role="img"
-      aria-label={`${rotulo}: ${ultimo}${unidade}, pico de ${pico}${unidade}`}
-    >
-      <defs>
-        <linearGradient id={idGrad} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={traco} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={traco} stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
+    <div style={{ position: "relative", width: "100%", height: altura }}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        style={{ width: "100%", height: altura, display: "block" }}
+        role="img"
+        aria-label={`${rotulo}: ${ultimo}${unidade}, pico de ${pico}${unidade}`}
+      >
+        <defs>
+          <linearGradient id={idGrad} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={traco} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={traco} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
 
-      {/* Grade a 25/50/75% — referência sem poluir */}
-      {[25, 50, 75].map((v) => (
-        <line
-          key={v}
-          x1={L} x2={W - R}
-          y1={py((v / 100) * maximo)} y2={py((v / 100) * maximo)}
-          stroke="var(--border)" strokeWidth="1" strokeDasharray="2 4"
-        />
-      ))}
-
-      {limite !== null && limite <= maximo && (
-        <>
+        {[25, 50, 75].map((v) => (
           <line
-            x1={L} x2={W - R} y1={py(limite)} y2={py(limite)}
-            stroke="var(--red)" strokeWidth="1.5" strokeDasharray="5 3"
-            opacity="0.55"
+            key={v}
+            x1={L} x2={W - R}
+            y1={py((v / 100) * maximo)} y2={py((v / 100) * maximo)}
+            stroke="var(--border)" strokeWidth="1" strokeDasharray="2 4"
+            vectorEffect="non-scaling-stroke"
           />
-          <text
-            x={W - R} y={py(limite) - 4} textAnchor="end"
-            fontSize="10" fill="var(--red)" opacity="0.8"
-          >
-            alerta {limite}{unidade}
-          </text>
-        </>
+        ))}
+
+        {topLimite !== null && (
+          <line
+            x1={L} x2={W - R} y1={topLimite} y2={topLimite}
+            stroke="var(--red)" strokeWidth="1.5" strokeDasharray="5 3"
+            opacity="0.5" vectorEffect="non-scaling-stroke"
+          />
+        )}
+
+        <path d={area} fill={`url(#${idGrad})`} />
+        <path
+          d={linha} fill="none" stroke={traco} strokeWidth="2"
+          strokeLinejoin="round" strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+
+      {/* Rótulo do alerta — HTML, não distorce */}
+      {topLimite !== null && !mini && (
+        <div
+          style={{
+            position: "absolute",
+            top: Math.max(0, topLimite - 15),
+            right: 6,
+            fontSize: 10,
+            color: "var(--red)",
+            opacity: 0.75,
+            background: "var(--white)",
+            padding: "0 3px",
+            borderRadius: 3,
+            pointerEvents: "none",
+          }}
+        >
+          alerta {limite}{unidade}
+        </div>
       )}
 
-      <path d={area} fill={`url(#${idGrad})`} />
-      <path
-        d={linha} fill="none" stroke={traco} strokeWidth="2"
-        strokeLinejoin="round" strokeLinecap="round"
+      {/* Ponto do valor atual — sempre na borda direita */}
+      <div
+        style={{
+          position: "absolute",
+          top: py(ultimo) - 4,
+          right: 4,
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: traco,
+          boxShadow: "0 0 0 2px var(--white)",
+          pointerEvents: "none",
+        }}
       />
-      <circle cx={px(n - 1)} cy={py(ultimo)} r="3.5" fill={traco} />
-    </svg>
+    </div>
   );
 }
 

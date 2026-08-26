@@ -20,7 +20,10 @@ import ConfiguracoesView from "../components/views/ConfiguracoesView";
 import DestinosView from "../components/views/DestinosView";
 import LogsView from "../components/views/LogsView";
 import MonitorView from "../components/views/MonitorView";
+import DescobertaView from "../components/views/DescobertaView";
+import TopologiaView from "../components/views/TopologiaView";
 import DispositivosView from "../components/views/DispositivosView";
+import ProcessosView from "../components/views/ProcessosView";
 import ManutencaoView from "../components/views/ManutencaoView";
 import AuditoriaView from "../components/views/AuditoriaView";
 import BackupsView from "../components/views/BackupsView";
@@ -39,8 +42,11 @@ const MENU = [
   { id: "painel", rotulo: "Painel", icone: IconPainel, perm: "hosts.view" },
   { id: "monitor", rotulo: "Monitor", icone: IconRecursos, perm: "metrics.view" },
   { id: "recursos", rotulo: "Recursos", icone: IconRecursos, perm: "metrics.view" },
+  { id: "processos", rotulo: "Processos", icone: IconRecursos, perm: "metrics.view" },
   { id: "servicos", rotulo: "Serviços", icone: IconServicos, perm: "services.view" },
   { id: "dispositivos", rotulo: "Câmeras", icone: IconServidor, perm: "metrics.view" },
+  { id: "descoberta", rotulo: "Descoberta", icone: IconServidor, perm: "hosts.view" },
+  { id: "topologia", rotulo: "Topologia", icone: IconServidor, perm: "hosts.view" },
   { id: "logs", rotulo: "Logs ao vivo", icone: IconLogs, perm: "services.view" },
   { id: "manutencao", rotulo: "Manutenção", icone: IconAlerta, perm: "maintenance.view" },
   { id: "terminal", rotulo: "InTerminal", icone: IconTerminal, perm: "terminal.use" },
@@ -133,7 +139,10 @@ export default function AppShell() {
           {abaValida === "painel" && <PainelView />}
           {abaValida === "monitor" && <MonitorView />}
           {abaValida === "dispositivos" && <DispositivosView />}
+          {abaValida === "descoberta" && <DescobertaView />}
+          {abaValida === "topologia" && <TopologiaView />}
           {abaValida === "recursos" && <RecursosView />}
+          {abaValida === "processos" && <ProcessosView />}
           {abaValida === "servicos" && <ServicosView />}
           {abaValida === "logs" && <LogsView />}
           {abaValida === "manutencao" && <ManutencaoView />}

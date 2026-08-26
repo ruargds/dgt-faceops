@@ -40,6 +40,11 @@ export default function MonitorView() {
   // parar é alerta que se aprende a ignorar.
   const anunciados = useRef(new Set());
   const primeiraCarga = useRef(true);
+  // Sequência do último pedido de série. Descarta resposta fora de
+  // ordem: sem isso, a série de '30 dias' (lenta) podia chegar depois
+  // da de '1 h' e sobrescrever a tela com a janela errada — era isso
+  // que fazia a troca de período parecer que não funcionava.
+  const pedidoSerie = useRef(0);
 
   const carregar = useCallback(async () => {
     try {
@@ -67,10 +72,12 @@ export default function MonitorView() {
 
   const carregarSerie = useCallback(async (hostId, horas) => {
     if (!hostId) return;
+    const meu = ++pedidoSerie.current;
     try {
-      setSerie(await api.monitorSerie(hostId, horas));
+      const r = await api.monitorSerie(hostId, horas);
+      if (meu === pedidoSerie.current) setSerie(r);
     } catch (ex) {
-      setErro(ex.message);
+      if (meu === pedidoSerie.current) setErro(ex.message);
     }
   }, []);
 
@@ -108,7 +115,10 @@ export default function MonitorView() {
   }, [carregar, carregarSerie, detalhe, janela]);
 
   useEffect(() => {
-    if (detalhe) carregarSerie(detalhe, janela);
+    if (detalhe) {
+      setSerie(null);
+      carregarSerie(detalhe, janela);
+    }
   }, [detalhe, janela, carregarSerie]);
 
   if (carregando && !resumo) return <Carregando texto="Lendo o histórico…" />;

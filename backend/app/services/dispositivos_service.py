@@ -83,23 +83,58 @@ class DispositivosService:
     # ── Descoberta ─────────────────────────────────────────────────────
 
     async def _container_pg(self, host, stack) -> str:
-        projeto = await stack._projeto(host)
+        """
+        Acha o container do PostgreSQL — SEM exigir que os rótulos batam.
+
+        O filtro por `project=X` + `service=postgresql` é frágil: numa
+        instalação distribuída o serviço tem outro nome (timescaledb,
+        pgbouncer na frente), o projeto detectado pode divergir, e o
+        container pode nem ter rótulo de compose. Aqui tentamos do mais
+        específico ao mais genérico, e só desistimos depois de procurar
+        de verdade — em vez de dizer "não achei" no primeiro filtro.
+        """
         sudo = await self.ssh.docker_needs_sudo(host)
-        r = await self.ssh.run(
-            host,
-            f"docker ps --filter label=com.docker.compose.project={projeto} "
-            "--filter label=com.docker.compose.service=postgresql "
-            "--format '{{.Names}}' | head -1",
-            sudo=sudo,
-            timeout=40,
-        )
-        nome = (r.stdout or "").strip()
-        if not nome:
-            raise DispositivosError(
-                "PostgreSQL não encontrado neste servidor. As câmeras ficam "
-                "no banco do FindFace — consulte no servidor onde ele roda."
+
+        try:
+            projeto = await stack._projeto(host)
+        except Exception:  # noqa: BLE001 - deteccao de projeto e best-effort
+            projeto = ""
+
+        tentativas: list[str] = []
+        if projeto:
+            tentativas.append(
+                f"docker ps --filter label=com.docker.compose.project={projeto} "
+                "--filter label=com.docker.compose.service=postgresql "
+                "--format '{{.Names}}' | head -1"
             )
-        return nome
+            tentativas.append(
+                f"docker ps --filter label=com.docker.compose.project={projeto} "
+                "--format '{{.Names}} {{.Image}}' "
+                "| grep -iE 'postgres|pgsql|timescale' | awk '{print $1}' | head -1"
+            )
+        # Qualquer container cujo nome OU imagem aponte para Postgres
+        tentativas.append(
+            "docker ps --format '{{.Names}} {{.Image}}' "
+            "| grep -iE 'postgres|pgsql|timescale' | awk '{print $1}' | head -1"
+        )
+        # Ultimo recurso: um container que responda a pg_isready por dentro
+        tentativas.append(
+            "for c in $(docker ps --format '{{.Names}}'); do "
+            "docker exec \"$c\" sh -c 'command -v pg_isready >/dev/null 2>&1 "
+            "&& pg_isready -q' >/dev/null 2>&1 && { echo \"$c\"; break; }; done"
+        )
+
+        for comando in tentativas:
+            r = await self.ssh.run(host, comando, sudo=sudo, timeout=60)
+            saida = (r.stdout or "").strip()
+            if saida:
+                return saida.splitlines()[0].strip()
+
+        raise DispositivosError(
+            "PostgreSQL não encontrado neste servidor. Numa instalação "
+            "distribuída o banco fica em UM servidor só - abra a tela "
+            "Descoberta para ver onde ele roda e consulte as câmeras lá."
+        )
 
     async def descobrir(self, host, stack, forcar: bool = False) -> dict:
         """

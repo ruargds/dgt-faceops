@@ -14,8 +14,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from app.api.routes import (
-    audit, auth, backups, configuracoes, dispositivos, destinos, exportar,
-    hosts, logs, maintenance, marca, monitor, ops, terminal,
+    audit, auth, backups, configuracoes, descoberta, dispositivos, destinos,
+    exportar, hosts, logs, maintenance, marca, monitor, ops, processos, terminal,
 )
 from app.core.config import settings
 from app.core.security import hash_password
@@ -25,11 +25,13 @@ from app.models import (  # noqa: F401 — registra todos os modelos
 )
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
+from app.services.descoberta_service import DescobertaService
 from app.services.dispositivos_service import DispositivosService
 from app.services.faxina_service import FaxinaService
 from app.services.ffapi_service import FFApiService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
+from app.services.processos_service import ProcessosService
 from app.services.logs_service import LogManager
 from app.services.maintenance_service import MaintenanceService
 from app.services.metrics_service import MetricsService
@@ -209,6 +211,10 @@ async def _varredor_de_ociosas(app: FastAPI) -> None:
             log.exception("erro no varredor de sessoes ociosas")
 
 
+# Documentação interativa só quando MODO_DEV está ligado. Exposta na
+# internet, /api/docs e /api/openapi.json entregariam o mapa completo da
+# API a qualquer um — não é vazamento de segredo, mas é reconhecimento de
+# graça para quem procura o que atacar.
 app = FastAPI(
     title="DGT FaceOps",
     description=(
@@ -216,19 +222,22 @@ app = FastAPI(
         "serviços, recursos e terminal SSH."
     ),
     version="0.1.0",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if settings.MODO_DEV else None,
+    redoc_url=None,
+    openapi_url="/api/openapi.json" if settings.MODO_DEV else None,
 )
 
-# O nginx serve o front na mesma origem; CORS aberto só ajudaria em
-# desenvolvimento, então fica restrito ao servidor de dev do React.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# O nginx serve o front na mesma origem, então em produção não há CORS a
+# liberar. O CORS de localhost serve só ao servidor de dev do React e sai
+# de cena quando MODO_DEV está desligado.
+if settings.MODO_DEV:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 @app.on_event("startup")
@@ -254,6 +263,8 @@ async def iniciar() -> None:
     app.state.limpeza = LimpezaService(ssh)
     app.state.ffapi = FFApiService()
     app.state.dispositivos = DispositivosService(ssh, ffapi=app.state.ffapi)
+    app.state.descoberta = DescobertaService(ssh)
+    app.state.processos = ProcessosService(ssh)
     app.state.stack = StackService(ssh, config, limpeza=app.state.limpeza)
     app.state.manutencao = MaintenanceService(ssh)
     app.state.backups = BackupService(ssh, storage, config)
@@ -355,6 +366,8 @@ app.include_router(configuracoes.router)
 app.include_router(marca.router)
 app.include_router(monitor.router)
 app.include_router(dispositivos.router)
+app.include_router(descoberta.router)
+app.include_router(processos.router)
 app.include_router(exportar.router)
 app.include_router(hosts.router)
 app.include_router(ops.router)

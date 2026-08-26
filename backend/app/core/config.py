@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-only-trocar"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+
+    # Só liga a documentação interativa (/api/docs) e o CORS de dev quando
+    # ligado explicitamente. Em produção — e sobretudo com o painel exposto
+    # pela Cloudflare — fica DESLIGADO: /api/docs abriria toda a superfície
+    # da API para qualquer visitante, e o CORS de localhost não tem uso.
+    MODO_DEV: bool = False
     ADMIN_USER: str = "admin"
     ADMIN_PASSWORD: str = "admin123"
 

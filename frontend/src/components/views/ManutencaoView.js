@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, nivel } from "../../api";
 import { usePermissions } from "../../usePermissions";
 import {
@@ -407,24 +407,45 @@ export default function ManutencaoView() {
   const [aviso, setAviso] = useState("");
   const [destino, setDestino] = useState("");
   const [incluirAtivo, setIncluirAtivo] = useState(false);
+  const abortRef = useRef(null);
 
   const diagnosticar = useCallback(async () => {
     if (!hostId) return;
+    // Cancelável: a análise mede o crescimento do log por ~20s, e o
+    // operador que se enganou de servidor não deveria ficar preso
+    // esperando. Parar aborta a requisição de fato, não só a tela.
+    const controlador = new AbortController();
+    abortRef.current = controlador;
     setCarregando(true);
     setErro("");
     setPrevia(null);
     setAviso("");
     try {
-      const d = await api.diagnostico(hostId);
+      const d = await api.diagnostico(hostId, { signal: controlador.signal });
       setDiag(d);
       setDestino(d.destino_sugerido || "");
     } catch (ex) {
-      setErro(ex.message);
-      setDiag(null);
+      if (ex && ex.name === "AbortError") {
+        setAviso("Análise interrompida.");
+      } else {
+        setErro(ex.message);
+        setDiag(null);
+      }
     } finally {
+      if (abortRef.current === controlador) abortRef.current = null;
       setCarregando(false);
     }
   }, [hostId]);
+
+  const pararDiagnostico = useCallback(() => {
+    if (abortRef.current) abortRef.current.abort();
+  }, []);
+
+  // Sair da tela ou trocar de servidor no meio da análise cancela a
+  // requisição pendente — nada de resposta chegando numa tela que já mudou.
+  useEffect(() => () => {
+    if (abortRef.current) abortRef.current.abort();
+  }, []);
 
   useEffect(() => {
     setDiag(null);
@@ -464,9 +485,15 @@ export default function ManutencaoView() {
         </div>
         <div className="page-actions">
           <SeletorHost hosts={hosts} hostId={hostId} onMudar={setHostId} />
-          <button className="btn btn-primary" onClick={diagnosticar} disabled={carregando}>
-            <IconAtualizar size={15} /> {carregando ? "Analisando…" : "Diagnosticar"}
-          </button>
+          {carregando ? (
+            <button className="btn btn-danger" onClick={pararDiagnostico}>
+              Parar
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={diagnosticar} disabled={!hostId}>
+              <IconAtualizar size={15} /> Diagnosticar
+            </button>
+          )}
         </div>
       </div>
 
