@@ -613,6 +613,256 @@ function LimpezaPontual() {
   );
 }
 
+/**
+ * Rotatividade do próprio FindFace.
+ *
+ * O que enche o disco num servidor de reconhecimento facial não é o log:
+ * são as fotos de evento — num servidor real, 242 GB de 268 GB. E o
+ * FindFace sabe se limpar sozinho: tem política de retenção própria, com
+ * idade máxima por tipo de evento, por quadro completo e por cluster.
+ *
+ * Até aqui o painel só oferecia a limpeza destrutiva, que apaga o passado
+ * e não impede o disco de encher de novo na semana seguinte. Isto ataca a
+ * causa; a limpeza ataca o sintoma. As duas coisas convivem — e é por isso
+ * que esta seção fica logo acima da limpeza.
+ *
+ * Prazo em DIAS. A API do fabricante fala em segundos, e pedir segundos a
+ * quem opera é convite a apagar cinco anos achando que apagou cinco dias.
+ */
+function Retencao({ hostId, hostNome }) {
+  const { has } = usePermissions();
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(false);
+  const [edicao, setEdicao] = useState({});
+  const [ligadas, setLigadas] = useState({});
+  const [confirmando, setConfirmando] = useState(false);
+  const [salvo, setSalvo] = useState("");
+
+  const carregar = useCallback(async () => {
+    if (!hostId) return;
+    setCarregando(true);
+    setErro("");
+    setSalvo("");
+    try {
+      const r = await api.retencao(hostId);
+      setDados(r);
+      setEdicao({});
+      setLigadas({});
+    } catch (ex) {
+      setDados(null);
+      setErro(ex.message);
+    } finally {
+      setCarregando(false);
+    }
+  }, [hostId]);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  if (carregando && !dados) return <Carregando texto="Lendo a política do FindFace…" />;
+
+  if (erro) {
+    return (
+      <div className="card card-tight">
+        <div className="section-title" style={{ marginBottom: 4 }}>
+          Rotatividade do FindFace
+        </div>
+        <div className="small muted">{erro}</div>
+      </div>
+    );
+  }
+  if (!dados) return null;
+
+  const valor = (campo) =>
+    edicao[campo.chave] !== undefined ? edicao[campo.chave] : campo.dias ?? "";
+
+  const mudou =
+    Object.keys(edicao).length > 0 || Object.keys(ligadas).length > 0;
+
+  return (
+    <div className="card">
+      <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+        <div className="section-title" style={{ marginBottom: 0 }}>
+          Rotatividade do FindFace
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={carregar} disabled={carregando}>
+          <IconAtualizar size={14} /> {carregando ? "Lendo…" : "Recarregar"}
+        </button>
+      </div>
+      <div className="small muted" style={{ marginBottom: 14 }}>
+        Por quanto tempo o FindFace guarda cada coisa. É a configuração da
+        própria plataforma — mexer aqui é mexer lá. Reduzir um prazo não apaga
+        nada no clique: o FindFace passa a remover o que ficar mais velho que o
+        novo prazo, no ritmo dele. <strong>Zero</strong> significa guardar para
+        sempre.
+      </div>
+
+      {salvo && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 12 }}
+        >
+          <span className="small" style={{ color: "var(--green-fg)" }}>
+            <IconOk size={13} /> {salvo}
+          </span>
+        </div>
+      )}
+
+      {dados.grupos.map((g) => (
+        <div key={g.grupo} style={{ marginBottom: 14 }}>
+          <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>
+            {g.grupo}
+          </div>
+          <div className="table-wrap">
+            <table className="tabela-densa">
+              <tbody>
+                {g.campos.map((campo, idx) => (
+                  <tr key={campo.chave}>
+                    <td title={campo.chave}>
+                      {campo.rotulo}
+                      {idx < 2 && (
+                        <span className="pill pill-warn" style={{ marginLeft: 8 }}>
+                          ocupa mais disco
+                        </span>
+                      )}
+                    </td>
+                    <td className="right" style={{ width: 190 }}>
+                      <div className="stack-h" style={{ justifyContent: "flex-end", gap: 6 }}>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={valor(campo)}
+                          disabled={!has("maintenance.apply")}
+                          onChange={(e) =>
+                            setEdicao((atual) => ({
+                              ...atual,
+                              [campo.chave]: e.target.value,
+                            }))
+                          }
+                          style={{ width: 90, textAlign: "right" }}
+                        />
+                        <span className="small muted">dias</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+
+      {dados.video.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>
+            Arquivo de vídeo
+            {dados.video_ligado === false && (
+              <span className="pill pill-idle" style={{ marginLeft: 8 }}>
+                limpeza desligada na plataforma
+              </span>
+            )}
+          </div>
+          <div className="table-wrap">
+            <table className="tabela-densa">
+              <tbody>
+                {dados.video.map((campo) => (
+                  <tr key={campo.chave}>
+                    <td title={campo.chave}>{campo.rotulo}</td>
+                    <td className="right" style={{ width: 190 }}>
+                      <div className="stack-h" style={{ justifyContent: "flex-end", gap: 6 }}>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={valor(campo)}
+                          disabled={!has("maintenance.apply")}
+                          onChange={(e) =>
+                            setEdicao((atual) => ({
+                              ...atual,
+                              [campo.chave]: e.target.value,
+                            }))
+                          }
+                          style={{ width: 90, textAlign: "right" }}
+                        />
+                        <span className="small muted">dias</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {dados.chaves.map((c) => (
+        <label className="check" key={c.chave} title={c.ajuda}>
+          <input
+            type="checkbox"
+            checked={ligadas[c.chave] !== undefined ? ligadas[c.chave] : c.ligado}
+            disabled={!has("maintenance.apply")}
+            onChange={(e) =>
+              setLigadas((atual) => ({ ...atual, [c.chave]: e.target.checked }))
+            }
+          />
+          <span>
+            {c.rotulo}
+            <div className="small muted">{c.ajuda}</div>
+          </span>
+        </label>
+      ))}
+
+      {has("maintenance.apply") && (
+        <div className="stack-h" style={{ marginTop: 12 }}>
+          <span className="small muted" style={{ flex: 1 }}>
+            {mudou
+              ? "Alterações não salvas."
+              : "Nada alterado. Os números são os que estão valendo agora na plataforma."}
+          </span>
+          <button
+            className="btn btn-danger"
+            disabled={!mudou}
+            onClick={() => setConfirmando(true)}
+          >
+            Salvar política
+          </button>
+        </div>
+      )}
+
+      {confirmando && (
+        <ConfirmarDigitando
+          titulo="Mudar a rotatividade do FindFace"
+          palavra={hostNome}
+          rotuloBotao="Salvar"
+          aviso={
+            `Isto altera a configuração da plataforma da NtechLab em ${hostNome}. ` +
+            "Nada é apagado no clique, mas o FindFace passa a remover o que ficar " +
+            "mais velho que os novos prazos — e nenhum backup essencial recupera " +
+            "foto de evento. Confira os números antes."
+          }
+          onConfirmar={async (confirmacao) => {
+            const dias = {};
+            Object.entries(edicao).forEach(([k, v]) => {
+              if (v !== "" && v !== null) dias[k] = Number(v);
+            });
+            await api.salvarRetencao(hostId, {
+              dias,
+              chaves: ligadas,
+              confirmar_host: confirmacao,
+            });
+            setSalvo("Política salva. A plataforma passa a valer os novos prazos.");
+            await carregar();
+          }}
+          onFechar={() => setConfirmando(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function ManutencaoView() {
   const { has } = usePermissions();
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
@@ -963,6 +1213,8 @@ export default function ManutencaoView() {
           )}
         </div>
       )}
+
+      {hostId && <Retencao hostId={hostId} hostNome={host ? host.name : ""} />}
 
       {diag && <Limpeza hostId={hostId} hostNome={host ? host.name : ""} />}
 

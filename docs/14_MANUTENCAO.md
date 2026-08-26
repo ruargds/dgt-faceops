@@ -153,6 +153,46 @@ vfs.fs.size[/,pfree]               trigger em 15%
 O segundo é o que faltou. Um disco levou semanas para encher; houve
 tempo de sobra para alertar.
 
+## Rotatividade do FindFace
+
+O que enche o disco num servidor de reconhecimento facial não é o log — são
+as fotos de evento. Num servidor real, 242 GB de 268 GB. E a limpeza de
+eventos, por mais necessária que seja, ataca o sintoma: apaga o passado e
+não impede o disco de encher de novo na semana seguinte.
+
+A causa se ajusta em **Manutenção → Rotatividade do FindFace**, que lê e
+grava a política da própria plataforma (`GET`/`PATCH /settings` da API da
+NtechLab):
+
+| Campo | O que guarda |
+|---|---|
+| Quadro completo — sem correspondência | **o que mais ocupa disco.** A cena inteira de quem passou e não bateu com dossiê |
+| Quadro completo — com correspondência | a cena inteira dos reconhecimentos |
+| Evento sem correspondência | o recorte e o vetor de quem não bateu |
+| Evento com correspondência | o recorte e o vetor dos reconhecimentos |
+| Eventos de cluster | agrupamentos de aparições da mesma pessoa |
+| Arquivo de vídeo | gravação contínua, quando ligada na plataforma |
+
+Há ainda **não gravar evento sem correspondência**, que é o maior corte de
+disco possível — e o mais caro em capacidade de investigação: some a
+possibilidade de procurar quem passou e não estava cadastrado.
+
+Três coisas que valem saber antes de mexer:
+
+1. **O prazo entra em dias; a API do fabricante fala em segundos.** A
+   conversão fica no painel. Pedir segundos a quem opera é convite a
+   apagar cinco anos achando que apagou cinco dias — a mesma regra da
+   limpeza de eventos.
+2. **Zero significa guardar para sempre.**
+3. **Nada é apagado no clique.** O FindFace passa a remover o que ficar
+   mais velho que o novo prazo, no ritmo dele. Ainda assim exige digitar o
+   nome do servidor e gera auditoria crítica: reduzir um prazo joga fora
+   dado de produção que nenhum backup essencial recupera.
+
+Rotatividade e limpeza convivem: a política evita o disco encher de novo, a
+limpeza resolve o passado que já está lá. É por isso que as duas ficam
+nesta tela, nessa ordem.
+
 ## Limpeza pontual do painel
 
 A faxina diária resolve o regime. Não resolve o caso pontual: "o disco do

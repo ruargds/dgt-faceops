@@ -413,6 +413,67 @@ def _funcionalidades(dados) -> list[dict]:
     return sorted(juntas.values(), key=lambda f: (not f["ligado"], f["nome"].lower()))
 
 
+# Campos de retenção do FindFace (GET/PATCH /settings), agrupados como a
+# operação pensa: por tipo de objeto, e dentro dele o que ocupa mais disco
+# primeiro. `fullframe` é o quadro inteiro da cena — é ele que pesa, não o
+# recorte do rosto; num servidor real as fotos de evento ocupavam 242 GB de
+# 268 GB.
+#
+# Todos os campos de idade vão em SEGUNDOS na API.
+RETENCAO_CAMPOS = [
+    {
+        "grupo": "Face",
+        "campos": [
+            ("face_events_max_fullframe_unmatched_age", "Quadro completo — sem correspondência"),
+            ("face_events_max_fullframe_matched_age", "Quadro completo — com correspondência"),
+            ("face_events_max_unmatched_age", "Evento sem correspondência"),
+            ("face_events_max_matched_age", "Evento com correspondência"),
+            ("face_cluster_events_max_age", "Eventos de cluster"),
+            ("face_cluster_events_keep_best_max_age", "Eventos de cluster, exceto o melhor"),
+        ],
+    },
+    {
+        "grupo": "Corpo",
+        "campos": [
+            ("body_events_max_fullframe_unmatched_age", "Quadro completo — sem correspondência"),
+            ("body_events_max_fullframe_matched_age", "Quadro completo — com correspondência"),
+            ("body_events_max_unmatched_age", "Evento sem correspondência"),
+            ("body_events_max_matched_age", "Evento com correspondência"),
+            ("body_cluster_events_max_age", "Eventos de cluster"),
+            ("body_cluster_events_keep_best_max_age", "Eventos de cluster, exceto o melhor"),
+        ],
+    },
+    {
+        "grupo": "Veículo",
+        "campos": [
+            ("car_events_max_fullframe_unmatched_age", "Quadro completo — sem correspondência"),
+            ("car_events_max_fullframe_matched_age", "Quadro completo — com correspondência"),
+            ("car_events_max_unmatched_age", "Evento sem correspondência"),
+            ("car_events_max_matched_age", "Evento com correspondência"),
+            ("car_cluster_events_max_age", "Eventos de cluster"),
+            ("car_cluster_events_keep_best_max_age", "Eventos de cluster, exceto o melhor"),
+        ],
+    },
+]
+
+# Campos do arquivo de vídeo, dentro de `vms_cleanup_settings`.
+RETENCAO_VIDEO = [
+    ("archive_cleanup_age", "Apagar vídeo mais velho que"),
+    ("between_tracks_cleanup_start_age", "Apagar trecho entre gravações mais velho que"),
+]
+
+# Chaves que não são idade: entram como estão.
+RETENCAO_LIGADESLIGA = [
+    (
+        "ignore_unmatched",
+        "Não gravar evento sem correspondência",
+        "O maior corte de disco que existe aqui: evento que não bateu com "
+        "nenhum dossiê deixa de ser gravado. Em contrapartida, some a "
+        "possibilidade de investigar quem passou e não estava cadastrado.",
+    ),
+]
+
+
 class FFApiError(Exception):
     pass
 
@@ -733,6 +794,203 @@ class FFApiService:
         dados = await self._get(f"{base}/cameras/count/", auth)
         total = dados.get("count", dados.get("total", dados))
         return {"ok": True, "cameras": total, "url": base, "usuario": quem}
+
+    async def contagens(self, host) -> dict:
+        """
+        Quantas câmeras, e quantas delas são detector externo.
+
+        Detector externo é sistema de fora empurrando evento pela API. Ele
+        aparece na mesma listagem das câmeras e consome licença como
+        câmera, mas não é câmera nenhuma — e quem responde "temos quantas
+        câmeras?" com o total misturado erra a conta nas duas direções.
+
+        Barato: `/count/` devolve só o número. Se o filtro não existir na
+        versão instalada, o total ainda vale e o resto volta nulo.
+        """
+        auth = await self._credenciais(host)
+        base = await self._base(host)
+
+        async def contar(params=None):
+            dados = await self._get(f"{base}/cameras/count/", auth, params)
+            if isinstance(dados, dict):
+                return _num(dados.get("count", dados.get("total")))
+            return _num(dados)
+
+        total = await contar()
+        externos = None
+        try:
+            externos = await contar({"external_detector": "true"})
+        except FFApiError:
+            externos = None
+
+        return {
+            "cameras_total": total,
+            "detectores_externos": externos,
+            "cameras_reais": (
+                total - externos if total is not None and externos is not None else None
+            ),
+        }
+
+    async def retencao(self, host) -> dict:
+        """
+        Política de rotatividade do próprio FindFace.
+
+        Só leitura. Devolve os valores em DIAS, já convertidos, junto do
+        catálogo de campos — a tela não precisa saber o nome interno de
+        cada um nem fazer conta de segundos.
+        """
+        auth = await self._credenciais(host)
+        base = await self._base(host)
+        bruto = await self._get(f"{base}/settings", auth)
+        if not isinstance(bruto, dict):
+            raise FFApiError("resposta de /settings não é um objeto")
+
+        def dias(valor):
+            n = _num(valor)
+            if n is None:
+                return None
+            return round(n / 86400, 2) if n > 0 else 0
+
+        grupos = []
+        for grupo in RETENCAO_CAMPOS:
+            campos = []
+            for chave, rotulo in grupo["campos"]:
+                if chave in bruto:
+                    campos.append({
+                        "chave": chave,
+                        "rotulo": rotulo,
+                        "dias": dias(bruto.get(chave)),
+                        "segundos": _num(bruto.get(chave)),
+                    })
+            if campos:
+                grupos.append({"grupo": grupo["grupo"], "campos": campos})
+
+        video = []
+        vms = bruto.get("vms_cleanup_settings") or {}
+        if isinstance(vms, dict):
+            for chave, rotulo in RETENCAO_VIDEO:
+                if chave in vms:
+                    video.append({
+                        "chave": chave,
+                        "rotulo": rotulo,
+                        "dias": dias(vms.get(chave)),
+                        "segundos": _num(vms.get(chave)),
+                    })
+
+        chaves = []
+        for chave, rotulo, ajuda in RETENCAO_LIGADESLIGA:
+            if chave in bruto:
+                chaves.append({
+                    "chave": chave,
+                    "rotulo": rotulo,
+                    "ajuda": ajuda,
+                    "ligado": bool(bruto.get(chave)),
+                })
+
+        return {
+            "grupos": grupos,
+            "video": video,
+            "chaves": chaves,
+            "video_ligado": bool(vms.get("cleanup_archive")) if isinstance(vms, dict) else None,
+            "qualidade_miniatura": _num(bruto.get("thumbnail_jpeg_quality")),
+            "bruto": bruto,
+        }
+
+    async def salvar_retencao(self, host, dias_por_campo: dict, chaves: dict) -> dict:
+        """
+        Grava a política. **Muda o comportamento do FindFace em produção.**
+
+        Recebe DIAS e converte para segundos, que é o que a API espera.
+        Diminuir uma idade não apaga nada na hora — o FindFace passa a
+        remover o que ficar mais velho que o novo prazo, no ritmo dele.
+        Ainda assim é ação destrutiva no tempo, e por isso a rota exige
+        confirmação e registra auditoria crítica.
+        """
+        auth = await self._credenciais(host)
+        base = await self._base(host)
+
+        corpo: dict = {}
+        video: dict = {}
+        conhecidos = {c[0] for g in RETENCAO_CAMPOS for c in g["campos"]}
+        de_video = {c[0] for c in RETENCAO_VIDEO}
+
+        for chave, dias in (dias_por_campo or {}).items():
+            n = _num(dias)
+            if n is None or n < 0:
+                continue
+            segundos = int(round(float(dias) * 86400))
+            if chave in conhecidos:
+                corpo[chave] = segundos
+            elif chave in de_video:
+                video[chave] = segundos
+
+        for chave, valor in (chaves or {}).items():
+            if chave in {c[0] for c in RETENCAO_LIGADESLIGA}:
+                corpo[chave] = bool(valor)
+
+        if video:
+            corpo["vms_cleanup_settings"] = video
+        if not corpo:
+            raise FFApiError("nada para salvar")
+
+        await self._patch(f"{base}/settings", auth, corpo)
+        return {"ok": True, "campos": sorted(corpo)}
+
+    async def _patch(self, url: str, autenticacao, corpo: dict) -> dict:
+        """PATCH autenticado. Usado só para gravar configuração."""
+        if isinstance(autenticacao, str):
+            autenticacao = {"Authorization": f"Token {autenticacao}"}
+        cabecalhos = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            **(autenticacao or {}),
+        }
+
+        if self._httpx is not None:
+            try:
+                async with self._httpx.AsyncClient(
+                    timeout=30, verify=False, follow_redirects=True
+                ) as cli:
+                    r = await cli.patch(url, headers=cabecalhos, json=corpo)
+                    if r.status_code >= 400:
+                        raise FFApiError(_erro_http(r.status_code, r.text))
+                    try:
+                        return r.json()
+                    except Exception:
+                        return {}
+            except FFApiError:
+                raise
+            except Exception as exc:
+                raise FFApiError(f"falha ao gravar na API: {exc}") from exc
+
+        import json as _json
+        import urllib.error
+        import urllib.request
+
+        def _enviar() -> dict:
+            req = urllib.request.Request(
+                url,
+                data=_json.dumps(corpo).encode("utf-8"),
+                headers=cabecalhos,
+                method="PATCH",
+            )
+            abridor = urllib.request.build_opener(_sem_verificar_tls())
+            try:
+                with abridor.open(req, timeout=30) as resp:
+                    try:
+                        return _json.loads(resp.read().decode("utf-8"))
+                    except Exception:
+                        return {}
+            except urllib.error.HTTPError as exc:
+                try:
+                    detalhe = exc.read().decode("utf-8", "replace")
+                except Exception:
+                    detalhe = ""
+                raise FFApiError(_erro_http(exc.code, detalhe)) from exc
+            except Exception as exc:
+                raise FFApiError(f"falha ao gravar na API: {exc}") from exc
+
+        return await asyncio.to_thread(_enviar)
 
     async def licenca(self, host) -> dict:
         """

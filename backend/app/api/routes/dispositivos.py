@@ -1,5 +1,6 @@
 """Câmeras do FindFace: quantas, quando falaram, quanto geram."""
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,9 +43,20 @@ async def licenca(
     # outra máquina que não esta.
     erro_ssh = ""
     try:
-        return await request.app.state.licenca.ler(host)
+        dados = await request.app.state.licenca.ler(host)
     except (LicencaError, SSHError) as exc:
         erro_ssh = str(exc)
+    else:
+        # A leitura por SSH traz a licenca, nao a contagem de cameras --
+        # o NTLS nao sabe quantas cameras existem. Quando a API estiver
+        # cadastrada, completa aqui, inclusive separando detector externo.
+        if configurado(host):
+            try:
+                dados.update(await request.app.state.ffapi.contagens(host))
+                dados["cameras_cadastradas"] = dados.get("cameras_total")
+            except FFApiError:
+                pass
+        return dados
 
     if not configurado(host):
         raise HTTPException(
@@ -161,3 +173,112 @@ async def redescobrir(
         )
     except (SSHError, DispositivosError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+class RetencaoIn(BaseModel):
+    """
+    Nova politica de rotatividade do FindFace.
+
+    `dias` chega por campo, em DIAS -- a API do fabricante fala em segundos
+    e a conversao fica no painel: pedir segundos a quem opera e convite a
+    apagar cinco anos achando que apagou cinco dias.
+    """
+
+    dias: dict[str, float] = Field(default_factory=dict)
+    chaves: dict[str, bool] = Field(default_factory=dict)
+    confirmar_host: str = ""
+
+
+@router.get("/{host_id}/retencao")
+async def retencao(
+    host_id: int,
+    request: Request,
+    _: User = Depends(require_permission("maintenance.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Politica de rotatividade do proprio FindFace. So leitura.
+
+    E a resposta para "o disco enche toda semana": em vez de apagar o
+    passado, ajustar por quanto tempo cada coisa fica. Quadro completo de
+    evento sem correspondencia e o campo que mais devolve disco.
+    """
+    from app.services.ffapi_service import FFApiError, configurado
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor nao encontrado")
+    if not configurado(host):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"'{host.name}' nao tem a API do FindFace cadastrada. A politica "
+                "de retencao so existe por essa via -- informe usuario e senha "
+                "em Servidores -> editar -> API do FindFace."
+            ),
+        )
+
+    try:
+        return await request.app.state.ffapi.retencao(host)
+    except FFApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.patch("/{host_id}/retencao")
+async def salvar_retencao(
+    host_id: int,
+    dados: RetencaoIn,
+    request: Request,
+    autor: User = Depends(require_permission("maintenance.apply")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Grava a politica de rotatividade. **Destrutiva no tempo.**
+
+    Nada e apagado no instante do clique: o FindFace passa a remover o que
+    ficar mais velho que o novo prazo, no ritmo dele. Ainda assim exige
+    digitar o nome do servidor -- diminuir um prazo joga fora dado de
+    producao que nenhum backup essencial recupera.
+    """
+    from app.services.ffapi_service import FFApiError
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor nao encontrado")
+
+    if dados.confirmar_host.strip() != host.name:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"confirmacao necessaria: digite exatamente '{host.name}'. "
+                "Reduzir um prazo faz o FindFace apagar o que passar dele."
+            ),
+        )
+
+    try:
+        resultado = await request.app.state.ffapi.salvar_retencao(
+            host, dados.dias, dados.chaves
+        )
+    except FFApiError as exc:
+        await audit_service.registrar(
+            db,
+            usuario=autor.username,
+            action="retencao.salvar",
+            target=host.name,
+            ip=client_ip(request),
+            success=False,
+            level="critical",
+            detail={"erro": str(exc)[:400]},
+        )
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="retencao.salvar",
+        target=host.name,
+        ip=client_ip(request),
+        level="critical",
+        detail={"dias": dados.dias, "chaves": dados.chaves},
+    )
+    return resultado

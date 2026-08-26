@@ -162,6 +162,12 @@ export const api = {
   // HTTP da NtechLab; o limite de licença não existe no banco lido por SSH.
   licencaFindFace: (id) => get(`/dispositivos/${id}/licenca`),
 
+  // Rotatividade do proprio FindFace: por quanto tempo cada coisa fica.
+  // E a resposta de causa para o disco que enche toda semana -- a limpeza
+  // de eventos ataca o sintoma.
+  retencao: (id) => get(`/dispositivos/${id}/retencao`),
+  salvarRetencao: (id, d) => patch(`/dispositivos/${id}/retencao`, d),
+
   // Servidores
   hosts: () => get("/hosts"),
   host: (id) => get(`/hosts/${id}`),

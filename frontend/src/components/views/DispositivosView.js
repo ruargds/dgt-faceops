@@ -136,7 +136,11 @@ function Licenciamento({ dados, erro, lendo, onAtualizar }) {
         </div>
         <div
           className="card card-tight stat"
-          title="Câmeras cadastradas no FindFace, contadas no momento desta leitura"
+          title={
+            "Câmeras cadastradas no FindFace, contadas no momento desta leitura. " +
+            "Detector externo é sistema de fora empurrando evento pela API: " +
+            "aparece na mesma lista e consome licença, mas não é câmera."
+          }
         >
           <span className="stat-label">{t("Câmeras cadastradas")}</span>
           <div className="stat-value">
@@ -144,6 +148,12 @@ function Licenciamento({ dados, erro, lendo, onAtualizar }) {
               ? "—"
               : dados.cameras_cadastradas}
           </div>
+          {dados.detectores_externos != null && (
+            <span className="stat-sub">
+              {dados.cameras_reais != null ? `${dados.cameras_reais} câmera(s) · ` : ""}
+              {dados.detectores_externos} detector(es) externo(s)
+            </span>
+          )}
         </div>
       </div>
 
