@@ -96,7 +96,7 @@ for i in $(seq 1 30); do
         echo ""
         echo "════════════════════════════════════════════════════"
         echo "  Pronto — https://localhost:${PORTA_S}"
-        echo "  Primeiro acesso: admin / admin123 (troque a senha)"
+        echo "  Primeiro acesso: consulte o manual de operacao"
         echo "════════════════════════════════════════════════════"
         exit 0
     fi
