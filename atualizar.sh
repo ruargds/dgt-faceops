@@ -41,6 +41,9 @@ for arg in "$@"; do
     case "$arg" in
         --verificar) MODO="verificar" ;;
         --forcar)    FORCAR=1 ;;
+        # Só para reiniciar os containers com a imagem que já existe
+        # (diagnóstico). NÃO aplica versão nova: o código, Python
+        # inclusive, é copiado para dentro da imagem no build.
         --sem-build) BUILD=0 ;;
         *) erro "opção desconhecida: $arg"; exit 1 ;;
     esac
@@ -142,9 +145,13 @@ if [ "$APERTADO" = "1" ] && [ "$BUILD" = "1" ] && [ "$FORCAR" != "1" ]; then
     echo
     echo "      Reconstruir agora competiria por CPU com o que já roda aqui."
     echo "      Opções:"
-    echo "        bash atualizar.sh --sem-build   (se mudou só código Python)"
     echo "        bash atualizar.sh --forcar      (assumindo o impacto)"
     echo "        ou tente num horário de menor movimento"
+    echo
+    echo "      NÃO use --sem-build para aplicar versão nova: o código vai"
+    echo "      dentro da imagem, então sem build o painel sobe com a imagem"
+    echo "      antiga e passa a anunciar uma revisão que não é a que roda."
+
     exit 3
 fi
 ok "carga aceitável"

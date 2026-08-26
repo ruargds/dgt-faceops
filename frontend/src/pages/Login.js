@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { api, setToken } from "../api";
 import { MARCA_PADRAO, urlLogo } from "../marca";
+import { t } from "../i18n";
 
 export default function Login({ onEntrar, marca }) {
   const m = marca || MARCA_PADRAO;
@@ -44,7 +45,7 @@ export default function Login({ onEntrar, marca }) {
         {erro && <div className="login-err">{erro}</div>}
 
         <div className="field">
-          <label className="label" htmlFor="usuario">Usuário</label>
+          <label className="label" htmlFor="usuario">{t("login.usuario")}</label>
           <input
             id="usuario"
             value={usuario}
@@ -56,7 +57,7 @@ export default function Login({ onEntrar, marca }) {
         </div>
 
         <div className="field">
-          <label className="label" htmlFor="senha">Senha</label>
+          <label className="label" htmlFor="senha">{t("login.senha")}</label>
           <input
             id="senha"
             type="password"
@@ -72,7 +73,7 @@ export default function Login({ onEntrar, marca }) {
           style={{ width: "100%", justifyContent: "center", padding: "10px" }}
           disabled={enviando}
         >
-          {enviando ? "Entrando…" : "Entrar"}
+          {enviando ? t("login.entrando") : t("login.entrar")}
         </button>
 
         <div className="login-hint">

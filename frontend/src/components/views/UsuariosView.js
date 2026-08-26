@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
+import { t } from "../../i18n";
 import { useSessao } from "../../usePermissions";
 import {
   fecharSeForaLimpo, Carregando, Erro,
@@ -58,9 +59,9 @@ export default function UsuariosView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Usuários</div>
+          <div className="page-title">{t("tela.usuarios")}</div>
           <div className="page-sub">
-            Quem entra no painel e o que cada perfil pode fazer nos servidores
+            {t("tela.usuarios.sub")}
           </div>
         </div>
         <div className="page-actions">

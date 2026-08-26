@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { api, formatBytes } from "../../api";
-import { BarraMetrica } from "../Graficos";
+import { api, formatBytes, nivel } from "../../api";
+import { t } from "../../i18n";
 import { Carregando, Erro, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { IconAtualizar } from "../Icons";
 
@@ -101,9 +101,9 @@ export default function ProcessosView() {
     <>
       <div className="page-head" style={{ marginBottom: 14 }}>
         <div>
-          <div className="page-title">Processos ao vivo</div>
+          <div className="page-title">{t("tela.processos")}</div>
           <div className="page-sub">
-            Quem está usando a máquina agora — como o htop, só que explicado
+            {t("tela.processos.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -137,20 +137,20 @@ export default function ProcessosView() {
             </div>
 
             <div className="small muted" style={{ marginBottom: 10 }}>
-              <strong>%CPU</strong> é o quanto de um núcleo o processo usa agora
-              (pode passar de 100% se usa vários). <strong>%MEM</strong> é a
+              <strong>CPU</strong> é o quanto de um núcleo o processo usa agora
+              (pode passar de 100% se usa vários). <strong>Memória</strong> é a
               fatia da memória física. <strong>Tempo</strong> é quanto de CPU ele
               já acumulou desde que iniciou.
             </div>
 
             <div className="table-wrap">
-              <table>
+              <table className="tabela-densa">
                 <thead>
                   <tr>
                     <Th campo="pid" ordem={ordem} onClick={ordenarPor} className="right">PID</Th>
                     <Th campo="usuario" ordem={ordem} onClick={ordenarPor}>Usuário</Th>
-                    <Th campo="cpu" ordem={ordem} onClick={ordenarPor} style={{ width: 150 }}>CPU</Th>
-                    <Th campo="mem" ordem={ordem} onClick={ordenarPor} style={{ width: 150 }}>Memória</Th>
+                    <Th campo="cpu" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 132 }}>CPU</Th>
+                    <Th campo="mem" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 132 }}>Memória</Th>
                     <Th campo="tempo" ordem={ordem} onClick={ordenarPor} className="right">Tempo</Th>
                     <Th campo="comando" ordem={ordem} onClick={ordenarPor}>Programa</Th>
                   </tr>
@@ -160,12 +160,8 @@ export default function ProcessosView() {
                     <tr key={p.pid}>
                       <td className="right mono small">{p.pid}</td>
                       <td className="small">{p.usuario}</td>
-                      <td>
-                        <BarraMetrica rotulo="" valor={Math.min(p.cpu, 100)} limite={101} unidade="%" detalhe={`${p.cpu.toFixed(1)}%`} />
-                      </td>
-                      <td>
-                        <BarraMetrica rotulo="" valor={Math.min(p.mem, 100)} limite={101} unidade="%" detalhe={`${p.mem.toFixed(1)}%`} />
-                      </td>
+                      <CelulaPct valor={p.cpu} />
+                      <CelulaPct valor={p.mem} />
                       <td className="right mono small">{p.tempo}</td>
                       <td className="mono small" style={{ maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.comando}>
                         {p.comando}
@@ -185,6 +181,28 @@ export default function ProcessosView() {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * Célula de percentual no formato gerenciador de tarefas: o número à
+ * direita, uma barra fina embaixo dele, tudo numa linha de altura fixa.
+ *
+ * A versão anterior usava a barra grande do painel e repetia o mesmo
+ * número duas vezes por célula — cada linha ficava com 78 px de altura e
+ * caberiam sete processos na tela. Aqui cabem trinta, que é o ponto de
+ * uma lista de processos.
+ */
+function CelulaPct({ valor }) {
+  const v = Math.max(0, valor || 0);
+  const largura = Math.min(v, 100);
+  return (
+    <td className="celula-pct">
+      <span className="mono">{v.toFixed(1)}%</span>
+      <div className="meter meter-fino">
+        <div className={`meter-fill meter-${nivel(largura)}`} style={{ width: `${largura}%` }} />
+      </div>
+    </td>
   );
 }
 

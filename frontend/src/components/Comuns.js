@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api, nivel } from "../api";
+import { t as traduzir } from "../i18n";
 import { IconAlerta } from "./Icons";
 
 /** Barra de uso com cor por faixa: verde <70%, âmbar <88%, vermelho acima. */
@@ -38,13 +39,13 @@ export function Vazio({ titulo, children }) {
 export function Erro({ mensagem, onTentar }) {
   if (!mensagem) return null;
   return (
-    <div className="card" style={{ borderColor: "#f3b6b6", background: "var(--red-bg)" }}>
-      <div className="stack-h" style={{ color: "#8c1c1c" }}>
+    <div className="card" style={{ borderColor: "var(--red-bd)", background: "var(--red-bg)" }}>
+      <div className="stack-h" style={{ color: "var(--red-fg)" }}>
         <IconAlerta size={18} />
         <div style={{ flex: 1, fontSize: 13 }}>{mensagem}</div>
         {onTentar && (
           <button className="btn btn-secondary btn-sm" onClick={onTentar}>
-            Tentar de novo
+            {traduzir("comum.tentar")}
           </button>
         )}
       </div>
@@ -52,10 +53,11 @@ export function Erro({ mensagem, onTentar }) {
   );
 }
 
-export function Carregando({ texto = "Carregando…" }) {
+export function Carregando({ texto }) {
+  const rotulo = texto || traduzir("comum.carregando");
   return (
     <div className="stack-h" style={{ padding: 18, color: "var(--text-3)" }}>
-      <div className="spin" /> {texto}
+      <div className="spin" /> {rotulo}
     </div>
   );
 }
@@ -257,9 +259,9 @@ export function ConfirmarDigitando({ titulo, aviso, palavra, rotuloBotao, onConf
         <div className="modal-body">
           <div
             className="card card-tight"
-            style={{ background: "var(--red-bg)", borderColor: "#f3b6b6", marginBottom: 16 }}
+            style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)", marginBottom: 16 }}
           >
-            <div className="stack-h" style={{ color: "#8c1c1c", alignItems: "flex-start" }}>
+            <div className="stack-h" style={{ color: "var(--red-fg)", alignItems: "flex-start" }}>
               <IconAlerta size={18} />
               <div style={{ flex: 1, fontSize: 13 }}>{aviso}</div>
             </div>

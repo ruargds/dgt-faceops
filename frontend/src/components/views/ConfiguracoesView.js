@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, enviarLogo } from "../../api";
+import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import { Carregando, Erro } from "../Comuns";
 import { IconAtualizar, IconLixeira, IconOk } from "../Icons";
@@ -228,9 +229,9 @@ export default function ConfiguracoesView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Configurações</div>
+          <div className="page-title">{t("tela.config")}</div>
           <div className="page-sub">
-            Ajustes do painel — valem na hora, sem reiniciar nada
+            {t("tela.config.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -258,9 +259,9 @@ export default function ConfiguracoesView() {
       {aviso && (
         <div
           className="card card-tight"
-          style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 14 }}
+          style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 14 }}
         >
-          <span className="small" style={{ color: "#06694a" }}>
+          <span className="small" style={{ color: "var(--green-fg)" }}>
             <IconOk size={13} /> {aviso}
           </span>
         </div>

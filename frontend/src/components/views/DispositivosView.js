@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatBytes, formatData } from "../../api";
+import { t } from "../../i18n";
 import { Carregando, Erro, Medidor, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { BarraMetrica } from "../Graficos";
 import { IconAtualizar, IconDownload, IconAlerta, IconOk } from "../Icons";
@@ -196,9 +197,9 @@ export default function DispositivosView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Câmeras</div>
+          <div className="page-title">{t("tela.cameras")}</div>
           <div className="page-sub">
-            Dispositivos cadastrados, última comunicação e volume de eventos
+            {t("tela.cameras.sub")}
           </div>
         </div>
         <div className="page-actions">

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatBytes, formatData } from "../../api";
+import { t } from "../../i18n";
 import { Carregando, Erro, Estatistica, Vazio } from "../Comuns";
 import { IconAlerta, IconAtualizar, IconGPU } from "../Icons";
 
@@ -38,9 +39,9 @@ export default function PainelView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Painel</div>
+          <div className="page-title">{t("tela.painel")}</div>
           <div className="page-sub">
-            Situação dos servidores FindFace Multi e do último backup de cada um
+            {t("tela.painel.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -149,13 +150,13 @@ function CartaoServidor({ s }) {
       {discosCriticos.length > 0 && (
         <div
           className="card card-tight"
-          style={{ background: "var(--red-bg)", borderColor: "#f3b6b6", marginBottom: 10 }}
+          style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)", marginBottom: 10 }}
         >
           {discosCriticos.map((d) => (
             <div
               key={d.ponto}
               className="stack-h small"
-              style={{ color: "#8c1c1c", gap: 6 }}
+              style={{ color: "var(--red-fg)", gap: 6 }}
             >
               <IconAlerta size={13} />
               <span className="mono">{d.ponto}</span>

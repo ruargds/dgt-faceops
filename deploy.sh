@@ -5,9 +5,13 @@
 #   bash deploy.sh            # sobe/reinicia sem rebuild (código Python)
 #   bash deploy.sh --build    # rebuild (requirements, Dockerfile, frontend)
 #
-# Regra prática, igual à do InfraCore: mexeu em requirements.txt, Dockerfile
-# ou qualquer coisa em frontend/ → precisa de --build. Mexeu só em código
-# Python do backend → deploy simples resolve.
+# Para aplicar qualquer versão nova, use --build. O código — Python
+# inclusive — é copiado para dentro da imagem (COPY backend/app ./app), sem
+# volume de fonte: sem build, o compose sobe a imagem antiga de novo e nada
+# muda, embora a revisão gravada no .env passe a dizer outra coisa.
+#
+# Sem --build serve para reiniciar o que já está construído: trocar valor do
+# .env, recriar container derrubado, testar subida.
 # ============================================================================
 set -euo pipefail
 

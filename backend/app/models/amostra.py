@@ -39,7 +39,12 @@ class Amostra(Base):
 
     # Percentuais, 0–100. Float ocupa o mesmo que int aqui e evita
     # arredondar cedo demais.
+    # `cpu_pct` é a CARGA por núcleo em percentual (fila), mantida pelo
+    # histórico já gravado. `cpu_uso_pct` é a OCUPAÇÃO real da CPU — as
+    # duas coisas divergem, e confundi-las é o clássico "a máquina está a
+    # 80%" quando 80% era fila de espera de disco.
     cpu_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    cpu_uso_pct: Mapped[float] = mapped_column(Float, default=0.0)
     carga_por_nucleo: Mapped[float] = mapped_column(Float, default=0.0)
     mem_pct: Mapped[float] = mapped_column(Float, default=0.0)
     swap_pct: Mapped[float] = mapped_column(Float, default=0.0)

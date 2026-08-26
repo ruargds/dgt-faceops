@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, formatDuracao, nivel } from "../../api";
+import { t } from "../../i18n";
 import {
   Carregando,
   Erro,
@@ -94,9 +95,9 @@ export default function RecursosView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Recursos</div>
+          <div className="page-title">{t("tela.recursos")}</div>
           <div className="page-sub">
-            Leitura direta da máquina no momento do clique — sem Zabbix, sem histórico
+            {t("tela.recursos.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -171,6 +172,23 @@ export default function RecursosView() {
                 pct={mem.swap_percentual}
               />
             )}
+            {/* Uso e carga respondem perguntas diferentes, e por isso são
+                dois cartões. Uso é ocupação: quanto da CPU foi gasta.
+                Carga é fila: quantos processos querem CPU. Máquina com
+                carga 4 e uso 20% está esperando disco, não CPU — trocar
+                de servidor por causa disso é dinheiro no lixo. */}
+            <Estatistica
+              rotulo="Processador em uso"
+              valor={cpu.uso_pct === null || cpu.uso_pct === undefined ? "—" : `${cpu.uso_pct}%`}
+              sub={
+                cpu.detalhe
+                  ? `usuário ${cpu.detalhe.usuario}% · sistema ${cpu.detalhe.sistema}% · ` +
+                    `espera disco ${cpu.detalhe.espera_io}%` +
+                    (cpu.detalhe.roubado > 0 ? ` · roubado ${cpu.detalhe.roubado}%` : "")
+                  : "leitura de /proc/stat indisponível"
+              }
+              pct={cpu.uso_pct === null || cpu.uso_pct === undefined ? undefined : cpu.uso_pct}
+            />
             <Estatistica
               rotulo="Carga por núcleo"
               valor={cpu.carga_por_nucleo.toFixed(2)}
@@ -178,6 +196,29 @@ export default function RecursosView() {
               pct={Math.min(cpu.carga_por_nucleo * 100, 100)}
             />
           </div>
+
+          {cpu.por_nucleo && cpu.por_nucleo.length > 1 && cpu.por_nucleo.length <= 32 && (
+            <div>
+              <div className="section-title">Uso por núcleo</div>
+              <div className="grid-nucleos">
+                {cpu.por_nucleo.map((n) => (
+                  <div className="nucleo" key={n.nucleo}>
+                    <div className="nucleo-topo">
+                      <span className="mono small">#{n.nucleo}</span>
+                      <span className="mono small" style={{ fontWeight: 600 }}>
+                        {n.uso_pct}%
+                      </span>
+                    </div>
+                    <Medidor pct={n.uso_pct} />
+                  </div>
+                ))}
+              </div>
+              <div className="small muted" style={{ marginTop: 6 }}>
+                Um núcleo cravado em 100% com os outros parados é processo de uma
+                thread só — mais CPU não resolve, e o gargalo está no programa.
+              </div>
+            </div>
+          )}
 
           {dados.gpus.length > 0 && (
             <div>

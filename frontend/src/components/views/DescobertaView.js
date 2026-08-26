@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes } from "../../api";
+import { t } from "../../i18n";
 import { Carregando, Erro, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { IconServidor } from "../Icons";
 
@@ -57,9 +58,9 @@ export default function DescobertaView() {
     <>
       <div className="page-head" style={{ marginBottom: 14 }}>
         <div>
-          <div className="page-title">Descoberta</div>
+          <div className="page-title">{t("tela.descoberta")}</div>
           <div className="page-sub">
-            O que roda no servidor — bancos, containers, portas, GPU e disco
+            {t("tela.descoberta.sub")}
           </div>
         </div>
         <div className="page-actions">

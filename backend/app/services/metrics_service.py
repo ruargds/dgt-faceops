@@ -21,6 +21,14 @@ SEP = "###FACEOPS:"
 
 COLLECT_SCRIPT = r"""
 set +e
+# CPU de verdade precisa de DUAS leituras de /proc/stat e da diferença
+# entre elas — /proc/stat é contador acumulado desde o boot, não taxa.
+# A primeira sai aqui, a segunda no fim do script: a janela é o próprio
+# tempo da coleta (segundos, na prática), sem pagar sleep por isso. O
+# sleep no fim é só o piso, para o caso de a máquina não ter docker e o
+# script voar.
+echo "###FACEOPS:STAT1"
+grep '^cpu' /proc/stat 2>/dev/null
 echo "###FACEOPS:UPTIME"
 cat /proc/uptime 2>/dev/null
 echo "###FACEOPS:LOADAVG"
@@ -48,6 +56,9 @@ if command -v docker >/dev/null 2>&1; then
 fi
 echo "###FACEOPS:SWAP"
 cat /proc/swaps 2>/dev/null
+sleep 0.3
+echo "###FACEOPS:STAT2"
+grep '^cpu' /proc/stat 2>/dev/null
 echo "###FACEOPS:END"
 """
 
@@ -68,6 +79,64 @@ def _split_sections(saida: str) -> dict[str, str]:
     if atual is not None:
         secoes[atual] = "\n".join(buffer)
     return secoes
+
+
+def _parse_stat(texto: str) -> dict[str, list[int]]:
+    """
+    Linhas `cpu`/`cpuN` de /proc/stat viram listas de contadores.
+
+    Campos, em ordem: user, nice, system, idle, iowait, irq, softirq,
+    steal, guest, guest_nice. Instalação antiga tem menos campos — o
+    parser aceita o que vier e o cálculo soma o que existe.
+    """
+    saida: dict[str, list[int]] = {}
+    for linha in texto.splitlines():
+        partes = linha.split()
+        if len(partes) < 5 or not partes[0].startswith("cpu"):
+            continue
+        try:
+            saida[partes[0]] = [int(p) for p in partes[1:]]
+        except ValueError:
+            continue
+    return saida
+
+
+def _uso_cpu(antes: list[int], depois: list[int]) -> dict | None:
+    """
+    Ocupação entre duas leituras do MESMO cpu.
+
+    `idle` e `iowait` não contam como uso: um processo esperando disco não
+    está gastando CPU, e somar os dois é o erro que faz alguém trocar de
+    servidor quando o problema era o disco. `steal` conta à parte — é CPU
+    que o hipervisor tomou, e num Azure isso explica lentidão que não
+    aparece em processo nenhum.
+    """
+    if not antes or not depois:
+        return None
+    n = min(len(antes), len(depois))
+    delta = [depois[i] - antes[i] for i in range(n)]
+    if any(d < 0 for d in delta):
+        # Contador reiniciou (reboot entre as leituras). Sem número honesto.
+        return None
+    total = sum(delta)
+    if total <= 0:
+        return None
+
+    def pct(indice: int) -> float:
+        if indice >= n:
+            return 0.0
+        return round(delta[indice] / total * 100, 1)
+
+    ocioso = pct(3) + pct(4)  # idle + iowait
+    return {
+        "uso_pct": round(max(0.0, 100.0 - ocioso), 1),
+        "usuario": round(pct(0) + pct(1), 1),   # user + nice
+        "sistema": round(pct(2) + pct(5) + pct(6), 1),  # system + irq + softirq
+        "espera_io": pct(4),
+        "roubado": pct(7),
+        "ocioso": pct(3),
+        "amostras_jiffies": total,
+    }
 
 
 def _parse_meminfo(texto: str) -> dict:
@@ -307,6 +376,19 @@ class MetricsService:
         gpus = _parse_gpu(secoes.get("GPU", ""))
         discos = _parse_df(secoes.get("DISK", ""))
 
+        # Uso real de CPU. Carga e uso respondem perguntas diferentes:
+        # carga é fila (quantos querem CPU), uso é ocupação (quanto da CPU
+        # foi gasta). Uma máquina pode estar 100% ocupada com carga 1,0, e
+        # pode estar com carga 4,0 gastando 20% de CPU esperando disco.
+        s1 = _parse_stat(secoes.get("STAT1", ""))
+        s2 = _parse_stat(secoes.get("STAT2", ""))
+        uso = _uso_cpu(s1.get("cpu", []), s2.get("cpu", []))
+        por_nucleo = []
+        for nome in sorted(k for k in s1 if k != "cpu"):
+            n = _uso_cpu(s1.get(nome, []), s2.get(nome, []))
+            if n is not None:
+                por_nucleo.append({"nucleo": nome.replace("cpu", ""), "uso_pct": n["uso_pct"]})
+
         return {
             "host_id": host.id,
             "host": host.name,
@@ -314,6 +396,12 @@ class MetricsService:
             "uptime_segundos": int(uptime_s),
             "cpu": {
                 "nucleos": nucleos,
+                # None quando a leitura não deu para calcular (contador
+                # reiniciado, janela nula). A tela mostra "—" em vez de
+                # inventar zero.
+                "uso_pct": uso["uso_pct"] if uso else None,
+                "detalhe": uso,
+                "por_nucleo": por_nucleo,
                 "carga_1min": carga[0],
                 "carga_5min": carga[1],
                 "carga_15min": carga[2],

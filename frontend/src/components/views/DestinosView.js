@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatBytes, formatData } from "../../api";
+import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import {
   fecharSeForaLimpo, Carregando, Erro, Vazio,
@@ -83,9 +84,9 @@ export default function DestinosView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Destinos de backup</div>
+          <div className="page-title">{t("tela.destinos")}</div>
           <div className="page-sub">
-            Onde os artefatos são guardados — local e externo, configurável aqui
+            {t("tela.destinos.sub")}
           </div>
         </div>
         {has("destinations.manage") && (
@@ -148,13 +149,13 @@ export default function DestinosView() {
                   style={{
                     marginBottom: 12,
                     background: d.last_test_ok ? "var(--green-bg)" : "var(--bg-2)",
-                    borderColor: d.last_test_ok ? "#a8e0cd" : "var(--border)",
+                    borderColor: d.last_test_ok ? "var(--green-bd)" : "var(--border)",
                   }}
                 >
                   {teste && !teste.carregando ? (
                     <div
                       className="small"
-                      style={{ color: teste.ok ? "#06694a" : "#8c1c1c" }}
+                      style={{ color: teste.ok ? "var(--green-fg)" : "var(--red-fg)" }}
                     >
                       {teste.ok ? <IconOk size={13} /> : <IconAlerta size={13} />}{" "}
                       {teste.detalhe}
@@ -171,7 +172,7 @@ export default function DestinosView() {
                       )}
                     </div>
                   ) : d.last_test_at ? (
-                    <div className="small" style={{ color: d.last_test_ok ? "#06694a" : "#8c1c1c" }}>
+                    <div className="small" style={{ color: d.last_test_ok ? "var(--green-fg)" : "var(--red-fg)" }}>
                       {d.last_test_ok ? "Último teste OK" : d.last_test_error}
                       <div className="muted" style={{ marginTop: 2 }}>
                         {formatData(d.last_test_at)}

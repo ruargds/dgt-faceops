@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, formatData, formatDuracao } from "../../api";
+import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import {
   fecharSeForaLimpo,
@@ -106,9 +107,9 @@ export default function BackupsView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Backups</div>
+          <div className="page-title">{t("tela.backups")}</div>
           <div className="page-sub">
-            Execuções sob demanda e disparadas por agendamento
+            {t("tela.backups.sub")}
             {espaco &&
               ` · ${formatBytes(espaco.livre_bytes)} livres no disco do painel`}
           </div>
@@ -146,9 +147,9 @@ export default function BackupsView() {
       {!carregando && !lista.some((r) => r.profile === "painel" && r.status === "sucesso") && (
         <div
           className="card card-tight"
-          style={{ background: "var(--amber-bg)", borderColor: "#f5d9a8", marginBottom: 14 }}
+          style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 14 }}
         >
-          <span className="small" style={{ color: "#8a4b00" }}>
+          <span className="small" style={{ color: "var(--amber-fg)" }}>
             <strong>O painel nunca foi salvo.</strong> Se esta máquina morrer,
             perdem-se o cadastro dos servidores, as credenciais cifradas, os
             agendamentos, o histórico e a auditoria. São alguns MB — use o
@@ -430,7 +431,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
           {perfil === "completo" && (
             <div
               className="card card-tight"
-              style={{ background: "var(--red-bg)", borderColor: "#f3b6b6" }}
+              style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)" }}
             >
               <label className="check" style={{ marginBottom: 0 }}>
                 <input
@@ -438,7 +439,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
                   checked={aceito}
                   onChange={(e) => setAceito(e.target.checked)}
                 />
-                <span style={{ color: "#8c1c1c" }}>
+                <span style={{ color: "var(--red-fg)" }}>
                   Entendo que o perfil Completo <strong>PARA o FindFace Multi</strong> em{" "}
                   <strong>{host ? host.name : "este servidor"}</strong> durante a cópia
                   (pode levar horas) e que o reconhecimento facial fica fora do ar nesse
@@ -522,8 +523,8 @@ function ModalDetalhe({ runId, onFechar }) {
               </div>
 
               {run.error && (
-                <div className="card card-tight" style={{ background: "var(--red-bg)", borderColor: "#f3b6b6" }}>
-                  <div className="small" style={{ color: "#8c1c1c" }}>{run.error}</div>
+                <div className="card card-tight" style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)" }}>
+                  <div className="small" style={{ color: "var(--red-fg)" }}>{run.error}</div>
                 </div>
               )}
 

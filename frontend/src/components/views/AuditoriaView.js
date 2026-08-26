@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatBytes, formatData, formatDuracao } from "../../api";
+import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import { Carregando, Erro, Vazio } from "../Comuns";
 import { IconAtualizar, IconDownload } from "../Icons";
@@ -18,9 +19,9 @@ export default function AuditoriaView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Auditoria</div>
+          <div className="page-title">{t("tela.auditoria")}</div>
           <div className="page-sub">
-            Quem fez o quê nos servidores — e as gravações das sessões de terminal
+            {t("tela.auditoria.sub")}
           </div>
         </div>
         <div className="page-actions">

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
+import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import {
   fecharSeForaLimpo,
@@ -88,9 +89,9 @@ export default function AgendamentosView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Agendamentos</div>
+          <div className="page-title">{t("tela.agendamentos")}</div>
           <div className="page-sub">
-            Recorrência programada de backup — o que a plataforma da NtechLab não tem
+            {t("tela.agendamentos.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -106,8 +107,8 @@ export default function AgendamentosView() {
       </div>
 
       {aviso && (
-        <div className="card card-tight" style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 14 }}>
-          <span className="small" style={{ color: "#06694a" }}>{aviso}</span>
+        <div className="card card-tight" style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 14 }}>
+          <span className="small" style={{ color: "var(--green-fg)" }}>{aviso}</span>
         </div>
       )}
 
@@ -390,7 +391,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
           {perfil === "completo" && (
             <div
               className="card card-tight"
-              style={{ background: "var(--red-bg)", borderColor: "#f3b6b6" }}
+              style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)" }}
             >
               <label className="check" style={{ marginBottom: 0 }}>
                 <input
@@ -398,7 +399,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
                   checked={aceito}
                   onChange={(e) => setAceito(e.target.checked)}
                 />
-                <span style={{ color: "#8c1c1c" }}>
+                <span style={{ color: "var(--red-fg)" }}>
                   Autorizo janela de manutenção recorrente: este agendamento{" "}
                   <strong>PARA o FindFace Multi</strong> em{" "}
                   <strong>{host ? host.name : "este servidor"}</strong> toda vez que rodar.

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
+import { t } from "../../i18n";
 import { Carregando, Erro, Vazio } from "../Comuns";
 import { IconAtualizar, IconGPU } from "../Icons";
 
@@ -59,9 +60,9 @@ export default function TopologiaView() {
     <>
       <div className="page-head" style={{ marginBottom: 14 }}>
         <div>
-          <div className="page-title">Topologia</div>
+          <div className="page-title">{t("tela.topologia")}</div>
           <div className="page-sub">
-            Como o FindFace se distribui entre os servidores — fluxo e dependências
+            {t("tela.topologia.sub")}
           </div>
         </div>
         <div className="page-actions">

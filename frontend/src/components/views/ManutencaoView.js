@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, nivel } from "../../api";
+import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import {
   Carregando,
@@ -84,9 +85,9 @@ function Limpeza({ hostId, hostNome }) {
       {dados && dados.em_andamento && (
         <div
           className="card card-tight"
-          style={{ background: "var(--amber-bg)", borderColor: "#f5d9a8", marginBottom: 12 }}
+          style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 12 }}
         >
-          <span className="small" style={{ color: "#8a4b00" }}>
+          <span className="small" style={{ color: "var(--amber-fg)" }}>
             Há uma limpeza em andamento neste servidor. Enquanto ela roda, o
             painel recusa reiniciar container e parar o stack — o manual é
             explícito de que isso corromperia o banco.
@@ -170,9 +171,9 @@ function Limpeza({ hostId, hostNome }) {
           {temZero && (
             <div
               className="card card-tight"
-              style={{ background: "var(--red-bg)", borderColor: "#f3b6b6", marginBottom: 12 }}
+              style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)", marginBottom: 12 }}
             >
-              <span className="small" style={{ color: "#8c1c1c" }}>
+              <span className="small" style={{ color: "var(--red-fg)" }}>
                 <IconAlerta size={13} /> Há item com <strong>0 dias</strong>. Isso
                 apaga <strong>TODOS</strong> os registros daquele tipo, não só os
                 antigos.
@@ -183,9 +184,9 @@ function Limpeza({ hostId, hostNome }) {
           {resultado && (
             <div
               className="card card-tight"
-              style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 12 }}
+              style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 12 }}
             >
-              <div className="small" style={{ color: "#06694a" }}>
+              <div className="small" style={{ color: "var(--green-fg)" }}>
                 Limpeza concluída em {Math.round((resultado.duracao_ms || 0) / 1000)}s.
               </div>
               {resultado.saida && (
@@ -358,15 +359,15 @@ function Faxina() {
       {feito && (
         <div
           className="card card-tight"
-          style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 12 }}
+          style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 12 }}
         >
-          <span className="small" style={{ color: "#06694a" }}>
+          <span className="small" style={{ color: "var(--green-fg)" }}>
             Faxina concluída em {feito.duracao_s}s —{" "}
             {feito.gravacoes_removidas} gravação(ões),{" "}
             {feito.staging_removido} staging, {feito.auditoria_removida}{" "}
             registro(s), {feito.logs_esvaziados} log(s) esvaziado(s).
             {feito.erros && feito.erros.length > 0 && (
-              <div style={{ color: "#8c1c1c", marginTop: 4 }}>
+              <div style={{ color: "var(--red-fg)", marginTop: 4 }}>
                 {feito.erros.join(" · ")}
               </div>
             )}
@@ -553,9 +554,9 @@ function LimpezaPontual() {
       {previa && (
         <div
           className="card card-tight"
-          style={{ background: "var(--amber-bg)", borderColor: "#f5d9a8", marginBottom: 12 }}
+          style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 12 }}
         >
-          <span className="small" style={{ color: "#8a4b00" }}>
+          <span className="small" style={{ color: "var(--amber-fg)" }}>
             {total > 0 ? (
               <>
                 Sairiam <strong>{total}</strong> item(ns) com mais de{" "}
@@ -572,15 +573,15 @@ function LimpezaPontual() {
       {feito && (
         <div
           className="card card-tight"
-          style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 12 }}
+          style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 12 }}
         >
-          <span className="small" style={{ color: "#06694a" }}>
+          <span className="small" style={{ color: "var(--green-fg)" }}>
             <IconOk size={13} /> Limpeza concluída — {feito.gravacoes} gravação(ões),{" "}
             {feito.staging} sobra(s) de staging, {feito.auditoria} registro(s) de
             auditoria, {feito.sessoes} sessão(ões), {feito.logs_execucao} log(s)
             esvaziado(s), {feito.amostras} amostra(s).
             {feito.erros && feito.erros.length > 0 && (
-              <div style={{ color: "#8c1c1c", marginTop: 4 }}>{feito.erros.join(" · ")}</div>
+              <div style={{ color: "var(--red-fg)", marginTop: 4 }}>{feito.erros.join(" · ")}</div>
             )}
           </span>
         </div>
@@ -721,9 +722,9 @@ export default function ManutencaoView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Manutenção</div>
+          <div className="page-title">{t("tela.manutencao")}</div>
           <div className="page-sub">
-            Disco e log dos servidores — diagnóstico e correção sem linha de comando
+            {t("tela.manutencao.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -745,9 +746,9 @@ export default function ManutencaoView() {
       {aviso && (
         <div
           className="card card-tight"
-          style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 14 }}
+          style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 14 }}
         >
-          <span className="small" style={{ color: "#06694a" }}>{aviso}</span>
+          <span className="small" style={{ color: "var(--green-fg)" }}>{aviso}</span>
         </div>
       )}
 

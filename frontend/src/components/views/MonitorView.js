@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, formatData } from "../../api";
+import { t } from "../../i18n";
 import { BarraMetrica, Faisca, GraficoLinha, tocarAlerta } from "../Graficos";
 import { Carregando, Erro, Vazio } from "../Comuns";
 import { IconAlerta, IconAtualizar, IconDownload, IconGPU, IconOk } from "../Icons";
@@ -19,7 +20,10 @@ const JANELAS = [
  * 1,4" não diz nada sozinho; "há processo esperando CPU" diz.
  */
 const EXPLICACAO = {
-  cpu: "Quanto a máquina está ocupada. Acima de 100% há processo esperando a vez.",
+  cpu:
+    "Quanto da CPU está sendo gasta agora (0 a 100%). A carga por núcleo, " +
+    "logo abaixo, é outra coisa: é a fila de quem quer CPU — pode estar alta " +
+    "com uso baixo quando os processos estão esperando disco.",
   mem: "Memória em uso, já descontando cache. Perto de 100%, o sistema começa a matar containers.",
   disco: "O disco mais cheio. Cheio, o banco para de gravar e o reconhecimento para junto.",
   gpu: "Quanto a placa de vídeo está trabalhando. É ela que faz o reconhecimento.",
@@ -134,9 +138,9 @@ export default function MonitorView() {
     <>
       <div className="page-head" style={{ marginBottom: 14 }}>
         <div>
-          <div className="page-title">Monitor</div>
+          <div className="page-title">{t("tela.monitor")}</div>
           <div className="page-sub">
-            Estado dos servidores, atualizado sozinho a cada 10 segundos
+            {t("tela.monitor.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -156,9 +160,9 @@ export default function MonitorView() {
       {alertas.length === 0 ? (
         <div
           className="card card-tight"
-          style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 16 }}
+          style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 16 }}
         >
-          <div className="stack-h small" style={{ color: "#06694a" }}>
+          <div className="stack-h small" style={{ color: "var(--green-fg)" }}>
             <IconOk size={16} />
             <strong>Tudo em ordem.</strong>
             <span>Nenhum servidor com problema no momento.</span>
@@ -180,14 +184,14 @@ export default function MonitorView() {
                   className="card card-tight"
                   style={{
                     background: grave ? "var(--red-bg)" : "var(--amber-bg)",
-                    borderColor: grave ? "#f3b6b6" : "#f5d9a8",
+                    borderColor: grave ? "var(--red-bd)" : "var(--amber-bd)",
                     borderLeftWidth: 4,
                     borderLeftColor: grave ? "var(--red)" : "var(--amber)",
                   }}
                 >
                   <div
                     className="stack-h"
-                    style={{ alignItems: "flex-start", gap: 10, color: grave ? "#8c1c1c" : "#8a4b00" }}
+                    style={{ alignItems: "flex-start", gap: 10, color: grave ? "var(--red-fg)" : "var(--amber-fg)" }}
                   >
                     <IconAlerta size={17} />
                     <div style={{ flex: 1 }}>
@@ -280,9 +284,28 @@ export default function MonitorView() {
             </div>
           ) : (
             <div className="stack-v" style={{ gap: 18 }}>
+              {/* Uso real quando existe medição; amostra antiga não tem, e
+                  aí o ponto some do gráfico em vez de virar 0%. */}
               <Painel
-                titulo="Processamento"
+                titulo="Processador em uso"
                 explicacao={EXPLICACAO.cpu}
+                serie={serie.amostras
+                  .filter((a) => a.cpu_uso !== null && a.cpu_uso !== undefined)
+                  .map((a) => ({ ts: a.ts, valor: a.cpu_uso }))}
+                limite={90}
+                legenda={
+                  serie.amostras.at(-1).cpu_uso === null ||
+                  serie.amostras.at(-1).cpu_uso === undefined
+                    ? "sem medição de uso nesta amostra"
+                    : `agora: ${serie.amostras.at(-1).cpu_uso}%`
+                }
+              />
+              <Painel
+                titulo="Carga (fila por núcleo)"
+                explicacao={
+                  "Quantos processos querem CPU ao mesmo tempo, por núcleo. " +
+                  "Acima de 1,00 há alguém esperando a vez."
+                }
                 serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.cpu }))}
                 limite={90}
                 maximo={200}
@@ -379,7 +402,7 @@ function CartaoMonitor({ s, alertas, selecionado, onSelecionar }) {
       style={{
         cursor: "pointer",
         opacity: s.ativo ? 1 : 0.6,
-        borderColor: selecionado ? "var(--blue)" : grave ? "#f3b6b6" : "var(--border)",
+        borderColor: selecionado ? "var(--blue)" : grave ? "var(--red-bd)" : "var(--border)",
         boxShadow: selecionado ? "0 0 0 3px rgba(26,111,196,.10)" : undefined,
       }}
     >
@@ -405,12 +428,21 @@ function CartaoMonitor({ s, alertas, selecionado, onSelecionar }) {
         <div className="small" style={{ color: "var(--red)" }}>{a.erro}</div>
       ) : (
         <>
-          <BarraMetrica
-            rotulo="Processamento"
-            valor={Math.min(a.cpu, 100)}
-            limite={90}
-            detalhe={`${a.carga} por núcleo`}
-          />
+          {a.cpu_uso !== null && a.cpu_uso !== undefined ? (
+            <BarraMetrica
+              rotulo="Processador"
+              valor={a.cpu_uso}
+              limite={90}
+              detalhe={`${a.carga} por núcleo de fila`}
+            />
+          ) : (
+            <BarraMetrica
+              rotulo="Carga por núcleo"
+              valor={Math.min(a.cpu, 100)}
+              limite={90}
+              detalhe={`${a.carga} por núcleo — uso de CPU ainda não medido`}
+            />
+          )}
           <BarraMetrica rotulo="Memória" valor={a.mem} limite={90} />
           <BarraMetrica
             rotulo="Disco"

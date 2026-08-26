@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import { api } from "../../api";
+import { t } from "../../i18n";
 import { MARCA_PADRAO } from "../../marca";
 import { useSessao } from "../../usePermissions";
 import { Carregando, Erro, SeletorHost, Vazio, fecharSeForaLimpo, useHosts } from "../Comuns";
@@ -38,7 +39,13 @@ export default function TerminalView() {
   const nomePainel = (marca || MARCA_PADRAO).nome;
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
 
-  const containerRef = useRef(null);
+  // O nó do terminal entra por ref de CALLBACK, virando estado. Com
+  // `useRef` + efeito de dependência vazia, o efeito rodava no primeiro
+  // render — quando a tela ainda mostra "carregando servidores" e a div do
+  // terminal nem existe no DOM. Ele saía pelo guard, nunca mais rodava, e
+  // `termRef` ficava nulo para sempre: clicar em Abrir terminal não fazia
+  // absolutamente nada, sem erro nenhum na tela.
+  const [container, setContainer] = useState(null);
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const wsRef = useRef(null);
@@ -187,10 +194,11 @@ export default function TerminalView() {
     copiarRef.current = copiar;
   }, [colar, copiar]);
 
-  // Cria o terminal uma única vez. Recriar a cada render perderia o
-  // histórico de rolagem e a posição do cursor a cada mudança de estado.
+  // Cria o terminal quando a div aparece no DOM, e uma vez só: recriar a
+  // cada render perderia o histórico de rolagem e a posição do cursor a
+  // cada mudança de estado.
   useEffect(() => {
-    if (!containerRef.current || termRef.current) return;
+    if (!container || termRef.current) return;
 
     const term = new Terminal({
       theme: TEMA,
@@ -207,7 +215,7 @@ export default function TerminalView() {
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon());
-    term.open(containerRef.current);
+    term.open(container);
     fit.fit();
 
     term.onData((dados) => {
@@ -270,7 +278,7 @@ export default function TerminalView() {
       termRef.current = null;
       fitRef.current = null;
     };
-  }, []);
+  }, [container]);
 
   // Fecha a sessão ao sair da tela — PTY órfão no servidor consome
   // recurso e mantém um shell aberto sem ninguém olhando.
@@ -286,9 +294,9 @@ export default function TerminalView() {
     <>
       <div className="page-head" style={{ marginBottom: 14 }}>
         <div>
-          <div className="page-title">InTerminal</div>
+          <div className="page-title">{t("tela.terminal")}</div>
           <div className="page-sub">
-            Shell SSH real no servidor, pelo navegador — toda sessão é gravada
+            {t("tela.terminal.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -338,7 +346,7 @@ export default function TerminalView() {
         </div>
         <div
           className="term-host"
-          ref={containerRef}
+          ref={setContainer}
           onContextMenu={(e) => {
             e.preventDefault();
             colar();

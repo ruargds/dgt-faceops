@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
+import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import {
   fecharSeForaLimpo, Carregando, Erro, Vazio,
@@ -64,9 +65,9 @@ export default function ServidoresView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Servidores</div>
+          <div className="page-title">{t("tela.servidores")}</div>
           <div className="page-sub">
-            VMs do FindFace Multi — credenciais no cofre, identidade fixada por chave
+            {t("tela.servidores.sub")}
           </div>
         </div>
         {has("hosts.manage") && (
@@ -134,11 +135,11 @@ export default function ServidoresView() {
                     style={{
                       marginBottom: 12,
                       background: teste.ok ? "var(--green-bg)" : "var(--red-bg)",
-                      borderColor: teste.ok ? "#a8e0cd" : "#f3b6b6",
+                      borderColor: teste.ok ? "var(--green-bd)" : "var(--red-bd)",
                     }}
                   >
                     {teste.ok ? (
-                      <div className="small" style={{ color: "#06694a" }}>
+                      <div className="small" style={{ color: "var(--green-fg)" }}>
                         <div className="stack-h"><IconOk size={13} /> Conectado em {teste.latencia_ms} ms</div>
                         <div className="mono" style={{ marginTop: 4 }}>
                           {teste.usuario}@{teste.hostname} · kernel {teste.kernel}
@@ -150,7 +151,7 @@ export default function ServidoresView() {
                           {teste.gpu_presente ? "sim" : "não"}
                         </div>
                         {!teste.sudo && (
-                          <div style={{ marginTop: 4, color: "#8a4b00" }}>
+                          <div style={{ marginTop: 4, color: "var(--amber-fg)" }}>
                             Sem sudo o backup e o restart de container não funcionam.
                           </div>
                         )}
@@ -162,7 +163,7 @@ export default function ServidoresView() {
                         )}
                       </div>
                     ) : (
-                      <div className="small" style={{ color: "#8c1c1c" }}>{teste.erro}</div>
+                      <div className="small" style={{ color: "var(--red-fg)" }}>{teste.erro}</div>
                     )}
                   </div>
                 )}
@@ -356,9 +357,9 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
             {chaveHost && (
               <div
                 className="card card-tight"
-                style={{ marginTop: 8, background: "var(--green-bg)", borderColor: "#a8e0cd" }}
+                style={{ marginTop: 8, background: "var(--green-bg)", borderColor: "var(--green-bd)" }}
               >
-                <div className="small mono" style={{ color: "#06694a", wordBreak: "break-all" }}>
+                <div className="small mono" style={{ color: "var(--green-fg)", wordBreak: "break-all" }}>
                   {chaveHost.fingerprint}
                 </div>
               </div>

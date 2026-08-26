@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
+import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import {
   fecharSeForaLimpo,
@@ -85,9 +86,9 @@ export default function ServicosView() {
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Serviços</div>
+          <div className="page-title">{t("tela.servicos")}</div>
           <div className="page-sub">
-            Containers do FindFace Multi — estado, saúde e reinícios
+            {t("tela.servicos.sub")}
           </div>
         </div>
         <div className="page-actions">
@@ -113,8 +114,8 @@ export default function ServicosView() {
       </div>
 
       {aviso && (
-        <div className="card card-tight" style={{ background: "var(--green-bg)", borderColor: "#a8e0cd", marginBottom: 14 }}>
-          <span className="small" style={{ color: "#06694a" }}>{aviso}</span>
+        <div className="card card-tight" style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 14 }}>
+          <span className="small" style={{ color: "var(--green-fg)" }}>{aviso}</span>
         </div>
       )}
 

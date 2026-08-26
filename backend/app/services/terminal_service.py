@@ -126,9 +126,18 @@ class SessaoTerminal:
         try:
             self.conn = await asyncssh.connect(self.host.address, **opcoes)
         except asyncssh.PermissionDenied as exc:
+            # A mensagem diz COM QUE credencial a tentativa foi feita. Sem
+            # isso, "login recusado" manda conferir senha quando a sessao
+            # estava usando a chave PEM do cofre, e ninguem adivinha.
+            if self.credencial_propria:
+                origem = "a senha digitada nesta sessao"
+            elif getattr(self.host, "auth_method", "") == "key":
+                origem = "a chave PEM cadastrada do servidor"
+            else:
+                origem = "a senha cadastrada do servidor"
             raise SSHError(
-                f"login recusado em '{self.host.name}' para o usuario "
-                f"'{self.login}'. Confira usuario e senha da sessao."
+                f"o servidor '{self.host.name}' recusou o login de "
+                f"'{self.login}' usando {origem}: {exc}"
             ) from exc
         except asyncssh.HostKeyNotVerifiable as exc:
             raise SSHError(

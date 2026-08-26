@@ -84,6 +84,25 @@ não são afetados.
 
 **Prevenção:** guarde uma cópia do `.env` fora da máquina.
 
+### Clicar em "Abrir terminal" não fazia nada
+
+Sintoma: o InTerminal aceitava o login, a janela fechava e **nada**
+acontecia — sem erro na tela, sem sessão, sem registro em auditoria.
+
+Causa: o terminal (xterm.js) era criado num efeito de montagem com lista de
+dependências vazia. Esse efeito rodava no primeiro render, quando a tela
+ainda mostrava "carregando servidores" e a `div` do terminal não existia no
+DOM. Ele saía pelo guard, nunca mais rodava, e a referência do terminal
+ficava nula para sempre — o botão chamava a função de conectar, que
+retornava na primeira linha, em silêncio.
+
+Corrigido: a `div` entra por *ref de callback* e o efeito depende do nó, de
+modo que o terminal nasce quando o elemento aparece de verdade na tela.
+
+Se voltar a acontecer depois de um deploy, é cache do navegador com o
+bundle antigo — confira o selo de versão no rodapé da barra lateral e dê
+`Ctrl+F5`.
+
 ## Serviços
 
 ### `nem 'docker compose' nem 'docker-compose' encontrados`

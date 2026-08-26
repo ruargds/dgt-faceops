@@ -60,6 +60,34 @@ com o intervalo e a retenção do histórico.
 
 ---
 
+### Uso de CPU e carga são coisas diferentes
+
+O Monitor mostra os dois, em gráficos separados, porque responder um pelo
+outro leva à conclusão errada:
+
+| | O que é | Quando assusta |
+|---|---|---|
+| **Processador em uso** | quanto da CPU foi realmente gasta, de 0 a 100% | perto de 100% de forma sustentada |
+| **Carga por núcleo** | quantos processos querem CPU ao mesmo tempo | acima de 1,00 há alguém esperando a vez |
+
+Uma máquina pode estar com **carga 4,0 e uso 20%**: ninguém está gastando
+CPU, todos estão esperando disco. Trocar o servidor por causa desse número
+é dinheiro no lixo — o gargalo é o disco. E pode estar com **uso 100% e
+carga 1,0**: um processo só, usando tudo o que tem, sem fila.
+
+O uso vem de duas leituras de `/proc/stat` na mesma coleta, com a diferença
+entre elas — `/proc/stat` é contador acumulado desde o boot, não taxa.
+`idle` e `iowait` não contam como uso; `steal` (CPU que o hipervisor tomou)
+aparece à parte na tela de Recursos, que é o que explica lentidão em VM do
+Azure sem nenhum processo pesado aparecendo.
+
+Amostra gravada antes desta medição existir não tem uso de CPU: o gráfico
+deixa buraco em vez de desenhar uma máquina ociosa que nunca existiu.
+
+Em **Recursos** há ainda o **uso por núcleo**. Um núcleo cravado em 100%
+com os outros parados é processo de uma thread só — mais CPU não resolve, e
+o gargalo está no programa.
+
 ## Alertas
 
 Derivados da última amostra de cada servidor. Aparecem no topo do Monitor,

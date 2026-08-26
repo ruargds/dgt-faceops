@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
+import { t } from "../../i18n";
 import { Carregando, Erro, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { IconAtualizar, IconLixeira, IconLogs, IconMais, IconStop } from "../Icons";
 
@@ -252,9 +253,9 @@ export default function LogsView() {
     <>
       <div className="page-head" style={{ marginBottom: 12 }}>
         <div>
-          <div className="page-title">Logs ao vivo</div>
+          <div className="page-title">{t("tela.logs")}</div>
           <div className="page-sub">
-            Acompanha qualquer container, com visões salvas e compartilhadas
+            {t("tela.logs.sub")}
           </div>
         </div>
         <div className="page-actions">

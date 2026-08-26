@@ -26,11 +26,21 @@
   /* Estados */
   --green: #0CA678;
   --green-bg: #E6F7F0;
+  --green-bd: #a8e0cd;
+  --green-fg: #06694a;
   --amber: #D97706;
   --amber-bg: #FEF3E2;
+  --amber-bd: #f5d9a8;
+  --amber-fg: #8a4b00;
   --red: #DC2626;
   --red-bg: #FEE2E2;
+  --red-bd: #f3b6b6;
+  --red-fg: #8c1c1c;
   --purple: #7C3AED;
+
+  /* Realce de linha (tabelas) */
+  --hover: #FAFBFC;
+  --linha-par: #FCFDFE;
 
   /* Terminal (padrão Camsync) */
   --term-bg: #0f172a;
@@ -46,6 +56,59 @@
   --shadow-lg: 0 8px 24px rgba(13,31,53,0.12);
   --sidebar-w: 232px;
 }
+
+/* ── Tema escuro ────────────────────────────────────────────────────────
+   Mesmo desenho, outra superfície: só os tokens mudam, nenhum componente
+   sabe em que tema está. Foi por isso que os hexadecimais soltos saíram do
+   meio das telas — cada um deles seria um ponto ilegível aqui.
+
+   A barra lateral e o terminal já eram escuros nos dois temas: o padrão
+   DGT sempre teve superfície escura para tela operacional, e mudar isso
+   agora seria trocar a identidade em vez de acrescentar uma opção.
+
+   `data-tema` fica no <html>, aplicado por tema.js antes do primeiro
+   render — atributo no root não pode ser decidido por componente, senão
+   a tela pisca clara antes de escurecer. */
+:root[data-tema="escuro"] {
+  --bg: #0A1220;
+  --bg-2: #131E2C;
+  --border: #22303F;
+  --border-2: #33475C;
+  --text: #E6EDF5;
+  --text-2: #AEBFD0;
+  --text-3: #7C8CA0;
+  /* `--white` é a cor de SUPERFÍCIE (cartão, tabela, modal), não o branco
+     literal — daí ela escurecer aqui. O nome ficou do tema claro. */
+  --white: #101A27;
+
+  --blue: #3B8FE0;
+  --blue-2: #2E7CC9;
+
+  --green: #34D399;
+  --green-bg: #0E2A22;
+  --green-bd: #1C5245;
+  --green-fg: #86EFAC;
+  --amber: #FBBF24;
+  --amber-bg: #2B2210;
+  --amber-bd: #574321;
+  --amber-fg: #FCD34D;
+  --red: #F87171;
+  --red-bg: #2E1517;
+  --red-bd: #5E2A2C;
+  --red-fg: #FCA5A5;
+  --purple: #A78BFA;
+
+  --hover: #16222F;
+  --linha-par: #0E1826;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow: 0 2px 8px rgba(0,0,0,0.45);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.55);
+}
+
+/* Impede o flash branco do navegador antes do CSS: o fundo do documento
+   acompanha o tema desde o primeiro pixel. */
+:root[data-tema="escuro"] body { background: var(--bg); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -184,6 +247,14 @@ input[type="checkbox"] { width: auto; }
 }
 .sidebar-user { color: var(--white); font-weight: 600; }
 .sidebar-role { color: #62748C; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.seletor-idioma {
+  width: 100%; margin-top: 6px; padding: 4px 6px; font-size: 11.5px;
+  color: #A9B8CC; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: var(--radius);
+}
+.seletor-idioma:focus { outline: none; border-color: var(--cyan); }
+.seletor-idioma option { color: var(--text); background: var(--white); }
+
 .sidebar-versao {
   margin-top: 8px; text-align: center; font-size: 10px;
   color: rgba(255,255,255,0.28); letter-spacing: .2px;
@@ -200,8 +271,8 @@ input[type="checkbox"] { width: auto; }
   padding: 10px 18px; font-size: 13px; font-weight: 500;
   border-bottom: 1px solid;
 }
-.banner-warn { background: var(--amber-bg); color: #8a4b00; border-color: #f5d9a8; }
-.banner-danger { background: var(--red-bg); color: #8c1c1c; border-color: #f3b6b6; }
+.banner-warn { background: var(--amber-bg); color: var(--amber-fg); border-color: var(--amber-bd); }
+.banner-danger { background: var(--red-bg); color: var(--red-fg); border-color: var(--red-bd); }
 .banner .btn { margin-left: auto; }
 
 /* ── Selos de estado ────────────────────────────────────────────────── */
@@ -211,9 +282,9 @@ input[type="checkbox"] { width: auto; }
   padding: 2px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 600;
   white-space: nowrap;
 }
-.pill-ok { background: var(--green-bg); color: #06694a; }
-.pill-warn { background: var(--amber-bg); color: #8a4b00; }
-.pill-err { background: var(--red-bg); color: #8c1c1c; }
+.pill-ok { background: var(--green-bg); color: var(--green-fg); }
+.pill-warn { background: var(--amber-bg); color: var(--amber-fg); }
+.pill-err { background: var(--red-bg); color: var(--red-fg); }
 .pill-idle { background: var(--bg-2); color: var(--text-2); }
 .pill-info { background: #E7F1FB; color: var(--blue-2); }
 
@@ -234,14 +305,34 @@ thead th {
 }
 tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover { background: #FAFBFC; }
+tbody tr:hover { background: var(--hover); }
 td.mono, .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px; }
 td.right, th.right { text-align: right; }
+
+/* Tabela densa — listas longas (processos, containers) onde a altura da
+   linha decide quantos itens cabem na tela. */
+.tabela-densa thead th { padding: 7px 12px; }
+.tabela-densa tbody td { padding: 5px 12px; font-size: 12.5px; }
+.tabela-densa tbody tr:nth-child(even) { background: var(--linha-par); }
+.tabela-densa tbody tr:hover { background: var(--hover); }
+
+.celula-pct { text-align: right; white-space: nowrap; }
+.celula-pct .mono { display: block; line-height: 1.3; }
+.celula-pct .meter { margin-top: 3px; }
+
+/* Grade de núcleos de CPU */
+.grid-nucleos {
+  display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+.nucleo { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; background: var(--white); }
+.nucleo-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin-bottom: 4px; }
 
 /* ── Barras de uso ──────────────────────────────────────────────────── */
 
 .meter { height: 6px; background: var(--bg-2); border-radius: 4px; overflow: hidden; }
 .meter-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+.meter-fino { height: 3px; border-radius: 2px; }
 .meter-ok { background: var(--green); }
 .meter-warn { background: var(--amber); }
 .meter-err { background: var(--red); }
@@ -302,7 +393,7 @@ td.right, th.right { text-align: right; }
 .login-logo { display: block; height: 40px; margin: 0 auto 6px; }
 .login-sub { text-align: center; color: var(--text-3); font-size: 12.5px; margin-bottom: 26px; }
 .login-err {
-  background: var(--red-bg); color: #8c1c1c; border: 1px solid #f3b6b6;
+  background: var(--red-bg); color: var(--red-fg); border: 1px solid var(--red-bd);
   padding: 9px 12px; border-radius: var(--radius); font-size: 13px; margin-bottom: 14px;
 }
 .login-hint {

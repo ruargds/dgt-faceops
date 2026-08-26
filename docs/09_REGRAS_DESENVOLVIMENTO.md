@@ -107,10 +107,17 @@
 
 ### Deploy
 
-27. **`deploy.sh --build` é necessário** ao mudar `requirements.txt`,
-    qualquer `Dockerfile` ou qualquer coisa em `frontend/`.
+27. **`deploy.sh --build` para aplicar qualquer mudança de código.**
+    Backend, frontend, `requirements.txt`, `Dockerfile` — tudo. O código é
+    copiado para dentro da imagem (`COPY backend/app ./app`) e não há
+    volume de fonte.
 
-28. **`deploy.sh` sem `--build`** basta para código Python do backend.
+28. **`deploy.sh` sem `--build` NÃO aplica código novo.** Ele recria os
+    containers com a imagem que já existe. Serve para trocar valor do
+    `.env`, recriar container derrubado ou testar a subida — e o mesmo
+    vale para `atualizar.sh --sem-build`. Esta regra já esteve escrita ao
+    contrário aqui, e a consequência é sutil: o painel sobe igual e passa
+    a anunciar uma revisão que não é a que está rodando.
 
 29. **Container fantasma:** se der "container name already in use", rode
     `docker rm -f faceops_backend faceops_frontend`. O `deploy.sh` já faz.

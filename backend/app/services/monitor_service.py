@@ -172,6 +172,13 @@ class MonitorService:
         # útil do gráfico.
         amostra.cpu_pct = round(min(carga * 100, 200), 1)
 
+        # Ocupação real, quando a coleta conseguiu calcular. Zero aqui
+        # significa "não medido" para o histórico antigo — a série devolve
+        # nulo nesse caso em vez de desenhar uma máquina ociosa que nunca
+        # existiu.
+        uso = cpu.get("uso_pct")
+        amostra.cpu_uso_pct = round(float(uso), 1) if uso is not None else 0.0
+
         amostra.mem_pct = round(float(mem.get("percentual", 0) or 0), 1)
         amostra.swap_pct = round(float(mem.get("swap_percentual", 0) or 0), 1)
 
@@ -244,6 +251,9 @@ class MonitorService:
                 {
                     "ts": a.ts.isoformat(),
                     "cpu": a.cpu_pct,
+                    # Nulo = amostra gravada antes de existir medição de
+                    # uso. O gráfico deixa buraco; buraco é honesto.
+                    "cpu_uso": a.cpu_uso_pct if a.cpu_uso_pct > 0 else None,
                     "carga": a.carga_por_nucleo,
                     "mem": a.mem_pct,
                     "swap": a.swap_pct,

@@ -112,6 +112,30 @@ Todo campo que fugiu do padrão mostra um link com o valor original.
 Clicar remove a linha do banco — volta a valer o `.env` ou o padrão do
 catálogo.
 
+## Tema e idioma ficam no navegador
+
+**Tema claro/escuro** e **idioma** estão no rodapé da barra lateral, ao lado
+do usuário — e **não** nesta aba, de propósito. São preferências de quem
+olha a tela, não da instalação: duas pessoas no mesmo painel podem querer
+coisas diferentes, e um plantão noturno não deveria depender de alguém com
+permissão de configuração para escurecer a tela.
+
+Ficam no `localStorage` do navegador. Trocar de máquina recomeça no padrão:
+tema do sistema operacional e idioma do navegador.
+
+O tema muda só os tokens de cor — nenhuma tela sabe em que tema está. A
+barra lateral e o terminal seguem escuros nos dois: superfície escura em
+tela operacional é o padrão DGT, e mudar isso seria trocar a identidade em
+vez de acrescentar uma opção.
+
+Sobre o idioma, o estado é este, sem enfeite: **o esqueleto do painel**
+(menu, títulos de tela, rodapé, login, componentes comuns) está em
+português e inglês; **o miolo das telas** — tabelas, avisos e as
+explicações longas — segue só em português e vai sendo traduzido tela a
+tela. Trocar o idioma **recarrega a página**, também de propósito: com
+parte dos textos ainda literal, meia tradução ao vivo ficaria pior que a
+pausa de meio segundo. Sessão de terminal aberta cai junto.
+
 ## O que NÃO fica aqui
 
 Por decisão, não por esquecimento:
