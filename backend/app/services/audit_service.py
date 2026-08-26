@@ -15,6 +15,7 @@ from app.models.audit import AuditLog
 CHAVES_PROIBIDAS = frozenset({
     "password", "senha", "ssh_key", "ssh_password", "sudo_password",
     "ssh_key_passphrase", "secret", "token", "access_token", "pem",
+    "ff_api_pass",
 })
 
 

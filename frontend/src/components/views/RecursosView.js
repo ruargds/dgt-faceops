@@ -86,7 +86,7 @@ export default function RecursosView() {
 
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   const mem = dados && dados.memoria;
   const cpu = dados && dados.cpu;
@@ -107,12 +107,12 @@ export default function RecursosView() {
               value={intervalo}
               onChange={(e) => setIntervalo(Number(e.target.value))}
               style={{ width: "auto" }}
-              title="Intervalo entre coletas"
+              title={t("Intervalo entre coletas")}
             >
-              <option value={10}>10s</option>
-              <option value={15}>15s</option>
-              <option value={30}>30s</option>
-              <option value={60}>60s</option>
+              <option value={10}>{t("10s")}</option>
+              <option value={15}>{t("15s")}</option>
+              <option value={30}>{t("30s")}</option>
+              <option value={60}>{t("60s")}</option>
             </select>
           )}
           <button
@@ -135,7 +135,7 @@ export default function RecursosView() {
 
       <Erro mensagem={erro} onTentar={coletar} />
 
-      {carregando && !dados && <Carregando texto="Lendo a máquina…" />}
+      {carregando && !dados && <Carregando texto={t("Lendo a máquina…")} />}
 
       {dados && (
         <div className="stack-v">
@@ -146,7 +146,7 @@ export default function RecursosView() {
               {formatDuracao(dados.uptime_segundos)}
             </span>
             {aoVivo && (
-              <span className="pill pill-ok" title="Para sozinho ao sair da tela ou trocar de aba">
+              <span className="pill pill-ok" title={t("Para sozinho ao sair da tela ou trocar de aba")}>
                 ao vivo · {intervalo}s
               </span>
             )}
@@ -154,19 +154,19 @@ export default function RecursosView() {
 
           <div className="grid-stats">
             <Estatistica
-              rotulo="Memória em uso"
+              rotulo={t("Memória em uso")}
               valor={formatBytes(mem.usado_bytes)}
               sub={`${formatBytes(mem.disponivel_bytes)} disponíveis de ${formatBytes(mem.total_bytes)}`}
               pct={mem.percentual}
             />
             <Estatistica
-              rotulo="Cache e buffers"
+              rotulo={t("Cache e buffers")}
               valor={formatBytes(mem.cache_bytes + mem.buffers_bytes)}
-              sub="Não conta como uso — o kernel devolve quando precisar"
+              sub={t("Não conta como uso — o kernel devolve quando precisar")}
             />
             {mem.swap_total_bytes > 0 && (
               <Estatistica
-                rotulo="Swap"
+                rotulo={t("Swap")}
                 valor={formatBytes(mem.swap_usado_bytes)}
                 sub={`de ${formatBytes(mem.swap_total_bytes)}`}
                 pct={mem.swap_percentual}
@@ -178,7 +178,7 @@ export default function RecursosView() {
                 carga 4 e uso 20% está esperando disco, não CPU — trocar
                 de servidor por causa disso é dinheiro no lixo. */}
             <Estatistica
-              rotulo="Processador em uso"
+              rotulo={t("Processador em uso")}
               valor={cpu.uso_pct === null || cpu.uso_pct === undefined ? "—" : `${cpu.uso_pct}%`}
               sub={
                 cpu.detalhe
@@ -190,7 +190,7 @@ export default function RecursosView() {
               pct={cpu.uso_pct === null || cpu.uso_pct === undefined ? undefined : cpu.uso_pct}
             />
             <Estatistica
-              rotulo="Carga por núcleo"
+              rotulo={t("Carga por núcleo")}
               valor={cpu.carga_por_nucleo.toFixed(2)}
               sub={`${cpu.carga_1min} / ${cpu.carga_5min} / ${cpu.carga_15min} em ${cpu.nucleos} núcleos`}
               pct={Math.min(cpu.carga_por_nucleo * 100, 100)}
@@ -199,7 +199,7 @@ export default function RecursosView() {
 
           {cpu.por_nucleo && cpu.por_nucleo.length > 1 && cpu.por_nucleo.length <= 32 && (
             <div>
-              <div className="section-title">Uso por núcleo</div>
+              <div className="section-title">{t("Uso por núcleo")}</div>
               <div className="grid-nucleos">
                 {cpu.por_nucleo.map((n) => (
                   <div className="nucleo" key={n.nucleo}>
@@ -224,23 +224,22 @@ export default function RecursosView() {
             <div>
               <div className="section-title">
                 <span className="stack-h">
-                  <IconGPU size={14} /> GPU
-                </span>
+                  <IconGPU size={14} />{t("GPU")}</span>
               </div>
               <div className="grid-cards">
                 {dados.gpus.map((g) => (
                   <div className="card" key={g.indice}>
-                    <div style={{ fontWeight: 600, color: "var(--navy)", marginBottom: 10 }}>
+                    <div style={{ fontWeight: 600, color: "var(--titulo)", marginBottom: 10 }}>
                       GPU {g.indice} · {g.nome}
                     </div>
                     <div className="stack-v" style={{ gap: 10 }}>
                       <LinhaMedidor
-                        rotulo="Utilização"
+                        rotulo={t("Utilização")}
                         valor={g.utilizacao_pct != null ? `${g.utilizacao_pct}%` : "n/d"}
                         pct={g.utilizacao_pct}
                       />
                       <LinhaMedidor
-                        rotulo="Memória de vídeo"
+                        rotulo={t("Memória de vídeo")}
                         valor={`${formatBytes(g.memoria_usada_bytes)} / ${formatBytes(g.memoria_total_bytes)}`}
                         pct={g.memoria_pct}
                       />
@@ -263,9 +262,9 @@ export default function RecursosView() {
                   <table>
                     <thead>
                       <tr>
-                        <th>PID</th>
-                        <th>Processo usando a GPU</th>
-                        <th className="right">Memória de vídeo</th>
+                        <th>{t("PID")}</th>
+                        <th>{t("Processo usando a GPU")}</th>
+                        <th className="right">{t("Memória de vídeo")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -284,17 +283,17 @@ export default function RecursosView() {
           )}
 
           <div>
-            <div className="section-title">Discos</div>
+            <div className="section-title">{t("Discos")}</div>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Ponto de montagem</th>
-                    <th>Dispositivo</th>
-                    <th className="right">Usado</th>
-                    <th className="right">Livre</th>
-                    <th className="right">Total</th>
-                    <th style={{ width: 150 }}>Ocupação</th>
+                    <th>{t("Ponto de montagem")}</th>
+                    <th>{t("Dispositivo")}</th>
+                    <th className="right">{t("Usado")}</th>
+                    <th className="right">{t("Livre")}</th>
+                    <th className="right">{t("Total")}</th>
+                    <th style={{ width: 150 }}>{t("Ocupação")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -343,11 +342,11 @@ export default function RecursosView() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Container</th>
-                      <th className="right">CPU</th>
-                      <th className="right">Memória</th>
-                      <th className="right">Limite</th>
-                      <th className="right">PIDs</th>
+                      <th>{t("Container")}</th>
+                      <th className="right">{t("CPU")}</th>
+                      <th className="right">{t("Memória")}</th>
+                      <th className="right">{t("Limite")}</th>
+                      <th className="right">{t("PIDs")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -419,11 +418,8 @@ function AnaliseArmazenamento({ hostId }) {
     <div className="card">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <div>
-          <div className="section-title" style={{ marginBottom: 2 }}>
-            Onde o disco do FindFace está sendo gasto
-          </div>
-          <div className="small muted">
-            Varre <span className="mono">/opt/findface-multi/data</span>. Leva alguns
+          <div className="section-title" style={{ marginBottom: 2 }}>{t("Onde o disco do FindFace está sendo gasto")}</div>
+          <div className="small muted">{t("Varre")}<span className="mono">/opt/findface-multi/data</span>. Leva alguns
             minutos em servidor com muitos eventos.
           </div>
         </div>
@@ -434,12 +430,11 @@ function AnaliseArmazenamento({ hostId }) {
 
       <Erro mensagem={erro} />
 
-      {carregando && <Carregando texto="Somando diretórios no servidor…" />}
+      {carregando && <Carregando texto={t("Somando diretórios no servidor…")} />}
 
       {dados && (
         <>
-          <div className="small muted" style={{ marginBottom: 10 }}>
-            Total em <span className="mono">{dados.base}</span>:{" "}
+          <div className="small muted" style={{ marginBottom: 10 }}>{t("Total em")}<span className="mono">{dados.base}</span>:{" "}
             <strong>{formatBytes(dados.total_bytes)}</strong>
             {dados.parcial && " (leitura parcial — houve timeout em parte da árvore)"}
           </div>
@@ -447,9 +442,9 @@ function AnaliseArmazenamento({ hostId }) {
             <table>
               <thead>
                 <tr>
-                  <th>Diretório</th>
-                  <th className="right">Tamanho</th>
-                  <th style={{ width: 160 }}>Fatia</th>
+                  <th>{t("Diretório")}</th>
+                  <th className="right">{t("Tamanho")}</th>
+                  <th style={{ width: 160 }}>{t("Fatia")}</th>
                 </tr>
               </thead>
               <tbody>

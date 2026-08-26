@@ -178,7 +178,29 @@ entrando na interface da NtechLab.
 
 Vem pela API HTTP (`GET /api/dispositivos/{id}/licenca`), é leitura barata
 e carrega sozinha ao trocar de servidor — diferente da contagem de
-eventos, que continua no clique.
+eventos, que continua no clique. O número de uso muda o tempo todo, então
+há **Atualizar uso**: quem quer o número de agora pede o número de agora,
+em vez de a tela ficar consultando sozinha.
+
+O cartão traz o mesmo que a tela de licenças da NtechLab: identificação,
+validade, tipo, arquivo e a tabela de recursos com **em uso** e
+**liberado**. Recurso estourado — usado acima do liberado, como o
+`Objects TNT API` a 2.400.054 de 2.400.000 no ambiente levantado — sobe
+para o topo da tabela e aparece em vermelho, porque é o que trava operação
+sem avisar ninguém.
+
+### Credencial da API: usuário e senha
+
+O FindFace é acessado com **usuário e senha** — os mesmos da plataforma da
+NtechLab. O painel faz login na API e reaproveita a sessão por 20 minutos,
+em memória; não repete o login a cada leitura, e nada disso é gravado além
+da senha cifrada no cofre. Token continua aceito para instalação que gere
+um: preenchido, ele substitui usuário e senha e não expira com a sessão.
+
+O certificado do FindFace é autoassinado em rede interna, então a
+verificação de cadeia é dispensada **nesta chamada e em mais nenhuma** —
+exigir cadeia válida aqui só impediria o painel de ler a plataforma que
+ele opera.
 
 Para cada recurso licenciado: **liberado**, **em uso**, **livre** e a
 ocupação em barra. Limite negativo aparece como `ilimitado`. O número de

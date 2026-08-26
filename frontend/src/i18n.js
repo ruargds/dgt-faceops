@@ -16,6 +16,8 @@
  * própria chave: um rótulo faltando aparece na língua errada, e não como
  * `menu.painel` no meio da tela.
  */
+import FRASES from "./i18n_frases";
+
 const CHAVE = "faceops_idioma";
 const IDIOMAS = ["pt", "en"];
 
@@ -216,10 +218,22 @@ export function definirIdioma(idioma) {
   window.location.reload();
 }
 
+/**
+ * Traduz.
+ *
+ * Duas fontes, nesta ordem: o dicionário por chave (menu, títulos de tela
+ * — texto que não existe literal no JSX) e o dicionário por frase, onde a
+ * chave é o próprio português da tela.
+ *
+ * Sem tradução, devolve o português. Nunca a chave crua: rótulo faltando
+ * aparece na língua errada, e não como `menu.painel` no meio da tela.
+ */
 export function t(chave, padrao = "") {
+  const idioma = idiomaAtual();
   const entrada = DICIONARIO[chave];
-  if (!entrada) return padrao || chave;
-  return entrada[idiomaAtual()] || entrada.pt || padrao || chave;
+  if (entrada) return entrada[idioma] || entrada.pt || padrao || chave;
+  if (idioma !== "pt" && FRASES[chave]) return FRASES[chave];
+  return padrao || chave;
 }
 
 export { IDIOMAS };

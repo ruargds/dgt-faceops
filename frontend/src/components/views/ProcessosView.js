@@ -71,7 +71,7 @@ export default function ProcessosView() {
 
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   const NUM = new Set(["pid", "cpu", "mem"]);
   const processos = dados
@@ -114,7 +114,7 @@ export default function ProcessosView() {
           >
             {pausado ? "Retomar" : "Pausar"}
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={carregar} title="Atualizar agora">
+          <button className="btn btn-secondary btn-sm" onClick={carregar} title={t("Atualizar agora")}>
             <IconAtualizar size={14} />
           </button>
         </div>
@@ -122,24 +122,22 @@ export default function ProcessosView() {
 
       <Erro mensagem={erro} onTentar={carregar} />
 
-      {!dados && !erro && <Carregando texto="Lendo os processos do servidor…" />}
+      {!dados && !erro && <Carregando texto={t("Lendo os processos do servidor…")} />}
 
       {dados && (
         <>
           <Resumo d={dados} />
 
           <div className="card" style={{ marginTop: 16 }}>
-            <div className="section-title" style={{ marginBottom: 8 }}>
-              Processos que mais consomem
-              <span className="small muted" style={{ fontWeight: 400 }}>
+            <div className="section-title" style={{ marginBottom: 8 }}>{t("Processos que mais consomem")}<span className="small muted" style={{ fontWeight: 400 }}>
                 {" "}— clique numa coluna para ordenar
               </span>
             </div>
 
             <div className="small muted" style={{ marginBottom: 10 }}>
-              <strong>CPU</strong> é o quanto de um núcleo o processo usa agora
-              (pode passar de 100% se usa vários). <strong>Memória</strong> é a
-              fatia da memória física. <strong>Tempo</strong> é quanto de CPU ele
+              <strong>{t("CPU")}</strong> é o quanto de um núcleo o processo usa agora
+              (pode passar de 100% se usa vários). <strong>{t("Memória")}</strong> é a
+              fatia da memória física. <strong>{t("Tempo")}</strong> é quanto de CPU ele
               já acumulou desde que iniciou.
             </div>
 
@@ -147,12 +145,12 @@ export default function ProcessosView() {
               <table className="tabela-densa">
                 <thead>
                   <tr>
-                    <Th campo="pid" ordem={ordem} onClick={ordenarPor} className="right">PID</Th>
-                    <Th campo="usuario" ordem={ordem} onClick={ordenarPor}>Usuário</Th>
-                    <Th campo="cpu" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 132 }}>CPU</Th>
-                    <Th campo="mem" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 132 }}>Memória</Th>
-                    <Th campo="tempo" ordem={ordem} onClick={ordenarPor} className="right">Tempo</Th>
-                    <Th campo="comando" ordem={ordem} onClick={ordenarPor}>Programa</Th>
+                    <Th campo="pid" ordem={ordem} onClick={ordenarPor} className="right">{t("PID")}</Th>
+                    <Th campo="usuario" ordem={ordem} onClick={ordenarPor}>{t("Usuário")}</Th>
+                    <Th campo="cpu" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 132 }}>{t("CPU")}</Th>
+                    <Th campo="mem" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 132 }}>{t("Memória")}</Th>
+                    <Th campo="tempo" ordem={ordem} onClick={ordenarPor} className="right">{t("Tempo")}</Th>
+                    <Th campo="comando" ordem={ordem} onClick={ordenarPor}>{t("Programa")}</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,7 +212,7 @@ function Th({ campo, ordem, onClick, children, className, style }) {
       className={className}
       style={{ ...(style || {}), cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
       onClick={() => onClick(campo)}
-      title="Ordenar por esta coluna"
+      title={t("Ordenar por esta coluna")}
     >
       {children}
       <span style={{ color: ativo ? "var(--blue)" : "var(--text-3)" }}>{seta || " ↕"}</span>
@@ -228,7 +226,7 @@ function Resumo({ d }) {
   return (
     <div className="grid-stats">
       <div className="card card-tight stat">
-        <span className="stat-label">Processador</span>
+        <span className="stat-label">{t("Processador")}</span>
         <div className="stat-value" style={{ color: d.cpu_pct >= 90 ? "var(--red)" : d.cpu_pct >= 75 ? "var(--amber)" : "var(--green)" }}>
           {d.cpu_pct}%
         </div>
@@ -238,7 +236,7 @@ function Resumo({ d }) {
       </div>
 
       <div className="card card-tight stat">
-        <span className="stat-label">Carga por núcleo</span>
+        <span className="stat-label">{t("Carga por núcleo")}</span>
         <div className="stat-value" style={{ color: cargaAlta ? "var(--amber)" : "var(--green)" }}>
           {d.load_por_nucleo}
         </div>
@@ -248,7 +246,7 @@ function Resumo({ d }) {
       </div>
 
       <div className="card card-tight stat">
-        <span className="stat-label">Memória</span>
+        <span className="stat-label">{t("Memória")}</span>
         <div className="stat-value" style={{ color: d.mem.pct >= 90 ? "var(--red)" : d.mem.pct >= 75 ? "var(--amber)" : "var(--green)" }}>
           {d.mem.pct}%
         </div>
@@ -258,7 +256,7 @@ function Resumo({ d }) {
       </div>
 
       <div className="card card-tight stat">
-        <span className="stat-label">Tarefas / Swap</span>
+        <span className="stat-label">{t("Tarefas / Swap")}</span>
         <div className="stat-value">{d.tarefas.total || "—"}</div>
         <span className="stat-sub">
           {d.tarefas.rodando || 0} rodando ·{" "}

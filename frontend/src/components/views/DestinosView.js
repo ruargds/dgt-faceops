@@ -92,8 +92,7 @@ export default function DestinosView() {
         {has("destinations.manage") && (
           <div className="page-actions">
             <button className="btn btn-primary" onClick={() => setEditando({ tipo: "local" })}>
-              <IconMais size={15} /> Novo destino
-            </button>
+              <IconMais size={15} />{t("Novo destino")}</button>
           </div>
         )}
       </div>
@@ -101,7 +100,7 @@ export default function DestinosView() {
       <Erro mensagem={erro} onTentar={carregar} />
 
       {lista.length === 0 ? (
-        <Vazio titulo="Nenhum destino cadastrado">
+        <Vazio titulo={t("Nenhum destino cadastrado")}>
           Sem destino, o backup roda no servidor e não tem para onde ir.
         </Vazio>
       ) : (
@@ -115,9 +114,9 @@ export default function DestinosView() {
                   className="stack-h"
                   style={{ justifyContent: "space-between", marginBottom: 4 }}
                 >
-                  <strong style={{ fontSize: 15, color: "var(--navy)" }}>{d.nome}</strong>
+                  <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{d.nome}</strong>
                   <div className="stack-h" style={{ gap: 5 }}>
-                    {d.padrao && <span className="pill pill-info">padrão</span>}
+                    {d.padrao && <span className="pill pill-info">{t("padrão")}</span>}
                     {!d.enabled && <span className="pill pill-idle">desativado</span>}
                   </div>
                 </div>
@@ -132,8 +131,7 @@ export default function DestinosView() {
 
                 {d.tem_credencial && (
                   <div className="stack-h small muted" style={{ gap: 6, marginBottom: 8 }}>
-                    <IconChave size={13} />
-                    credencial guardada · <span className="mono">{d.cred_fingerprint}</span>
+                    <IconChave size={13} />{t("credencial guardada ·")}<span className="mono">{d.cred_fingerprint}</span>
                   </div>
                 )}
 
@@ -179,7 +177,7 @@ export default function DestinosView() {
                       </div>
                     </div>
                   ) : (
-                    <div className="small muted">Nunca testado</div>
+                    <div className="small muted">{t("Nunca testado")}</div>
                   )}
                 </div>
 
@@ -193,9 +191,7 @@ export default function DestinosView() {
                   </button>
                   {has("destinations.manage") && (
                     <>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setEditando(d)}>
-                        Editar
-                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setEditando(d)}>{t("Editar")}</button>
                       <button className="btn btn-danger btn-sm" onClick={() => remover(d)}>
                         <IconLixeira size={13} />
                       </button>
@@ -282,7 +278,7 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
 
           {!editando && (
             <div className="field">
-              <label className="label label-required">Tipo</label>
+              <label className="label label-required">{t("Tipo")}</label>
               <div className="stack-v" style={{ gap: 8 }}>
                 {TIPOS.map((t) => (
                   <label
@@ -321,21 +317,20 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
 
           <div className="row row-2">
             <div className="field">
-              <label className="label label-required">Nome</label>
-              <input value={f.nome} onChange={set("nome")} required placeholder="Azure — cofre frio" />
+              <label className="label label-required">{t("Nome")}</label>
+              <input value={f.nome} onChange={set("nome")} required placeholder={t("Azure — cofre frio")} />
             </div>
             <div className="field">
-              <label className="label">Descrição</label>
+              <label className="label">{t("Descrição")}</label>
               <input value={f.descricao} onChange={set("descricao")} />
             </div>
           </div>
 
           {f.tipo === "local" && (
             <div className="field">
-              <label className="label label-required">Caminho</label>
+              <label className="label label-required">{t("Caminho")}</label>
               <input className="mono" value={f.caminho} onChange={set("caminho")} required />
-              <div className="field-help">
-                Caminho <strong>dentro do container</strong> do painel. O padrão{" "}
+              <div className="field-help">{t("Caminho")}<strong>{t("dentro do container")}</strong> do painel. O padrão{" "}
                 <span className="mono">/data/backups</span> já está mapeado para o disco
                 do host no docker-compose.
               </div>
@@ -346,22 +341,20 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
             <>
               <div className="row row-2">
                 <div className="field">
-                  <label className="label label-required">Container</label>
+                  <label className="label label-required">{t("Container")}</label>
                   <input className="mono" value={f.azure_container} onChange={set("azure_container")} />
                 </div>
                 <div className="field">
-                  <label className="label">Camada de armazenamento</label>
+                  <label className="label">{t("Camada de armazenamento")}</label>
                   <select value={f.azure_tier} onChange={set("azure_tier")}>
-                    <option value="Hot">Hot — acesso frequente, mais caro</option>
-                    <option value="Cool">Cool — recomendado para backup</option>
-                    <option value="Archive">Archive — barato, restauro leva horas</option>
+                    <option value="Hot">{t("Hot — acesso frequente, mais caro")}</option>
+                    <option value="Cool">{t("Cool — recomendado para backup")}</option>
+                    <option value="Archive">{t("Archive — barato, restauro leva horas")}</option>
                   </select>
                 </div>
               </div>
               <div className="field">
-                <label className={`label ${editando ? "" : "label-required"}`}>
-                  Connection string
-                </label>
+                <label className={`label ${editando ? "" : "label-required"}`}>{t("Connection string")}</label>
                 <textarea
                   rows={3}
                   value={segredos.azure_conn}
@@ -385,7 +378,7 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
             <>
               <div className="row row-2">
                 <div className="field">
-                  <label className="label label-required">Nome do remote</label>
+                  <label className="label label-required">{t("Nome do remote")}</label>
                   <input
                     className="mono"
                     value={f.rclone_remote}
@@ -393,20 +386,16 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
                     placeholder="gdrive"
                     required
                   />
-                  <div className="field-help">
-                    O que está entre colchetes no bloco abaixo.
-                  </div>
+                  <div className="field-help">{t("O que está entre colchetes no bloco abaixo.")}</div>
                 </div>
                 <div className="field">
-                  <label className="label">Caminho no destino</label>
+                  <label className="label">{t("Caminho no destino")}</label>
                   <input className="mono" value={f.rclone_caminho} onChange={set("rclone_caminho")} />
                 </div>
               </div>
 
               <div className="field">
-                <label className={`label ${editando ? "" : "label-required"}`}>
-                  Bloco de configuração do rclone
-                </label>
+                <label className={`label ${editando ? "" : "label-required"}`}>{t("Bloco de configuração do rclone")}</label>
                 <textarea
                   rows={8}
                   value={segredos.rclone_conf}
@@ -418,16 +407,14 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
                   }
                   required={!editando}
                 />
-                <div className="field-help">
-                  Gere com <span className="mono">rclone config</span> em qualquer máquina
-                  e cole aqui a seção do remote, <strong>incluindo a linha entre
-                  colchetes</strong>. Contém token e chave — vai cifrada para o cofre e é
+                <div className="field-help">{t("Gere com")}<span className="mono">{t("rclone config")}</span> em qualquer máquina
+                  e cole aqui a seção do remote, <strong>{t("incluindo a linha entre colchetes")}</strong>. Contém token e chave — vai cifrada para o cofre e é
                   materializada em arquivo temporário (modo 0600) só durante o envio.
                 </div>
               </div>
 
               <div className="field">
-                <label className="label">Parâmetros extras do rclone</label>
+                <label className="label">{t("Parâmetros extras do rclone")}</label>
                 <input
                   className="mono"
                   value={f.rclone_flags}
@@ -459,21 +446,20 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
               </div>
             </div>
             <div className="field">
-              <label className="label">Opções</label>
+              <label className="label">{t("Opções")}</label>
               <label className="check">
                 <input type="checkbox" checked={f.padrao} onChange={set("padrao")} />
-                <span>Pré-selecionado ao criar backup e agendamento</span>
+                <span>{t("Pré-selecionado ao criar backup e agendamento")}</span>
               </label>
               <label className="check">
                 <input type="checkbox" checked={f.enabled} onChange={set("enabled")} />
-                <span>Destino ativo</span>
+                <span>{t("Destino ativo")}</span>
               </label>
             </div>
           </div>
 
           {tipoInfo && (
-            <div className="small muted" style={{ marginTop: 6 }}>
-              Depois de salvar, use <strong>Testar</strong>: o painel grava um arquivo
+            <div className="small muted" style={{ marginTop: 6 }}>{t("Depois de salvar, use")}<strong>{t("Testar")}</strong>: o painel grava um arquivo
               pequeno, confere e apaga. Permissão de escrita e cota só aparecem na hora
               de gravar — melhor descobrir agora que no meio do backup.
             </div>
@@ -481,9 +467,7 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
         </div>
 
         <div className="modal-foot">
-          <button type="button" className="btn btn-secondary" onClick={onFechar}>
-            Cancelar
-          </button>
+          <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button className="btn btn-primary" disabled={enviando}>
             {enviando ? "Salvando…" : editando ? "Salvar" : "Cadastrar"}
           </button>

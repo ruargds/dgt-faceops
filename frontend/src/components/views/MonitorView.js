@@ -125,7 +125,7 @@ export default function MonitorView() {
     }
   }, [detalhe, janela, carregarSerie]);
 
-  if (carregando && !resumo) return <Carregando texto="Lendo o histórico…" />;
+  if (carregando && !resumo) return <Carregando texto={t("Lendo o histórico…")} />;
 
   const alertas = (resumo && resumo.alertas) || [];
   const servidores = (resumo && resumo.servidores) || [];
@@ -146,11 +146,10 @@ export default function MonitorView() {
         <div className="page-actions">
           <label className="check" style={{ margin: 0 }}>
             <input type="checkbox" checked={som} onChange={(e) => setSom(e.target.checked)} />
-            <span>Aviso sonoro</span>
+            <span>{t("Aviso sonoro")}</span>
           </label>
           <button className="btn btn-secondary" onClick={carregar}>
-            <IconAtualizar size={15} /> Atualizar
-          </button>
+            <IconAtualizar size={15} />{t("Atualizar")}</button>
         </div>
       </div>
 
@@ -164,8 +163,8 @@ export default function MonitorView() {
         >
           <div className="stack-h small" style={{ color: "var(--green-fg)" }}>
             <IconOk size={16} />
-            <strong>Tudo em ordem.</strong>
-            <span>Nenhum servidor com problema no momento.</span>
+            <strong>{t("Tudo em ordem.")}</strong>
+            <span>{t("Nenhum servidor com problema no momento.")}</span>
           </div>
         </div>
       ) : (
@@ -219,10 +218,7 @@ export default function MonitorView() {
 
       {/* ── Cartões ──────────────────────────────────────────────── */}
       {servidores.length === 0 ? (
-        <Vazio titulo="Nenhum servidor cadastrado">
-          Cadastre as máquinas em <strong>Servidores</strong> para o monitor
-          começar a acompanhar.
-        </Vazio>
+        <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as máquinas em")}<strong>{t("Servidores")}</strong>{t("para o monitor começar a acompanhar.")}</Vazio>
       ) : (
         <div className="grid-cards">
           {servidores.map((s) => (
@@ -267,7 +263,7 @@ export default function MonitorView() {
                     .baixar(api.urlExportarMonitor(detalhe, janela), `monitor-${hostDetalhe.host}-${janela}h.csv`)
                     .catch((e) => setErro(e.message))
                 }
-                title="Baixar o histórico bruto em CSV"
+                title={t("Baixar o histórico bruto em CSV")}
               >
                 <IconDownload size={13} />
               </button>
@@ -287,7 +283,7 @@ export default function MonitorView() {
               {/* Uso real quando existe medição; amostra antiga não tem, e
                   aí o ponto some do gráfico em vez de virar 0%. */}
               <Painel
-                titulo="Processador em uso"
+                titulo={t("Processador em uso")}
                 explicacao={EXPLICACAO.cpu}
                 serie={serie.amostras
                   .filter((a) => a.cpu_uso !== null && a.cpu_uso !== undefined)
@@ -312,14 +308,14 @@ export default function MonitorView() {
                 legenda={`agora: ${serie.amostras.at(-1).carga} por núcleo`}
               />
               <Painel
-                titulo="Memória"
+                titulo={t("Memória")}
                 explicacao={EXPLICACAO.mem}
                 serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.mem }))}
                 limite={90}
                 legenda={`agora: ${serie.amostras.at(-1).mem}%`}
               />
               <Painel
-                titulo="Disco"
+                titulo={t("Disco")}
                 explicacao={EXPLICACAO.disco}
                 serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.disco }))}
                 limite={90}
@@ -331,14 +327,14 @@ export default function MonitorView() {
               {serie.tem_gpu && (
                 <>
                   <Painel
-                    titulo="Placa de vídeo — uso"
+                    titulo={t("Placa de vídeo — uso")}
                     explicacao={EXPLICACAO.gpu}
                     serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.gpu }))}
                     limite={95}
                     legenda={`${serie.amostras.at(-1).gpu_temp} °C`}
                   />
                   <Painel
-                    titulo="Placa de vídeo — memória"
+                    titulo={t("Placa de vídeo — memória")}
                     explicacao={EXPLICACAO.gpu_mem}
                     serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.gpu_mem }))}
                     limite={92}
@@ -356,7 +352,7 @@ export default function MonitorView() {
         O coletor lê cada servidor a cada {coletor.intervalo_s || 60} segundos —{" "}
         {coletor.ciclos || 0} ciclo(s) desde que o painel subiu. Esta tela lê o
         histórico já gravado; não é ela que conversa com os servidores. Ajuste
-        os limites de alerta em <strong>Configurações</strong>.
+        os limites de alerta em <strong>{t("Configurações")}</strong>.
       </div>
     </>
   );
@@ -409,10 +405,10 @@ function CartaoMonitor({ s, alertas, selecionado, onSelecionar }) {
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 2 }}>
         <div className="stack-h">
           <span className={`dot ${dot}`} />
-          <strong style={{ fontSize: 15, color: "var(--navy)" }}>{s.host}</strong>
+          <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{s.host}</strong>
         </div>
         {s.tem_gpu && (
-          <span className="pill pill-info"><IconGPU size={12} /> GPU</span>
+          <span className="pill pill-info"><IconGPU size={12} />{t("GPU")}</span>
         )}
       </div>
 
@@ -421,38 +417,36 @@ function CartaoMonitor({ s, alertas, selecionado, onSelecionar }) {
       </div>
 
       {!a ? (
-        <div className="small muted">
-          Aguardando a primeira leitura do coletor.
-        </div>
+        <div className="small muted">{t("Aguardando a primeira leitura do coletor.")}</div>
       ) : a.erro ? (
         <div className="small" style={{ color: "var(--red)" }}>{a.erro}</div>
       ) : (
         <>
           {a.cpu_uso !== null && a.cpu_uso !== undefined ? (
             <BarraMetrica
-              rotulo="Processador"
+              rotulo={t("Processador")}
               valor={a.cpu_uso}
               limite={90}
               detalhe={`${a.carga} por núcleo de fila`}
             />
           ) : (
             <BarraMetrica
-              rotulo="Carga por núcleo"
+              rotulo={t("Carga por núcleo")}
               valor={Math.min(a.cpu, 100)}
               limite={90}
               detalhe={`${a.carga} por núcleo — uso de CPU ainda não medido`}
             />
           )}
-          <BarraMetrica rotulo="Memória" valor={a.mem} limite={90} />
+          <BarraMetrica rotulo={t("Memória")} valor={a.mem} limite={90} />
           <BarraMetrica
-            rotulo="Disco"
+            rotulo={t("Disco")}
             valor={a.disco}
             limite={90}
             detalhe={`${a.disco_ponto} — ${a.disco_livre_gb} GB livres`}
           />
           {s.tem_gpu && (
             <BarraMetrica
-              rotulo="Memória de vídeo"
+              rotulo={t("Memória de vídeo")}
               valor={a.gpu_mem}
               limite={92}
               detalhe={a.gpu_temp ? `${a.gpu_temp} °C` : ""}
@@ -468,7 +462,7 @@ function CartaoMonitor({ s, alertas, selecionado, onSelecionar }) {
                 ? `${a.cont_rodando} de ${a.cont_total} serviços`
                 : "sem serviços do FindFace"}
             </span>
-            <span title="Quanto a leitura custou">{a.coleta_ms} ms</span>
+            <span title={t("Quanto a leitura custou")}>{a.coleta_ms} ms</span>
           </div>
           <div className="small muted" style={{ marginTop: 2 }}>
             Última leitura: {formatData(a.ts)}

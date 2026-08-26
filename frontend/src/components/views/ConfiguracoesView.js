@@ -76,7 +76,7 @@ function Marca({ onMudou }) {
 
   return (
     <div className="card">
-      <div className="section-title" style={{ marginBottom: 4 }}>Logotipos</div>
+      <div className="section-title" style={{ marginBottom: 4 }}>{t("Logotipos")}</div>
       <div className="small muted" style={{ marginBottom: 16 }}>
         Substitui a marca padrão sem reconstruir a aplicação. PNG, JPG, GIF
         ou SVG, até 2 MB. Fica no volume de dados, então sobrevive a
@@ -94,9 +94,7 @@ function Marca({ onMudou }) {
               <label className="label">
                 {l.rotulo}
                 {proprio && (
-                  <span className="pill pill-ok" style={{ marginLeft: 6, textTransform: "none" }}>
-                    próprio
-                  </span>
+                  <span className="pill pill-ok" style={{ marginLeft: 6, textTransform: "none" }}>{t("próprio")}</span>
                 )}
               </label>
 
@@ -145,7 +143,7 @@ function Marca({ onMudou }) {
                     className="btn btn-ghost btn-sm"
                     onClick={() => remover(l.tipo)}
                     disabled={ocupado === l.tipo}
-                    title="Voltar ao padrão"
+                    title={t("Voltar ao padrão")}
                   >
                     <IconLixeira size={13} />
                   </button>
@@ -236,8 +234,7 @@ export default function ConfiguracoesView() {
         </div>
         <div className="page-actions">
           <button className="btn btn-secondary" onClick={carregar} disabled={salvando}>
-            <IconAtualizar size={15} /> Recarregar
-          </button>
+            <IconAtualizar size={15} />{t("Recarregar")}</button>
           {podeEditar && (
             <button
               className="btn btn-primary"
@@ -298,9 +295,7 @@ export default function ConfiguracoesView() {
                         <span
                           className="pill pill-info"
                           style={{ marginLeft: 6, textTransform: "none" }}
-                        >
-                          não salvo
-                        </span>
+                        >{t("não salvo")}</span>
                       )}
                     </label>
 
@@ -371,11 +366,10 @@ export default function ConfiguracoesView() {
         ))}
       </div>
 
-      <div className="small muted" style={{ marginTop: 16 }}>
-        O que <strong>não</strong> fica aqui, por precisar existir antes do banco
-        subir: <span className="mono">SECRET_KEY</span>,{" "}
-        <span className="mono">POSTGRES_PASSWORD</span> e{" "}
-        <span className="mono">PORTA_HTTP</span> continuam no{" "}
+      <div className="small muted" style={{ marginTop: 16 }}>{t("O que")}<strong>{t("não")}</strong> fica aqui, por precisar existir antes do banco
+        subir: <span className="mono">{t("SECRET_KEY")}</span>,{" "}
+        <span className="mono">{t("POSTGRES_PASSWORD")}</span> e{" "}
+        <span className="mono">{t("PORTA_HTTP")}</span> continuam no{" "}
         <span className="mono">.env</span>. Credenciais de acesso ficam no cofre,
         nas telas de Servidores e Destinos.
       </div>

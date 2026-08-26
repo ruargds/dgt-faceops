@@ -42,6 +42,17 @@
   --hover: #FAFBFC;
   --linha-par: #FCFDFE;
 
+  /* Cor de TÍTULO. Separada de --navy porque --navy é também o fundo da
+     barra lateral e vem da marca do cliente em tempo de execução: no tema
+     escuro o título precisa clarear sem que a barra clareie junto. */
+  --titulo: var(--navy);
+  /* Texto sobre cor sólida (botão primário, item ativo do menu). Branco
+     nos dois temas — não é superfície, é contraste. */
+  --sobre-cor: #FFFFFF;
+  /* Selo informativo */
+  --blue-bg: #E7F1FB;
+  --blue-fg: var(--blue-2);
+
   /* Terminal (padrão Camsync) */
   --term-bg: #0f172a;
   --term-bg-2: #16213a;
@@ -101,6 +112,10 @@
   --hover: #16222F;
   --linha-par: #0E1826;
 
+  --titulo: #F1F6FC;
+  --blue-bg: #10243A;
+  --blue-fg: #8CC2F5;
+
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
   --shadow: 0 2px 8px rgba(0,0,0,0.45);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.55);
@@ -158,7 +173,7 @@ input[type="checkbox"] { width: auto; }
   font-size: 13px; transition: background .12s, border-color .12s;
   border: 1px solid transparent; cursor: pointer; white-space: nowrap;
 }
-.btn-primary { background: var(--blue); color: var(--white); }
+.btn-primary { background: var(--blue); color: var(--sobre-cor); }
 .btn-primary:hover:not(:disabled) { background: var(--blue-2); }
 .btn-primary:disabled { background: var(--text-3); cursor: not-allowed; }
 
@@ -213,7 +228,7 @@ input[type="checkbox"] { width: auto; }
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
 }
-.page-title { font-size: 20px; font-weight: 600; color: var(--navy); }
+.page-title { font-size: 20px; font-weight: 600; color: var(--titulo); }
 .page-sub { font-size: 13px; color: var(--text-3); margin-top: 2px; }
 .page-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
@@ -234,8 +249,8 @@ input[type="checkbox"] { width: auto; }
   font-size: 13.5px; font-weight: 500; margin-bottom: 2px; text-align: left;
   transition: background .12s, color .12s;
 }
-.nav-item:hover { background: rgba(255,255,255,0.06); color: var(--white); }
-.nav-item.active { background: var(--blue); color: var(--white); }
+.nav-item:hover { background: rgba(255,255,255,0.06); color: var(--sobre-cor); }
+.nav-item.active { background: var(--blue); color: var(--sobre-cor); }
 .nav-item svg { flex-shrink: 0; }
 .nav-group {
   font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
@@ -245,7 +260,7 @@ input[type="checkbox"] { width: auto; }
 .sidebar-foot {
   padding: 12px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px;
 }
-.sidebar-user { color: var(--white); font-weight: 600; }
+.sidebar-user { color: var(--sobre-cor); font-weight: 600; }
 .sidebar-role { color: #62748C; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
 .seletor-idioma {
   width: 100%; margin-top: 6px; padding: 4px 6px; font-size: 11.5px;
@@ -286,7 +301,7 @@ input[type="checkbox"] { width: auto; }
 .pill-warn { background: var(--amber-bg); color: var(--amber-fg); }
 .pill-err { background: var(--red-bg); color: var(--red-fg); }
 .pill-idle { background: var(--bg-2); color: var(--text-2); }
-.pill-info { background: #E7F1FB; color: var(--blue-2); }
+.pill-info { background: var(--blue-bg); color: var(--blue-fg); }
 
 .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .dot-ok { background: var(--green); }
@@ -340,7 +355,7 @@ td.right, th.right { text-align: right; }
 .stat { display: flex; flex-direction: column; gap: 5px; }
 .stat-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-3); }
-.stat-value { font-size: 17px; font-weight: 650; color: var(--navy); }
+.stat-value { font-size: 17px; font-weight: 650; color: var(--titulo); }
 .stat-sub { font-size: 11.5px; color: var(--text-3); }
 
 .grid-cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
@@ -361,7 +376,7 @@ td.right, th.right { text-align: right; }
   padding: 16px 20px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
-.modal-title { font-size: 16px; font-weight: 600; color: var(--navy); }
+.modal-title { font-size: 16px; font-weight: 600; color: var(--titulo); }
 .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
 .modal-foot {
   padding: 14px 20px; border-top: 1px solid var(--border);

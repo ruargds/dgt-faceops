@@ -67,9 +67,7 @@ function Limpeza({ hostId, hostNome }) {
   return (
     <div className="card">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-        <div className="section-title" style={{ marginBottom: 0 }}>
-          Limpeza de eventos antigos
-        </div>
+        <div className="section-title" style={{ marginBottom: 0 }}>{t("Limpeza de eventos antigos")}</div>
         <button className="btn btn-secondary btn-sm" onClick={carregar} disabled={carregando}>
           {carregando ? "Consultando…" : dados ? "Recarregar" : "Consultar opções"}
         </button>
@@ -96,8 +94,7 @@ function Limpeza({ hostId, hostNome }) {
       )}
 
       {dados && !dados.confirmado_pelo_servidor && (
-        <div className="small" style={{ color: "var(--amber)", marginBottom: 10 }}>
-          O servidor não respondeu ao <span className="mono">--help</span>. A
+        <div className="small" style={{ color: "var(--amber)", marginBottom: 10 }}>{t("O servidor não respondeu ao")}<span className="mono">--help</span>. A
           lista abaixo é a documentada para a 2.4.1 e pode não bater com esta
           instalação.
         </div>
@@ -110,8 +107,8 @@ function Limpeza({ hostId, hostNome }) {
               <thead>
                 <tr>
                   <th style={{ width: 1 }}></th>
-                  <th>O que apagar</th>
-                  <th style={{ width: 150 }}>Mais velho que</th>
+                  <th>{t("O que apagar")}</th>
+                  <th style={{ width: 150 }}>{t("Mais velho que")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,9 +132,7 @@ function Limpeza({ hostId, hostNome }) {
                         <div className="small">
                           {o.descricao}
                           {o.pesada && (
-                            <span className="pill pill-info" style={{ marginLeft: 6 }}>
-                              libera mais
-                            </span>
+                            <span className="pill pill-info" style={{ marginLeft: 6 }}>{t("libera mais")}</span>
                           )}
                         </div>
                         <div className="small muted mono">--{o.nome}</div>
@@ -174,8 +169,8 @@ function Limpeza({ hostId, hostNome }) {
               style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)", marginBottom: 12 }}
             >
               <span className="small" style={{ color: "var(--red-fg)" }}>
-                <IconAlerta size={13} /> Há item com <strong>0 dias</strong>. Isso
-                apaga <strong>TODOS</strong> os registros daquele tipo, não só os
+                <IconAlerta size={13} />{t("Há item com")}<strong>{t("0 dias")}</strong>. Isso
+                apaga <strong>{t("TODOS")}</strong> os registros daquele tipo, não só os
                 antigos.
               </span>
             </div>
@@ -208,9 +203,7 @@ function Limpeza({ hostId, hostNome }) {
                 className="btn btn-danger"
                 disabled={!itens.length || dados.em_andamento}
                 onClick={() => setConfirmando(true)}
-              >
-                Apagar eventos antigos
-              </button>
+              >{t("Apagar eventos antigos")}</button>
             )}
           </div>
         </>
@@ -218,9 +211,9 @@ function Limpeza({ hostId, hostNome }) {
 
       {confirmando && (
         <ConfirmarDigitando
-          titulo="Apagar eventos antigos"
+          titulo={t("Apagar eventos antigos")}
           palavra={hostNome}
-          rotuloBotao="Apagar definitivamente"
+          rotuloBotao={t("Apagar definitivamente")}
           aviso={
             `Isto APAGA de ${hostNome}: ` +
             itens
@@ -290,9 +283,7 @@ function Faxina() {
 
   return (
     <div className="card">
-      <div className="section-title" style={{ marginBottom: 4 }}>
-        Faxina do painel
-      </div>
+      <div className="section-title" style={{ marginBottom: 4 }}>{t("Faxina do painel")}</div>
       <div className="small muted" style={{ marginBottom: 14 }}>
         Roda sozinha uma vez por dia. Impede o painel de crescer sem fim.
         O artefato de backup não é tocado aqui — tem retenção própria, por
@@ -305,37 +296,29 @@ function Faxina() {
         <table>
           <thead>
             <tr>
-              <th>O que</th>
-              <th className="right">A remover agora</th>
-              <th>Retenção</th>
+              <th>{t("O que")}</th>
+              <th className="right">{t("A remover agora")}</th>
+              <th>{t("Retenção")}</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>Gravações do terminal</td>
+              <td>{t("Gravações do terminal")}</td>
               <td className="right mono">
                 {previa.gravacoes} ({formatBytes(previa.gravacoes_bytes)})
               </td>
               <td className="small muted">{r.gravacoes_dias} dias</td>
             </tr>
             <tr>
-              <td>
-                Staging órfão
-                <div className="small muted">
-                  sobra de execução que falhou no meio
-                </div>
+              <td>{t("Staging órfão")}<div className="small muted">{t("sobra de execução que falhou no meio")}</div>
               </td>
               <td className="right mono">
                 {previa.staging} ({formatBytes(previa.staging_bytes)})
               </td>
-              <td className="small muted">24 horas</td>
+              <td className="small muted">{t("24 horas")}</td>
             </tr>
             <tr>
-              <td>
-                Registros de auditoria
-                <div className="small muted">
-                  nível crítico fica o triplo do prazo
-                </div>
+              <td>{t("Registros de auditoria")}<div className="small muted">{t("nível crítico fica o triplo do prazo")}</div>
               </td>
               <td className="right mono">
                 {previa.auditoria} de {previa.auditoria_total}
@@ -343,11 +326,7 @@ function Faxina() {
               <td className="small muted">{r.auditoria_dias} dias</td>
             </tr>
             <tr>
-              <td>
-                Log das execuções
-                <div className="small muted">
-                  esvazia o texto, mantém a linha do histórico
-                </div>
+              <td>{t("Log das execuções")}<div className="small muted">{t("esvazia o texto, mantém a linha do histórico")}</div>
               </td>
               <td className="right mono">{previa.logs_execucao}</td>
               <td className="small muted">{r.log_execucao_dias} dias</td>
@@ -380,7 +359,7 @@ function Faxina() {
           {temAlgo
             ? `Liberaria ${formatBytes(totalBytes)} em disco agora.`
             : "Nada a remover no momento."}{" "}
-          Os prazos ficam em <strong>Configurações → Faxina automática</strong>.
+          Os prazos ficam em <strong>{t("Configurações → Faxina automática")}</strong>.
         </span>
         {has("maintenance.apply") && (
           <button
@@ -498,9 +477,7 @@ function LimpezaPontual() {
 
   return (
     <div className="card">
-      <div className="section-title" style={{ marginBottom: 4 }}>
-        Limpeza pontual
-      </div>
+      <div className="section-title" style={{ marginBottom: 4 }}>{t("Limpeza pontual")}</div>
       <div className="small muted" style={{ marginBottom: 14 }}>
         Escolha o que sai e a partir de quantos dias. Não mexe na retenção
         automática, não toca em artefato de backup e não apaga cadastro,
@@ -533,7 +510,7 @@ function LimpezaPontual() {
       </div>
 
       <div className="stack-h" style={{ marginBottom: 12 }}>
-        <span className="small">Mais velho que</span>
+        <span className="small">{t("Mais velho que")}</span>
         <input
           type="number"
           min={7}
@@ -558,8 +535,7 @@ function LimpezaPontual() {
         >
           <span className="small" style={{ color: "var(--amber-fg)" }}>
             {total > 0 ? (
-              <>
-                Sairiam <strong>{total}</strong> item(ns) com mais de{" "}
+              <>{t("Sairiam")}<strong>{total}</strong> item(ns) com mais de{" "}
                 <strong>{previa.dias}</strong> dias
                 {bytes > 0 ? <> e {formatBytes(bytes)} de disco</> : null}.
               </>
@@ -605,17 +581,15 @@ function LimpezaPontual() {
             className="btn btn-danger"
             onClick={() => setConfirmando(true)}
             disabled={!previa || total === 0}
-          >
-            Limpar
-          </button>
+          >{t("Limpar")}</button>
         )}
       </div>
 
       {confirmando && previa && (
         <ConfirmarDigitando
-          titulo="Limpeza pontual do painel"
+          titulo={t("Limpeza pontual do painel")}
           palavra="LIMPAR"
-          rotuloBotao="Limpar"
+          rotuloBotao={t("Limpar")}
           aviso={
             "Remove " + total + " item(ns) com mais de " + previa.dias +
             " dias em " + selecionadas.length + " categoria(s). Não há lixeira: " +
@@ -713,7 +687,7 @@ export default function ManutencaoView() {
 
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   const host = hosts.find((h) => h.id === hostId);
   const crescGB = diag ? diag.crescimento_bytes_dia / 1073741824 : 0;
@@ -730,13 +704,10 @@ export default function ManutencaoView() {
         <div className="page-actions">
           <SeletorHost hosts={hosts} hostId={hostId} onMudar={setHostId} />
           {carregando ? (
-            <button className="btn btn-danger" onClick={pararDiagnostico}>
-              Parar
-            </button>
+            <button className="btn btn-danger" onClick={pararDiagnostico}>{t("Parar")}</button>
           ) : (
             <button className="btn btn-primary" onClick={diagnosticar} disabled={!hostId}>
-              <IconAtualizar size={15} /> Diagnosticar
-            </button>
+              <IconAtualizar size={15} />{t("Diagnosticar")}</button>
           )}
         </div>
       </div>
@@ -757,9 +728,9 @@ export default function ManutencaoView() {
       )}
 
       {!diag && !carregando && (
-        <Vazio titulo="Clique em Diagnosticar">
+        <Vazio titulo={t("Clique em Diagnosticar")}>
           A análise lê o disco, mede a velocidade de crescimento do log e
-          verifica o que já está configurado. <strong>Não altera nada.</strong>
+          verifica o que já está configurado. <strong>{t("Não altera nada.")}</strong>
         </Vazio>
       )}
 
@@ -768,7 +739,7 @@ export default function ManutencaoView() {
           {/* ── Resumo ───────────────────────────────────────────── */}
           <div className="grid-stats">
             <div className="card card-tight stat">
-              <span className="stat-label">Crescimento do log</span>
+              <span className="stat-label">{t("Crescimento do log")}</span>
               <div
                 className="stat-value"
                 style={{ color: crescGB > 1 ? "var(--red)" : crescGB > 0.2 ? "var(--amber)" : "var(--green)" }}
@@ -793,12 +764,12 @@ export default function ManutencaoView() {
             </div>
 
             <div className="card card-tight stat">
-              <span className="stat-label">Contenção aplicada</span>
+              <span className="stat-label">{t("Contenção aplicada")}</span>
               <div className="stat-value">
                 {diag.contencao_aplicada && diag.contencao_aplicada.rsyslog ? (
-                  <span style={{ color: "var(--green)" }}>Sim</span>
+                  <span style={{ color: "var(--green)" }}>{t("Sim")}</span>
                 ) : (
-                  <span style={{ color: "var(--amber)" }}>Não</span>
+                  <span style={{ color: "var(--amber)" }}>{t("Não")}</span>
                 )}
               </div>
               <span className="stat-sub">
@@ -809,15 +780,15 @@ export default function ManutencaoView() {
 
           {/* ── Discos ───────────────────────────────────────────── */}
           <div>
-            <div className="section-title">Discos</div>
+            <div className="section-title">{t("Discos")}</div>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Ponto</th>
-                    <th className="right">Usado</th>
-                    <th className="right">Livre</th>
-                    <th style={{ width: 170 }}>Ocupação</th>
+                    <th>{t("Ponto")}</th>
+                    <th className="right">{t("Usado")}</th>
+                    <th className="right">{t("Livre")}</th>
+                    <th style={{ width: 170 }}>{t("Ocupação")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -853,11 +824,10 @@ export default function ManutencaoView() {
 
           {/* ── Ação 1: contenção ────────────────────────────────── */}
           <div className="card">
-            <div className="section-title">1. Conter o crescimento do log</div>
+            <div className="section-title">{t("1. Conter o crescimento do log")}</div>
 
             {diag.container_polui_syslog ? (
-              <div className="small" style={{ marginBottom: 12 }}>
-                Os containers estão gravando no <span className="mono">/var/log/syslog</span> —{" "}
+              <div className="small" style={{ marginBottom: 12 }}>{t("Os containers estão gravando no")}<span className="mono">/var/log/syslog</span> —{" "}
                 <strong>{diag.linhas_container_no_syslog} das últimas 2000 linhas</strong>.
                 O filtro descarta apenas requisição HTTP bem-sucedida (2xx/3xx);
                 erro e aviso continuam sendo gravados.
@@ -875,28 +845,23 @@ export default function ManutencaoView() {
 
             {diag.amostra && (
               <details style={{ marginBottom: 12 }}>
-                <summary className="small muted" style={{ cursor: "pointer" }}>
-                  Ver amostra do que está sendo gravado
-                </summary>
+                <summary className="small muted" style={{ cursor: "pointer" }}>{t("Ver amostra do que está sendo gravado")}</summary>
                 <div className="log" style={{ marginTop: 8, maxHeight: 160 }}>{diag.amostra}</div>
               </details>
             )}
 
             <div className="stack-h">
               <button className="btn btn-secondary" onClick={() => simular("contencao")}>
-                <IconLogs size={15} /> Ver o que será alterado
-              </button>
+                <IconLogs size={15} />{t("Ver o que será alterado")}</button>
               {has("maintenance.apply") && (
-                <button className="btn btn-primary" onClick={() => setConfirmando("contencao")}>
-                  Aplicar contenção
-                </button>
+                <button className="btn btn-primary" onClick={() => setConfirmando("contencao")}>{t("Aplicar contenção")}</button>
               )}
             </div>
           </div>
 
           {/* ── Ação 2: arquivar ─────────────────────────────────── */}
           <div className="card">
-            <div className="section-title">2. Arquivar log antigo</div>
+            <div className="section-title">{t("2. Arquivar log antigo")}</div>
             <div className="small" style={{ marginBottom: 12 }}>
               Move os arquivos já rotacionados (
               <strong>{formatBytes(diag.rotacionados_bytes)}</strong> em{" "}
@@ -910,28 +875,24 @@ export default function ManutencaoView() {
 
             <div className="row row-2">
               <div className="field">
-                <label className="label">Destino</label>
+                <label className="label">{t("Destino")}</label>
                 <input
                   className="mono"
                   value={destino}
                   onChange={(e) => setDestino(e.target.value)}
                   placeholder="/media/STORAGE/logs-arquivados"
                 />
-                <div className="field-help">
-                  Sugerido pelo disco com mais espaço livre.
-                </div>
+                <div className="field-help">{t("Sugerido pelo disco com mais espaço livre.")}</div>
               </div>
               <div className="field">
-                <label className="label">Incluir o syslog ativo</label>
+                <label className="label">{t("Incluir o syslog ativo")}</label>
                 <label className="check">
                   <input
                     type="checkbox"
                     checked={incluirAtivo}
                     onChange={(e) => setIncluirAtivo(e.target.checked)}
                   />
-                  <span>
-                    Copiar o <span className="mono">/var/log/syslog</span> atual e
-                    zerá-lo com <span className="mono">truncate</span> (nunca{" "}
+                  <span>{t("Copiar o")}<span className="mono">/var/log/syslog</span>{t("atual e zerá-lo com")}<span className="mono">truncate</span> (nunca{" "}
                     <span className="mono">rm</span> — o rsyslog o mantém aberto e
                     apagar não devolveria o espaço)
                   </span>
@@ -945,16 +906,13 @@ export default function ManutencaoView() {
                 onClick={() => simular("arquivar")}
                 disabled={!destino}
               >
-                <IconLogs size={15} /> Ver o que será movido
-              </button>
+                <IconLogs size={15} />{t("Ver o que será movido")}</button>
               {has("maintenance.apply") && (
                 <button
                   className="btn btn-primary"
                   onClick={() => setConfirmando("arquivar")}
                   disabled={!destino}
-                >
-                  Arquivar
-                </button>
+                >{t("Arquivar")}</button>
               )}
             </div>
           </div>
@@ -978,17 +936,15 @@ export default function ManutencaoView() {
 
               {previa.tipo === "arquivar" && (
                 <>
-                  <div className="small" style={{ marginBottom: 10 }}>
-                    Destino <span className="mono">{previa.destino}</span> ·{" "}
+                  <div className="small" style={{ marginBottom: 10 }}>{t("Destino")}<span className="mono">{previa.destino}</span> ·{" "}
                     {previa.candidatos.length} arquivo(s) ·{" "}
-                    <strong>{formatBytes(previa.total_bytes)}</strong> a liberar
-                  </div>
+                    <strong>{formatBytes(previa.total_bytes)}</strong>{t("a liberar")}</div>
                   <div className="table-wrap">
                     <table>
                       <thead>
                         <tr>
-                          <th>Arquivo</th>
-                          <th className="right">Tamanho</th>
+                          <th>{t("Arquivo")}</th>
+                          <th className="right">{t("Tamanho")}</th>
                         </tr>
                       </thead>
                       <tbody>

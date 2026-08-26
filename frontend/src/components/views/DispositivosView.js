@@ -22,40 +22,104 @@ const PERIODOS = [
 /**
  * Licenciamento do FindFace.
  *
- * "Cabem quantas câmeras ainda?" era pergunta que só a interface da
- * NtechLab respondia, e que aparece em toda conversa de expansão. Vem da
- * API HTTP: limite, uso e o que sobra, com o número real de câmeras
- * cadastradas confrontando o limite licenciado.
+ * É a mesma tela de licenças da plataforma da NtechLab, trazida para cá:
+ * identificação e validade no topo, e a tabela de recursos com o que está
+ * **em uso** e o que está **liberado**. Existe porque "cabem quantas
+ * câmeras ainda?" e "estamos estourando algum limite?" eram perguntas que
+ * só tinham resposta entrando na interface do fabricante.
  *
- * Quando a instalação devolve a licença num formato que o achatamento do
- * servidor não reconhece, o corpo bruto fica acessível ali mesmo — melhor
- * mostrar JSON do que esconder o dado.
+ * O número de uso muda o tempo todo, então há botão de reler — a leitura é
+ * barata (um GET, sem SSH), mas não fica se atualizando sozinha: quem
+ * quiser o número de agora pede o número de agora.
+ *
+ * Recurso estourado (usado > liberado, como o `Objects TNT API` a
+ * 2.400.054 de 2.400.000 na instalação real) sobe para o topo e aparece em
+ * vermelho: é o que trava operação sem avisar ninguém.
  */
-function Licenciamento({ dados, erro }) {
+function Licenciamento({ dados, erro, lendo, onAtualizar }) {
   const [verBruto, setVerBruto] = useState(false);
 
   if (erro) {
     return (
       <div className="card card-tight">
-        <div className="section-title" style={{ marginBottom: 4 }}>
-          Licenciamento
+        <div className="stack-h" style={{ justifyContent: "space-between" }}>
+          <div className="section-title" style={{ marginBottom: 0 }}>{t("Licenciamento")}</div>
+          <button className="btn btn-ghost btn-sm" onClick={onAtualizar} disabled={lendo}>
+            <IconAtualizar size={14} /> {lendo ? "Lendo…" : "Tentar de novo"}
+          </button>
         </div>
-        <div className="small muted">{erro}</div>
+        <div className="small muted" style={{ marginTop: 6 }}>{erro}</div>
       </div>
     );
   }
-  if (!dados) return null;
+  if (!dados) {
+    return lendo ? <Carregando texto={t("Lendo o licenciamento do FindFace…")} /> : null;
+  }
 
-  const itens = dados.itens || [];
+  const cab = dados.cabecalho || {};
+  // Estourado primeiro; depois o mais ocupado. Quem abre a tela precisa ver
+  // o problema sem procurar.
+  const itens = [...(dados.itens || [])].sort((a, b) => {
+    if (Boolean(b.estourado) !== Boolean(a.estourado)) return b.estourado ? 1 : -1;
+    const oa = a.limite > 0 && a.usado != null ? a.usado / a.limite : -1;
+    const ob = b.limite > 0 && b.usado != null ? b.usado / b.limite : -1;
+    return ob - oa;
+  });
+
+  const numero = (v) =>
+    v === null || v === undefined ? "—" : Number(v).toLocaleString("pt-BR");
 
   return (
     <div className="card">
-      <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-        <div className="section-title">Licenciamento</div>
-        <span className="small muted mono">
-          {dados.url}
-          {dados.caminho}
-        </span>
+      <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+        <div className="section-title" style={{ marginBottom: 0 }}>
+          Licenciamento
+          {dados.estourados > 0 && (
+            <span className="pill pill-err" style={{ marginLeft: 8 }}>
+              <IconAlerta size={11} /> {dados.estourados} limite(s) estourado(s)
+            </span>
+          )}
+          {dados.estourados === 0 && cab.valido && (
+            <span className="pill pill-ok" style={{ marginLeft: 8 }}>
+              <IconOk size={11} />{t("válida")}</span>
+          )}
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={onAtualizar} disabled={lendo}>
+          <IconAtualizar size={14} /> {lendo ? "Lendo…" : "Atualizar uso"}
+        </button>
+      </div>
+
+      <div className="grid-stats" style={{ marginBottom: 12 }}>
+        <div className="card card-tight stat">
+          <span className="stat-label">{t("Identificação")}</span>
+          <div className="mono small" style={{ wordBreak: "break-all" }}>
+            {cab.id || "—"}
+          </div>
+          <span className="stat-sub">{cab.tipo ? `tipo ${cab.tipo}` : "—"}</span>
+        </div>
+        <div className="card card-tight stat">
+          <span className="stat-label">{t("Validade")}</span>
+          <div className="stat-value">{cab.validade || "—"}</div>
+          <span className="stat-sub">
+            {cab.valido === false ? "licença inválida" : "data de expiração"}
+          </span>
+        </div>
+        <div className="card card-tight stat">
+          <span className="stat-label">{t("Arquivo")}</span>
+          <div className="mono small" style={{ wordBreak: "break-all" }}>
+            {cab.arquivo || "—"}
+          </div>
+          <span className="stat-sub">{t("no servidor do FindFace")}</span>
+        </div>
+        <div className="card card-tight stat">
+          <span className="stat-label">{t("Câmeras cadastradas")}</span>
+          <div className="stat-value">
+            {dados.cameras_cadastradas === null || dados.cameras_cadastradas === undefined
+              ? "—"
+              : dados.cameras_cadastradas}
+          </div>
+          <span className="stat-sub">{t("contadas agora, pela API")}</span>
+        </div>
       </div>
 
       {itens.length === 0 ? (
@@ -64,46 +128,55 @@ function Licenciamento({ dados, erro }) {
           Veja o conteúdo bruto abaixo.
         </div>
       ) : (
-        <div className="table-wrap" style={{ marginTop: 10 }}>
-          <table>
+        <div className="table-wrap">
+          <table className="tabela-densa">
             <thead>
               <tr>
-                <th>Recurso</th>
-                <th className="right">Liberado</th>
-                <th className="right">Em uso</th>
-                <th className="right">Livre</th>
-                <th style={{ width: 160 }}>Ocupação</th>
+                <th>{t("Recurso")}</th>
+                <th className="right">{t("Em uso")}</th>
+                <th className="right">{t("Liberado")}</th>
+                <th className="right">{t("Livre")}</th>
+                <th style={{ width: 150 }}>{t("Ocupação")}</th>
               </tr>
             </thead>
             <tbody>
               {itens.map((i, idx) => {
                 const pct =
-                  i.limite && i.limite > 0 && i.usado !== null && i.usado !== undefined
+                  i.limite > 0 && i.usado !== null && i.usado !== undefined
                     ? (i.usado / i.limite) * 100
                     : null;
                 return (
                   <tr key={`${i.recurso}-${idx}`}>
-                    <td className="mono">{i.recurso}</td>
-                    <td className="right mono">
-                      {i.ilimitado ? "ilimitado" : i.limite === null ? "—" : i.limite.toLocaleString("pt-BR")}
+                    <td>
+                      {i.recurso}
+                      {i.estourado && (
+                        <span className="pill pill-err" style={{ marginLeft: 8 }}>
+                          estourado
+                        </span>
+                      )}
+                    </td>
+                    <td
+                      className="right mono"
+                      style={i.estourado ? { color: "var(--red)", fontWeight: 600 } : undefined}
+                    >
+                      {numero(i.usado)}
                     </td>
                     <td className="right mono">
-                      {i.usado === null || i.usado === undefined
-                        ? "—"
-                        : i.usado.toLocaleString("pt-BR")}
+                      {i.ilimitado ? "ilimitado" : numero(i.limite)}
                     </td>
-                    <td className="right mono">
-                      {i.restante === null || i.restante === undefined
-                        ? "—"
-                        : i.restante.toLocaleString("pt-BR")}
+                    <td
+                      className="right mono"
+                      style={i.restante < 0 ? { color: "var(--red)" } : undefined}
+                    >
+                      {i.ilimitado ? "—" : numero(i.restante)}
                     </td>
                     <td>
                       {pct === null ? (
                         <span className="small muted">—</span>
                       ) : (
                         <div className="stack-h" style={{ gap: 8 }}>
-                          <Medidor pct={pct} />
-                          <span className="small mono">{pct.toFixed(0)}%</span>
+                          <Medidor pct={Math.min(pct, 100)} />
+                          <span className="mono small">{pct.toFixed(0)}%</span>
                         </div>
                       )}
                     </td>
@@ -116,10 +189,8 @@ function Licenciamento({ dados, erro }) {
       )}
 
       <div className="stack-h" style={{ marginTop: 10 }}>
-        <span className="small muted" style={{ flex: 1 }}>
-          {dados.cameras_cadastradas === null || dados.cameras_cadastradas === undefined
-            ? "Contagem de câmeras indisponível pela API."
-            : `${dados.cameras_cadastradas} câmera(s) cadastrada(s) no servidor agora.`}
+        <span className="small muted" style={{ flex: 1 }}>{t("Lido de")}<span className="mono">{dados.url}{dados.caminho}</span>. O uso é o
+          do instante da leitura — clique em Atualizar uso para o número de agora.
         </span>
         <button className="btn btn-ghost btn-sm" onClick={() => setVerBruto((v) => !v)}>
           {verBruto ? "Esconder resposta bruta" : "Ver resposta bruta"}
@@ -147,6 +218,7 @@ export default function DispositivosView() {
   const [filtro, setFiltro] = useState("");
   const [licenca, setLicenca] = useState(null);
   const [erroLicenca, setErroLicenca] = useState("");
+  const [lendoLicenca, setLendoLicenca] = useState(false);
 
   const consultar = useCallback(async () => {
     if (!hostId) return;
@@ -170,22 +242,27 @@ export default function DispositivosView() {
   // carrega sozinha ao trocar de servidor — diferente da contagem de
   // eventos, que continua sob demanda. Assim a tela responde algo útil
   // antes de alguém clicar em Consultar.
-  useEffect(() => {
+  const lerLicenca = useCallback(async () => {
     if (!hostId) return;
-    let vivo = true;
-    setLicenca(null);
+    setLendoLicenca(true);
     setErroLicenca("");
-    api
-      .licencaFindFace(hostId)
-      .then((r) => vivo && setLicenca(r))
-      .catch((ex) => vivo && setErroLicenca(ex.message));
-    return () => {
-      vivo = false;
-    };
+    try {
+      setLicenca(await api.licencaFindFace(hostId));
+    } catch (ex) {
+      setLicenca(null);
+      setErroLicenca(ex.message);
+    } finally {
+      setLendoLicenca(false);
+    }
   }, [hostId]);
 
+  useEffect(() => {
+    setLicenca(null);
+    lerLicenca();
+  }, [lerLicenca]);
+
   if (carregandoHosts) return <Carregando />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   const cameras = dados
     ? dados.cameras.filter((c) =>
@@ -221,32 +298,36 @@ export default function DispositivosView() {
                   .baixar(api.urlExportarDispositivos(hostId, periodo), `cameras-${periodo}.csv`)
                   .catch((e) => setErro(e.message))
               }
-              title="Baixar em CSV"
+              title={t("Baixar em CSV")}
             >
-              <IconDownload size={15} /> Exportar
-            </button>
+              <IconDownload size={15} />{t("Exportar")}</button>
           )}
         </div>
       </div>
 
       <Erro mensagem={erro} onTentar={consultar} />
 
-      <Licenciamento dados={licenca} erro={erroLicenca} />
+      <Licenciamento
+        dados={licenca}
+        erro={erroLicenca}
+        lendo={lendoLicenca}
+        onAtualizar={lerLicenca}
+      />
 
       {!dados && !carregando && (
-        <Vazio titulo="Clique em Consultar">
+        <Vazio titulo={t("Clique em Consultar")}>
           Lê o banco do FindFace e conta os eventos por câmera. Pode levar alguns
           segundos em base grande — por isso é sob demanda, não automático.
         </Vazio>
       )}
 
-      {carregando && !dados && <Carregando texto="Contando eventos no banco do FindFace…" />}
+      {carregando && !dados && <Carregando texto={t("Contando eventos no banco do FindFace…")} />}
 
       {dados && (
         <div className="stack-v">
           <div className="grid-stats">
             <div className="card card-tight stat">
-              <span className="stat-label">Câmeras cadastradas</span>
+              <span className="stat-label">{t("Câmeras cadastradas")}</span>
               <div className="stat-value">{dados.total_cameras}</div>
               <span className="stat-sub">{dados.esquema.banco}</span>
             </div>
@@ -255,22 +336,22 @@ export default function DispositivosView() {
               <div className="stat-value" style={{ color: "var(--green)" }}>
                 {dados.cameras_com_evento}
               </div>
-              <span className="stat-sub">geraram ao menos um evento</span>
+              <span className="stat-sub">{t("geraram ao menos um evento")}</span>
             </div>
             <div className="card card-tight stat">
-              <span className="stat-label">Sem eventos</span>
+              <span className="stat-label">{t("Sem eventos")}</span>
               <div
                 className="stat-value"
                 style={{ color: dados.cameras_mudas > 0 ? "var(--amber)" : "var(--text-3)" }}
               >
                 {dados.cameras_mudas}
               </div>
-              <span className="stat-sub">nada no período — pode estar offline</span>
+              <span className="stat-sub">{t("nada no período — pode estar offline")}</span>
             </div>
             <div className="card card-tight stat">
-              <span className="stat-label">Total de eventos</span>
+              <span className="stat-label">{t("Total de eventos")}</span>
               <div className="stat-value">{dados.total_eventos.toLocaleString("pt-BR")}</div>
-              <span className="stat-sub">no período</span>
+              <span className="stat-sub">{t("no período")}</span>
             </div>
           </div>
 
@@ -278,7 +359,7 @@ export default function DispositivosView() {
             <input
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
-              placeholder="filtrar câmera pelo nome…"
+              placeholder={t("filtrar câmera pelo nome…")}
               style={{ maxWidth: 280 }}
             />
             {dados.estimativa && (
@@ -292,12 +373,12 @@ export default function DispositivosView() {
             <table>
               <thead>
                 <tr>
-                  <th>Câmera</th>
-                  <th>Situação</th>
+                  <th>{t("Câmera")}</th>
+                  <th>{t("Situação")}</th>
                   <th className="right">Eventos ({dados.periodo_rotulo})</th>
-                  <th style={{ width: 140 }}>Participação</th>
-                  <th className="right">Volume estimado</th>
-                  <th>Último evento</th>
+                  <th style={{ width: 140 }}>{t("Participação")}</th>
+                  <th className="right">{t("Volume estimado")}</th>
+                  <th>{t("Último evento")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -314,8 +395,7 @@ export default function DispositivosView() {
                       <td>
                         {muda ? (
                           <span className="pill pill-warn">
-                            <IconAlerta size={11} /> sem eventos
-                          </span>
+                            <IconAlerta size={11} />{t("sem eventos")}</span>
                         ) : (
                           <span className="pill pill-ok">
                             <IconOk size={11} /> ativa

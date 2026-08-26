@@ -75,11 +75,11 @@ export default function TopologiaView() {
       <Erro mensagem={erro} onTentar={carregar} />
 
       {carregando && !dados && (
-        <Carregando texto="Varrendo os servidores por SSH e montando o mapa…" />
+        <Carregando texto={t("Varrendo os servidores por SSH e montando o mapa…")} />
       )}
 
       {dados && dados.servidores.length === 0 && (
-        <Vazio titulo="Nenhum servidor habilitado">
+        <Vazio titulo={t("Nenhum servidor habilitado")}>
           Cadastre e habilite servidores para o painel montar a topologia.
         </Vazio>
       )}
@@ -92,15 +92,13 @@ export default function TopologiaView() {
           >
             <span className="small">
               {dados.distribuido ? (
-                <>
-                  Instalação <strong>distribuída</strong>: o processamento está
+                <>{t("Instalação")}<strong>{t("distribuída")}</strong>: o processamento está
                   repartido entre {dados.servidores.filter((s) => s.camadas.length).length}{" "}
                   servidores. Cada coluna abaixo é uma etapa do reconhecimento; os
                   blocos coloridos dizem em que máquina ela roda.
                 </>
               ) : (
-                <>
-                  Instalação <strong>concentrada</strong>: as etapas rodam
+                <>{t("Instalação")}<strong>concentrada</strong>: as etapas rodam
                   praticamente num servidor só. O mesmo mapa vale — só que numa
                   coluna de cor única.
                 </>
@@ -173,9 +171,8 @@ function ColunaCamada({ camada, hosts, corDe, nomeDe }) {
         <div className="stack-h" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <strong style={{ fontSize: 13.5 }}>{camada.nome}</strong>
           {camada.gpu && (
-            <span className="pill pill-info" title="Usa GPU">
-              <IconGPU size={11} /> GPU
-            </span>
+            <span className="pill pill-info" title={t("Usa GPU")}>
+              <IconGPU size={11} />{t("GPU")}</span>
           )}
         </div>
         <div className="small muted" style={{ marginTop: 2, minHeight: 30 }}>
@@ -189,9 +186,7 @@ function ColunaCamada({ camada, hosts, corDe, nomeDe }) {
             origem externa (dispositivos)
           </span>
         ) : hosts.length === 0 ? (
-          <span className="small" style={{ color: "var(--amber)" }}>
-            não detectada
-          </span>
+          <span className="small" style={{ color: "var(--amber)" }}>{t("não detectada")}</span>
         ) : (
           hosts.map((hid) => (
             <span
@@ -223,17 +218,15 @@ function Legenda({ dados, corDe }) {
   const nomes = Object.fromEntries(dados.camadas.map((c) => [c.chave, c.nome]));
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="section-title" style={{ marginBottom: 8 }}>
-        Servidores e o que cada um carrega
-      </div>
+      <div className="section-title" style={{ marginBottom: 8 }}>{t("Servidores e o que cada um carrega")}</div>
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Servidor</th>
-              <th>Papel</th>
-              <th>GPU</th>
-              <th>Camadas que executa</th>
+              <th>{t("Servidor")}</th>
+              <th>{t("Papel")}</th>
+              <th>{t("GPU")}</th>
+              <th>{t("Camadas que executa")}</th>
             </tr>
           </thead>
           <tbody>
@@ -262,7 +255,7 @@ function Legenda({ dados, corDe }) {
                       sem contato: {s.erro}
                     </span>
                   ) : s.camadas.length === 0 ? (
-                    <span className="small muted">nenhuma do FindFace</span>
+                    <span className="small muted">{t("nenhuma do FindFace")}</span>
                   ) : (
                     <span className="stack-h" style={{ flexWrap: "wrap", gap: 5 }}>
                       {s.camadas.map((c) => (

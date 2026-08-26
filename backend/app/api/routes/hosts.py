@@ -23,7 +23,9 @@ def _para_out(host: Host) -> HostOut:
     saida = HostOut.model_validate(host)
     saida.tem_credencial = bool(host.ssh_key_enc or host.ssh_password_enc)
     saida.tem_sudo = bool(host.sudo_password_enc)
-    saida.tem_api = bool(host.ff_api_url and host.ff_api_token_enc)
+    saida.tem_api = bool(
+        host.ff_api_url and (host.ff_api_pass_enc or host.ff_api_token_enc)
+    )
     return saida
 
 
@@ -116,6 +118,8 @@ async def criar(
         enabled=dados.enabled,
         monitorar=dados.monitorar,
         ff_api_url=dados.ff_api_url,
+        ff_api_user=dados.ff_api_user or "",
+        ff_api_pass_enc=encrypt_secret(dados.ff_api_pass or ""),
         ff_api_token_enc=encrypt_secret(dados.ff_api_token or ""),
     )
     db.add(host)
@@ -157,7 +161,7 @@ async def atualizar(
     for campo in (
         "name", "description", "role", "ssh_user", "auth_method",
         "ffmulti_dir", "compose_file", "has_gpu", "enabled", "monitorar",
-        "ff_api_url", "ssh_port",
+        "ff_api_url", "ff_api_user", "ssh_port",
     ):
         valor = getattr(dados, campo)
         if valor is not None and getattr(host, campo) != valor:
@@ -192,6 +196,9 @@ async def atualizar(
     if dados.sudo_password is not None:
         host.sudo_password_enc = encrypt_secret(dados.sudo_password)
         alterados.append("sudo_password")
+    if dados.ff_api_pass is not None:
+        host.ff_api_pass_enc = encrypt_secret(dados.ff_api_pass)
+        alterados.append("ff_api_pass")
     if dados.ff_api_token is not None:
         host.ff_api_token_enc = encrypt_secret(dados.ff_api_token)
         alterados.append("ff_api_token")
@@ -348,6 +355,8 @@ async def testar(
 
 class TestarApiIn(BaseModel):
     ff_api_url: str | None = None
+    ff_api_user: str | None = None
+    ff_api_pass: str | None = None
     ff_api_token: str | None = None
 
 
@@ -375,20 +384,34 @@ async def testar_api(
         raise HTTPException(status_code=404, detail="servidor não encontrado")
 
     url = (dados.ff_api_url or host.ff_api_url or "").strip()
+
+    # O que foi digitado na tela tem precedência sobre o que está salvo —
+    # é isso que permite validar a credencial ANTES de gravar.
+    usuario = dados.ff_api_user if dados.ff_api_user is not None else host.ff_api_user
+    if dados.ff_api_pass:
+        senha = dados.ff_api_pass
+    else:
+        senha = decrypt_secret(host.ff_api_pass_enc) if host.ff_api_pass_enc else ""
     if dados.ff_api_token:
         token = dados.ff_api_token
     else:
         token = decrypt_secret(host.ff_api_token_enc) if host.ff_api_token_enc else ""
 
-    if not url or not token:
-        return {"ok": False, "erro": "informe a URL e o token da API do FindFace"}
+    if not url or not ((usuario and senha) or token):
+        return {
+            "ok": False,
+            "erro": "informe a URL e o usuário/senha do FindFace (ou um token)",
+        }
 
     # objeto leve que o FFApiService entende, sem tocar no banco
     from app.core.vault import encrypt_secret
     alvo = SimpleNamespace(
+        id=host.id,
         name=host.name,
         ff_api_url=url,
-        ff_api_token_enc=encrypt_secret(token),
+        ff_api_user=usuario or "",
+        ff_api_pass_enc=encrypt_secret(senha or ""),
+        ff_api_token_enc=encrypt_secret(token or ""),
     )
     try:
         r = await request.app.state.ffapi.testar(alvo)

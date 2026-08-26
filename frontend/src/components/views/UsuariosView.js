@@ -66,8 +66,7 @@ export default function UsuariosView() {
         </div>
         <div className="page-actions">
           <button className="btn btn-primary" onClick={() => setEditando({})}>
-            <IconMais size={15} /> Novo usuário
-          </button>
+            <IconMais size={15} />{t("Novo usuário")}</button>
         </div>
       </div>
 
@@ -78,11 +77,11 @@ export default function UsuariosView() {
           <table>
             <thead>
               <tr>
-                <th>Usuário</th>
-                <th>Nome</th>
-                <th>Perfil</th>
-                <th>Situação</th>
-                <th>Último acesso</th>
+                <th>{t("Usuário")}</th>
+                <th>{t("Nome")}</th>
+                <th>{t("Perfil")}</th>
+                <th>{t("Situação")}</th>
+                <th>{t("Último acesso")}</th>
                 <th style={{ width: 1 }}></th>
               </tr>
             </thead>
@@ -95,7 +94,7 @@ export default function UsuariosView() {
                       <span className="pill pill-info" style={{ marginLeft: 6 }}>super</span>
                     )}
                     {u.id === eu.id && (
-                      <span className="pill pill-idle" style={{ marginLeft: 6 }}>você</span>
+                      <span className="pill pill-idle" style={{ marginLeft: 6 }}>{t("você")}</span>
                     )}
                   </td>
                   <td>{u.full_name || <span className="muted">—</span>}</td>
@@ -105,17 +104,13 @@ export default function UsuariosView() {
                       {u.is_active ? "ativo" : "inativo"}
                     </span>
                     {u.senha_padrao && (
-                      <div className="small" style={{ color: "var(--amber)", marginTop: 3 }}>
-                        senha de fábrica
-                      </div>
+                      <div className="small" style={{ color: "var(--amber)", marginTop: 3 }}>{t("senha de fábrica")}</div>
                     )}
                   </td>
                   <td className="small muted">{formatData(u.last_login_at)}</td>
                   <td>
                     <div className="stack-h" style={{ gap: 6, flexWrap: "nowrap" }}>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setEditando(u)}>
-                        Editar
-                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setEditando(u)}>{t("Editar")}</button>
                       {u.id !== eu.id && (
                         <>
                           <button className="btn btn-secondary btn-sm" onClick={() => alternarAtivo(u)}>
@@ -137,7 +132,7 @@ export default function UsuariosView() {
         </div>
 
         <div className="card">
-          <div className="section-title">O que cada perfil pode fazer</div>
+          <div className="section-title">{t("O que cada perfil pode fazer")}</div>
           <div className="small muted" style={{ marginBottom: 12 }}>
             As permissões são fixas no código, não em tabela. Botão sem permissão não
             aparece na tela — não fica cinza.
@@ -146,8 +141,8 @@ export default function UsuariosView() {
             <table>
               <thead>
                 <tr>
-                  <th>Permissão</th>
-                  <th>O que libera</th>
+                  <th>{t("Permissão")}</th>
+                  <th>{t("O que libera")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -224,7 +219,7 @@ function ModalUsuario({ inicial, perfis, onFechar, onPronto }) {
 
           <div className="row row-2">
             <div className="field">
-              <label className="label label-required">Usuário</label>
+              <label className="label label-required">{t("Usuário")}</label>
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -233,28 +228,27 @@ function ModalUsuario({ inicial, perfis, onFechar, onPronto }) {
               />
             </div>
             <div className="field">
-              <label className="label">Nome completo</label>
+              <label className="label">{t("Nome completo")}</label>
               <input value={fullName} onChange={(e) => setFullName(e.target.value)} />
             </div>
           </div>
 
           <div className="field">
-            <label className="label label-required">Perfil</label>
+            <label className="label label-required">{t("Perfil")}</label>
             <select value={role} onChange={(e) => setRole(e.target.value)}>
               {Object.entries(perfis).map(([id, nome]) => (
                 <option key={id} value={id}>{nome}</option>
               ))}
             </select>
             <div className="field-help">
-              <strong>Observador</strong> vê tudo e não executa nada.{" "}
-              <strong>Operador</strong> reinicia container e dispara backup.{" "}
-              <strong>Técnico</strong> soma terminal com sudo e agendamentos.{" "}
-              <strong>Administrador</strong> tem tudo, inclusive restore e parada do stack.
-            </div>
+              <strong>{t("Observador")}</strong> vê tudo e não executa nada.{" "}
+              <strong>{t("Operador")}</strong> reinicia container e dispara backup.{" "}
+              <strong>{t("Técnico")}</strong> soma terminal com sudo e agendamentos.{" "}
+              <strong>{t("Administrador")}</strong>{t("tem tudo, inclusive restore e parada do stack.")}</div>
           </div>
 
           <div className="field">
-            <label className={`label ${editando ? "" : "label-required"}`}>Senha</label>
+            <label className={`label ${editando ? "" : "label-required"}`}>{t("Senha")}</label>
             <input
               type="password"
               value={senha}
@@ -267,7 +261,7 @@ function ModalUsuario({ inicial, perfis, onFechar, onPronto }) {
           </div>
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn btn-secondary" onClick={onFechar}>Cancelar</button>
+          <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button className="btn btn-primary" disabled={enviando}>
             {enviando ? "Salvando…" : editando ? "Salvar" : "Criar"}
           </button>

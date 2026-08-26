@@ -61,6 +61,10 @@ class Host(Base):
     # cameras usa a API oficial em vez de ler o Postgres via SSH — mais
     # limpo e sem depender de acesso ao banco. O token vai cifrado.
     ff_api_url: Mapped[str] = mapped_column(String(255), default="")
+    # A instalação real do FindFace entra com USUÁRIO E SENHA; o token é o
+    # caminho alternativo, para quem gerou um. Os dois ficam no cofre.
+    ff_api_user: Mapped[str] = mapped_column(String(120), default="")
+    ff_api_pass_enc: Mapped[str] = mapped_column(Text, default="")
     ff_api_token_enc: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

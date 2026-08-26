@@ -78,7 +78,7 @@ export default function ServicosView() {
 
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   const host = hosts.find((h) => h.id === hostId);
 
@@ -94,20 +94,17 @@ export default function ServicosView() {
         <div className="page-actions">
           <SeletorHost hosts={hosts} hostId={hostId} onMudar={setHostId} />
           <button className="btn btn-secondary" onClick={carregar} disabled={carregando}>
-            <IconAtualizar size={15} /> Atualizar
-          </button>
+            <IconAtualizar size={15} />{t("Atualizar")}</button>
           {has("services.stack") && dados && (
             <>
               <button
                 className="btn btn-secondary"
                 onClick={() => setAcaoStack("up")}
-                title="Sobe os containers que estiverem parados"
+                title={t("Sobe os containers que estiverem parados")}
               >
-                <IconPlay size={15} /> Subir stack
-              </button>
+                <IconPlay size={15} />{t("Subir stack")}</button>
               <button className="btn btn-danger" onClick={() => setAcaoStack("stop")}>
-                <IconStop size={15} /> Parar stack
-              </button>
+                <IconStop size={15} />{t("Parar stack")}</button>
             </>
           )}
         </div>
@@ -121,16 +118,15 @@ export default function ServicosView() {
 
       <Erro mensagem={erro} onTentar={carregar} />
 
-      {carregando && !dados && <Carregando texto="Consultando o Docker do servidor…" />}
+      {carregando && !dados && <Carregando texto={t("Consultando o Docker do servidor…")} />}
 
       {dados && (
         <div className="stack-v">
-          <div className="stack-h small muted">
-            Projeto compose <span className="mono">{dados.projeto}</span> ·{" "}
+          <div className="stack-h small muted">{t("Projeto compose")}<span className="mono">{dados.projeto}</span> ·{" "}
             <span className="mono">{dados.compose_file}</span> · {dados.rodando} de{" "}
             {dados.total} rodando
             {dados.jobs > 0 && (
-              <span className="pill pill-idle" title="Jobs de migração, rodam na subida e saem com 0">
+              <span className="pill pill-idle" title={t("Jobs de migração, rodam na subida e saem com 0")}>
                 +{dados.jobs} job(s)
               </span>
             )}
@@ -145,11 +141,11 @@ export default function ServicosView() {
             <table>
               <thead>
                 <tr>
-                  <th>Serviço</th>
-                  <th>Estado</th>
-                  <th>Saúde</th>
-                  <th className="right">Reinícios</th>
-                  <th>Desde</th>
+                  <th>{t("Serviço")}</th>
+                  <th>{t("Estado")}</th>
+                  <th>{t("Saúde")}</th>
+                  <th className="right">{t("Reinícios")}</th>
+                  <th>{t("Desde")}</th>
                   <th style={{ width: 1 }}></th>
                 </tr>
               </thead>
@@ -160,12 +156,12 @@ export default function ServicosView() {
                       <div className="stack-h" style={{ gap: 6 }}>
                         <span className="mono">{s.servico}</span>
                         {s.usa_gpu && (
-                          <span className="pill pill-info" title="Usa GPU">
+                          <span className="pill pill-info" title={t("Usa GPU")}>
                             <IconGPU size={11} />
                           </span>
                         )}
                         {s.guarda_dados && (
-                          <span className="pill pill-idle" title="Guarda dados em disco">
+                          <span className="pill pill-idle" title={t("Guarda dados em disco")}>
                             dados
                           </span>
                         )}
@@ -182,9 +178,7 @@ export default function ServicosView() {
                     </td>
                     <td>
                       {s.e_job && s.exit_code === 0 ? (
-                        <span className="pill pill-ok" title="Job concluído com sucesso">
-                          Concluído
-                        </span>
+                        <span className="pill pill-ok" title={t("Job concluído com sucesso")}>{t("Concluído")}</span>
                       ) : (
                         <Selo status={s.estado} />
                       )}
@@ -194,9 +188,7 @@ export default function ServicosView() {
                         </div>
                       )}
                       {s.oom_killed && (
-                        <div className="small" style={{ color: "var(--red)", marginTop: 3 }}>
-                          morto por falta de memória
-                        </div>
+                        <div className="small" style={{ color: "var(--red)", marginTop: 3 }}>{t("morto por falta de memória")}</div>
                       )}
                     </td>
                     <td>{s.saude ? <Selo status={s.saude} /> : <span className="muted small">—</span>}</td>
@@ -215,7 +207,7 @@ export default function ServicosView() {
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={() => verLogs(s.nome)}
-                          title="Ver últimas linhas do log"
+                          title={t("Ver últimas linhas do log")}
                         >
                           <IconLogs size={14} />
                         </button>
@@ -243,11 +235,11 @@ export default function ServicosView() {
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <div className="modal-title mono">{logs.container}</div>
-              <button className="btn btn-ghost btn-sm" onClick={() => setLogs(null)}>Fechar</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setLogs(null)}>{t("Fechar")}</button>
             </div>
             <div className="modal-body">
               {logs.carregando ? (
-                <Carregando texto="Buscando o log…" />
+                <Carregando texto={t("Buscando o log…")} />
               ) : (
                 <div className="log">{logs.texto || "(log vazio)"}</div>
               )}

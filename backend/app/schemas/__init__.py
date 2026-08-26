@@ -87,7 +87,11 @@ class HostIn(BaseModel):
     enabled: bool = True
     monitorar: bool = True
     ff_api_url: str = ""
-    ff_api_token: str | None = None  # segredo — so entra
+    # A instalação entra na API do FindFace com usuário e senha; o token é
+    # alternativa para quem gerou um. Senha e token são segredo: só entram.
+    ff_api_user: str = ""
+    ff_api_pass: str | None = None
+    ff_api_token: str | None = None
 
     @field_validator("auth_method")
     @classmethod
@@ -115,6 +119,8 @@ class HostUpdate(BaseModel):
     enabled: bool | None = None
     monitorar: bool | None = None
     ff_api_url: str | None = None
+    ff_api_user: str | None = None
+    ff_api_pass: str | None = None
     ff_api_token: str | None = None
 
 
@@ -135,6 +141,7 @@ class HostOut(BaseModel):
     enabled: bool
     monitorar: bool
     ff_api_url: str
+    ff_api_user: str
     last_seen_at: datetime | None
     last_status: str
     last_error: str

@@ -101,7 +101,7 @@ export function SeletorHost({ hosts, hostId, onMudar, incluirTodos = false }) {
       onChange={(e) => onMudar(e.target.value === "" ? null : Number(e.target.value))}
       style={{ width: "auto", minWidth: 190 }}
     >
-      {incluirTodos && <option value="">Todos os servidores</option>}
+      {incluirTodos && <option value="">{t("Todos os servidores")}</option>}
       {hosts.map((h) => (
         <option key={h.id} value={h.id} disabled={!h.enabled}>
           {h.name}
@@ -144,10 +144,7 @@ export function useDestinos() {
 export function SeletorDestinos({ destinos, selecionados, onMudar }) {
   if (!destinos.length) {
     return (
-      <div className="small" style={{ color: "var(--amber)" }}>
-        Nenhum destino ativo. Cadastre um em <strong>Destinos</strong> antes de
-        continuar.
-      </div>
+      <div className="small" style={{ color: "var(--amber)" }}>{t("Nenhum destino ativo. Cadastre um em")}<strong>{t("Destinos")}</strong>{t("antes de continuar.")}</div>
     );
   }
   return (
@@ -268,14 +265,12 @@ export function ConfirmarDigitando({ titulo, aviso, palavra, rotuloBotao, onConf
           </div>
           {erro && <div className="login-err">{erro}</div>}
           <div className="field">
-            <label className="label">
-              Digite <strong className="mono">{palavra}</strong> para confirmar
-            </label>
+            <label className="label">{t("Digite")}<strong className="mono">{palavra}</strong>{t("para confirmar")}</label>
             <input value={texto} onChange={(e) => setTexto(e.target.value)} autoFocus />
           </div>
         </div>
         <div className="modal-foot">
-          <button className="btn btn-secondary" onClick={onFechar}>Cancelar</button>
+          <button className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button
             className="btn btn-danger"
             disabled={texto !== palavra || enviando}

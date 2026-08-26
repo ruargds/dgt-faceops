@@ -286,7 +286,7 @@ export default function TerminalView() {
 
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   const conectado = estado === "conectado";
 
@@ -303,12 +303,8 @@ export default function TerminalView() {
           <SeletorHost hosts={hosts} hostId={hostId} onMudar={setHostId} />
           {conectado ? (
             <>
-              <button className="btn btn-secondary" onClick={colar}>
-                Colar
-              </button>
-              <button className="btn btn-danger" onClick={desconectar}>
-                Encerrar sessão
-              </button>
+              <button className="btn btn-secondary" onClick={colar}>{t("Colar")}</button>
+              <button className="btn btn-danger" onClick={desconectar}>{t("Encerrar sessão")}</button>
             </>
           ) : (
             <button
@@ -333,13 +329,13 @@ export default function TerminalView() {
               {info.usuario_ssh}@{info.host}
             </span>
           ) : (
-            <span className="muted">sem sessão</span>
+            <span className="muted">{t("sem sessão")}</span>
           )}
           <div className="term-bar-sep" />
           {info && info.gravando && (
             <span className="term-badge term-badge-rec">gravando</span>
           )}
-          {info && info.sudo && <span className="term-badge">sudo liberado</span>}
+          {info && info.sudo && <span className="term-badge">{t("sudo liberado")}</span>}
           <span className={`pill ${conectado ? "pill-ok" : estado === "erro" ? "pill-err" : "pill-idle"}`}>
             {conectado ? "conectado" : estado}
           </span>
@@ -356,14 +352,12 @@ export default function TerminalView() {
 
       <div className="small muted" style={{ marginTop: 10 }}>
         Selecionar já copia; clique direito cola (ou{" "}
-        <span className="mono">Ctrl+Shift+V</span>).{" "}
-        <span className="mono">Ctrl+C</span> continua interrompendo o comando,
+        <span className="mono">{t("Ctrl+Shift+V")}</span>).{" "}
+        <span className="mono">{t("Ctrl+C")}</span> continua interrompendo o comando,
         como em qualquer terminal.
         <br />
         A sessão cai sozinha depois de 30 minutos parada. Tudo o que for digitado
-        fica registrado em <span className="mono">.cast</span> e pode ser reproduzido
-        com <span className="mono">asciinema play</span> na tela de Auditoria.
-      </div>
+        fica registrado em <span className="mono">.cast</span>{t("e pode ser reproduzido com")}<span className="mono">{t("asciinema play")}</span>{t("na tela de Auditoria.")}</div>
 
       {pedindoLogin && (
         <ModalLoginSsh
@@ -421,7 +415,7 @@ function ModalLoginSsh({ host, onFechar, onEntrar }) {
         </div>
         <div className="modal-body">
           <div className="field">
-            <label className="label label-required">Usuário</label>
+            <label className="label label-required">{t("Usuário")}</label>
             <input
               value={usuario}
               onChange={(e) => setUsuario(e.target.value)}
@@ -434,7 +428,7 @@ function ModalLoginSsh({ host, onFechar, onEntrar }) {
             </div>
           </div>
           <div className="field">
-            <label className="label">Senha</label>
+            <label className="label">{t("Senha")}</label>
             <input
               type="password"
               value={senha}
@@ -450,12 +444,9 @@ function ModalLoginSsh({ host, onFechar, onEntrar }) {
           </div>
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn btn-secondary" onClick={onFechar}>
-            Cancelar
-          </button>
+          <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button className="btn btn-primary" disabled={!usuario.trim()}>
-            <IconTerminal size={15} /> Conectar
-          </button>
+            <IconTerminal size={15} />{t("Conectar")}</button>
         </div>
       </form>
     </div>
@@ -483,11 +474,11 @@ function ModalColar({ onFechar, onEnviar }) {
         }}
       >
         <div className="modal-head">
-          <div className="modal-title">Colar no terminal</div>
+          <div className="modal-title">{t("Colar no terminal")}</div>
         </div>
         <div className="modal-body">
           <div className="field">
-            <label className="label">Conteúdo</label>
+            <label className="label">{t("Conteúdo")}</label>
             <textarea
               className="mono"
               rows={6}
@@ -502,12 +493,8 @@ function ModalColar({ onFechar, onEnviar }) {
           </div>
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn btn-secondary" onClick={onFechar}>
-            Cancelar
-          </button>
-          <button className="btn btn-primary" disabled={!texto}>
-            Enviar
-          </button>
+          <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
+          <button className="btn btn-primary" disabled={!texto}>{t("Enviar")}</button>
         </div>
       </form>
     </div>

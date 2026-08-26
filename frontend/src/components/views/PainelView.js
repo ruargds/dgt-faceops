@@ -46,21 +46,20 @@ export default function PainelView() {
         </div>
         <div className="page-actions">
           <button className="btn btn-secondary" onClick={carregar} disabled={carregando}>
-            <IconAtualizar size={15} /> Atualizar
-          </button>
+            <IconAtualizar size={15} />{t("Atualizar")}</button>
         </div>
       </div>
 
       <Erro mensagem={erro} onTentar={carregar} />
 
-      {carregando && !dados && <Carregando texto="Consultando os servidores…" />}
+      {carregando && !dados && <Carregando texto={t("Consultando os servidores…")} />}
 
       {dados && (
         <div className="stack-v">
           {armazenamento && (
             <div className="grid-stats">
               <Estatistica
-                rotulo="Disco de backup do painel"
+                rotulo={t("Disco de backup do painel")}
                 valor={`${formatBytes(armazenamento.livre_bytes)} livres`}
                 sub={`${formatBytes(armazenamento.usado_bytes)} de ${formatBytes(
                   armazenamento.total_bytes
@@ -68,26 +67,23 @@ export default function PainelView() {
                 pct={armazenamento.percentual}
               />
               <Estatistica
-                rotulo="Servidores"
+                rotulo={t("Servidores")}
                 valor={`${dados.servidores.filter((s) => s.ativo).length} ativos`}
                 sub={`${dados.servidores.length} cadastrados no total`}
               />
               <Estatistica
-                rotulo="Serviços com problema"
+                rotulo={t("Serviços com problema")}
                 valor={dados.servidores.reduce(
                   (t, s) => t + ((s.servicos && s.servicos.com_problema) || 0),
                   0
                 )}
-                sub="Containers parados ou marcados como unhealthy"
+                sub={t("Containers parados ou marcados como unhealthy")}
               />
             </div>
           )}
 
           {dados.servidores.length === 0 ? (
-            <Vazio titulo="Nenhum servidor cadastrado">
-              Cadastre as VMs do FindFace Multi em <strong>Servidores</strong> para
-              começar a operar por aqui.
-            </Vazio>
+            <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as VMs do FindFace Multi em")}<strong>{t("Servidores")}</strong>{t("para começar a operar por aqui.")}</Vazio>
           ) : (
             <div className="grid-cards">
               {dados.servidores.map((s) => (
@@ -133,11 +129,10 @@ function CartaoServidor({ s }) {
     <div className="card">
       <div className="stack-h" style={{ marginBottom: 4 }}>
         <span className={`dot ${classeDot}`} />
-        <strong style={{ fontSize: 15, color: "var(--navy)" }}>{s.nome}</strong>
+        <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{s.nome}</strong>
         {s.tem_gpu && (
           <span className="pill pill-info">
-            <IconGPU size={12} /> GPU
-          </span>
+            <IconGPU size={12} />{t("GPU")}</span>
         )}
       </div>
 
@@ -183,7 +178,7 @@ function CartaoServidor({ s }) {
         }}
       >
         <div className="stack-h" style={{ justifyContent: "space-between" }}>
-          <span className="small muted">Último backup</span>
+          <span className="small muted">{t("Último backup")}</span>
           {backup ? (
             <span className={`pill ${backup.status === "sucesso" ? "pill-ok" : backup.status === "falha" ? "pill-err" : "pill-info"}`}>
               {backup.perfil}

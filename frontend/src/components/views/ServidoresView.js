@@ -73,8 +73,7 @@ export default function ServidoresView() {
         {has("hosts.manage") && (
           <div className="page-actions">
             <button className="btn btn-primary" onClick={() => setEditando({})}>
-              <IconMais size={15} /> Cadastrar servidor
-            </button>
+              <IconMais size={15} />{t("Cadastrar servidor")}</button>
           </div>
         )}
       </div>
@@ -82,7 +81,7 @@ export default function ServidoresView() {
       <Erro mensagem={erro} onTentar={carregar} />
 
       {lista.length === 0 ? (
-        <Vazio titulo="Nenhum servidor cadastrado">
+        <Vazio titulo={t("Nenhum servidor cadastrado")}>
           Cadastre as VMs do FindFace Multi. O painel lê a chave pública do servidor
           antes de guardar qualquer credencial.
         </Vazio>
@@ -93,10 +92,10 @@ export default function ServidoresView() {
             return (
               <div className="card" key={h.id} style={{ opacity: h.enabled ? 1 : 0.6 }}>
                 <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-                  <strong style={{ fontSize: 15, color: "var(--navy)" }}>{h.name}</strong>
+                  <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{h.name}</strong>
                   <div className="stack-h" style={{ gap: 5 }}>
                     {h.has_gpu && (
-                      <span className="pill pill-info"><IconGPU size={12} /> GPU</span>
+                      <span className="pill pill-info"><IconGPU size={12} />{t("GPU")}</span>
                     )}
                     {!h.enabled && <span className="pill pill-idle">desativado</span>}
                   </div>
@@ -151,9 +150,7 @@ export default function ServidoresView() {
                           {teste.gpu_presente ? "sim" : "não"}
                         </div>
                         {!teste.sudo && (
-                          <div style={{ marginTop: 4, color: "var(--amber-fg)" }}>
-                            Sem sudo o backup e o restart de container não funcionam.
-                          </div>
+                          <div style={{ marginTop: 4, color: "var(--amber-fg)" }}>{t("Sem sudo o backup e o restart de container não funcionam.")}</div>
                         )}
                         {teste.caminho_corrigido && (
                           <div style={{ marginTop: 4 }}>
@@ -178,9 +175,7 @@ export default function ServidoresView() {
                   </button>
                   {has("hosts.manage") && (
                     <>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setEditando(h)}>
-                        Editar
-                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setEditando(h)}>{t("Editar")}</button>
                       <button className="btn btn-danger btn-sm" onClick={() => remover(h)}>
                         <IconLixeira size={13} />
                       </button>
@@ -222,12 +217,14 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
     has_gpu: inicial.has_gpu || false,
     enabled: inicial.enabled !== undefined ? inicial.enabled : true,
     ff_api_url: inicial.ff_api_url || "",
+    ff_api_user: inicial.ff_api_user || "",
   });
   const [segredos, setSegredos] = useState({
     ssh_key: "",
     ssh_key_passphrase: "",
     ssh_password: "",
     sudo_password: "",
+    ff_api_pass: "",
     ff_api_token: "",
   });
   const [testeApi, setTesteApi] = useState(null);
@@ -237,6 +234,8 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
     try {
       const r = await api.testarApiHost(inicial.id, {
         ff_api_url: f.ff_api_url,
+        ff_api_user: f.ff_api_user || undefined,
+        ff_api_pass: segredos.ff_api_pass || undefined,
         ff_api_token: segredos.ff_api_token || undefined,
       });
       setTesteApi(r);
@@ -303,14 +302,14 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
         <div className="modal-body">
           {erro && <div className="login-err">{erro}</div>}
 
-          <div className="section-title">Identificação</div>
+          <div className="section-title">{t("Identificação")}</div>
           <div className="row row-2">
             <div className="field">
-              <label className="label label-required">Nome</label>
-              <input value={f.name} onChange={set("name")} placeholder="vm-appserver" required />
+              <label className="label label-required">{t("Nome")}</label>
+              <input value={f.name} onChange={set("name")} placeholder={t("vm-appserver")} required />
             </div>
             <div className="field">
-              <label className="label">Papel</label>
+              <label className="label">{t("Papel")}</label>
               <select value={f.role} onChange={set("role")}>
                 {PAPEIS.map((p) => (
                   <option key={p.id} value={p.id}>{p.nome}</option>
@@ -319,37 +318,32 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
             </div>
           </div>
           <div className="field">
-            <label className="label">Descrição</label>
+            <label className="label">{t("Descrição")}</label>
             <input value={f.description} onChange={set("description")} />
           </div>
 
-          <div className="section-title" style={{ marginTop: 18 }}>Acesso SSH</div>
+          <div className="section-title" style={{ marginTop: 18 }}>{t("Acesso SSH")}</div>
           <div className="row row-3">
             <div className="field">
               <label className="label label-required">Endereço (IP ou DNS)</label>
               <input value={f.address} onChange={set("address")} required />
             </div>
             <div className="field">
-              <label className="label label-required">Porta</label>
+              <label className="label label-required">{t("Porta")}</label>
               <input type="number" value={f.ssh_port} onChange={set("ssh_port")} required />
             </div>
             <div className="field">
-              <label className="label label-required">Usuário</label>
+              <label className="label label-required">{t("Usuário")}</label>
               <input value={f.ssh_user} onChange={set("ssh_user")} placeholder="azureuser" required />
             </div>
           </div>
 
           <div className="field">
             <div className="stack-h" style={{ justifyContent: "space-between" }}>
-              <label className="label" style={{ marginBottom: 0 }}>
-                Identidade do servidor
-              </label>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={lerChaveHost}>
-                Ler chave do servidor
-              </button>
+              <label className="label" style={{ marginBottom: 0 }}>{t("Identidade do servidor")}</label>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={lerChaveHost}>{t("Ler chave do servidor")}</button>
             </div>
-            <div className="field-help" style={{ marginTop: 6 }}>
-              O painel lê a chave pública do servidor <strong>antes</strong> de qualquer
+            <div className="field-help" style={{ marginTop: 6 }}>{t("O painel lê a chave pública do servidor")}<strong>antes</strong> de qualquer
               credencial trafegar, e fixa essa identidade. Se a chave mudar depois, a
               conexão é recusada em vez de entregar a senha de sudo a um impostor.
               {editando && " Ao salvar, a leitura é refeita se o endereço mudar."}
@@ -372,10 +366,10 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
           </div>
 
           <div className="field">
-            <label className="label">Autenticação</label>
+            <label className="label">{t("Autenticação")}</label>
             <select value={f.auth_method} onChange={set("auth_method")}>
-              <option value="key">Chave PEM</option>
-              <option value="password">Senha</option>
+              <option value="key">{t("Chave PEM")}</option>
+              <option value="password">{t("Senha")}</option>
             </select>
           </div>
 
@@ -386,9 +380,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
                   <label className={`label ${editando ? "" : "label-required"}`} style={{ marginBottom: 0 }}>
                     Chave privada (PEM)
                   </label>
-                  <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer", margin: 0 }}>
-                    Carregar arquivo .pem
-                    <input
+                  <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer", margin: 0 }}>{t("Carregar arquivo .pem")}<input
                       type="file"
                       style={{ display: "none" }}
                       onChange={(e) => {
@@ -429,8 +421,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
                   required={!editando}
                   style={{ marginTop: 6 }}
                 />
-                <div className="field-help">
-                  Cole a chave ou carregue o arquivo <span className="mono">.pem</span>.
+                <div className="field-help">{t("Cole a chave ou carregue o arquivo")}<span className="mono">.pem</span>.
                   Guardada cifrada (Fernet AES-128) no cofre. Nunca é exibida nem
                   devolvida pela API depois de salva.
                   {editando && inicial.key_fingerprint && (
@@ -452,7 +443,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
             </>
           ) : (
             <div className="field">
-              <label className={`label ${editando ? "" : "label-required"}`}>Senha SSH</label>
+              <label className={`label ${editando ? "" : "label-required"}`}>{t("Senha SSH")}</label>
               <input
                 type="password"
                 value={segredos.ssh_password}
@@ -465,7 +456,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
           )}
 
           <div className="field">
-            <label className="label">Senha de sudo</label>
+            <label className="label">{t("Senha de sudo")}</label>
             <input
               type="password"
               value={segredos.sudo_password}
@@ -473,35 +464,34 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               autoComplete="new-password"
               placeholder={editando ? "Deixe em branco para manter" : ""}
             />
-            <div className="field-help">
-              Deixe vazio se o usuário tem <span className="mono">NOPASSWD</span> no
+            <div className="field-help">{t("Deixe vazio se o usuário tem")}<span className="mono">{t("NOPASSWD")}</span> no
               sudoers. Backup e restart de container precisam de root.
             </div>
           </div>
 
-          <div className="section-title" style={{ marginTop: 18 }}>FindFace Multi</div>
+          <div className="section-title" style={{ marginTop: 18 }}>{t("FindFace Multi")}</div>
           <div className="row row-2">
             <div className="field">
-              <label className="label">Diretório de instalação</label>
+              <label className="label">{t("Diretório de instalação")}</label>
               <input className="mono" value={f.ffmulti_dir} onChange={set("ffmulti_dir")} />
             </div>
             <div className="field">
-              <label className="label">Arquivo docker-compose</label>
+              <label className="label">{t("Arquivo docker-compose")}</label>
               <input className="mono" value={f.compose_file} onChange={set("compose_file")} />
             </div>
           </div>
 
-          <div className="section-title" style={{ marginTop: 18 }}>
-            API do FindFace <span className="small muted">— coleta de câmeras por IP (recomendado)</span>
+          <div className="section-title" style={{ marginTop: 18 }}>{t("API do FindFace")}<span className="small muted">— coleta de câmeras por IP (recomendado)</span>
           </div>
           <div className="field-help" style={{ marginBottom: 8 }}>
-            Caminho preferido para contar câmeras e eventos: o painel usa a API do
-            FindFace em vez de vasculhar o banco por SSH. Aponte para o IP do
-            FindFace e cole um token de API. Se ficar em branco, o painel cai no
-            SSH+PostgreSQL.
+            Caminho preferido para contar câmeras, eventos e licenças: o painel
+            usa a API do FindFace em vez de vasculhar o banco por SSH. Entre com
+            o mesmo usuário e senha que você usa na plataforma da NtechLab. Se
+            ficar em branco, o painel cai no SSH+PostgreSQL — e o licenciamento,
+            que só existe pela API, fica indisponível.
           </div>
           <div className="field">
-            <label className="label">URL da API</label>
+            <label className="label">{t("URL da API")}</label>
             <input
               className="mono"
               value={f.ff_api_url}
@@ -510,7 +500,36 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
             />
           </div>
           <div className="field">
-            <label className="label">Token da API</label>
+            <label className="label">{t("Usuário da API")}</label>
+            <input
+              value={f.ff_api_user}
+              onChange={set("ff_api_user")}
+              autoComplete="off"
+              placeholder={t("o mesmo usuário que entra no FindFace")}
+            />
+          </div>
+          <div className="field">
+            <label className="label">{t("Senha da API")}</label>
+            <input
+              type="password"
+              value={segredos.ff_api_pass}
+              onChange={setSeg("ff_api_pass")}
+              autoComplete="new-password"
+              placeholder={
+                editando && inicial.tem_api
+                  ? "Deixe em branco para manter"
+                  : "senha desse usuário no FindFace"
+              }
+            />
+            <div className="field-help">
+              O painel faz login na API e reaproveita a sessão por 20 minutos —
+              não repete o login a cada leitura. Guardada cifrada no cofre;
+              nunca é exibida depois de salva.
+            </div>
+          </div>
+          <div className="field">
+            <label className="label">{t("Token da API")}<span className="small muted">— opcional</span>
+            </label>
             <input
               type="password"
               value={segredos.ff_api_token}
@@ -519,8 +538,8 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               placeholder={editando && inicial.tem_api ? "Deixe em branco para manter" : "cole o token de API do FindFace"}
             />
             <div className="field-help">
-              Gere o token no FindFace (perfil do usuário → API). Guardado cifrado
-              no cofre; nunca é exibido depois de salvo.
+              Só para instalação que gere token de API. Preenchido, ele substitui
+              o usuário e a senha acima — não expira com a sessão.
             </div>
           </div>
           {editando && (
@@ -550,7 +569,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
         </div>
 
         <div className="modal-foot">
-          <button type="button" className="btn btn-secondary" onClick={onFechar}>Cancelar</button>
+          <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button className="btn btn-primary" disabled={enviando}>
             {enviando ? "Salvando…" : editando ? "Salvar" : "Cadastrar"}
           </button>

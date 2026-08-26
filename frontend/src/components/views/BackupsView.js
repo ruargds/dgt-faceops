@@ -101,7 +101,7 @@ export default function BackupsView() {
 
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   return (
     <>
@@ -122,8 +122,7 @@ export default function BackupsView() {
             incluirTodos
           />
           <button className="btn btn-secondary" onClick={carregar}>
-            <IconAtualizar size={15} /> Atualizar
-          </button>
+            <IconAtualizar size={15} />{t("Atualizar")}</button>
           {has("backups.run") && (
             <>
               <button
@@ -135,8 +134,7 @@ export default function BackupsView() {
                 {painelRodando ? "Salvando…" : "Backup do painel"}
               </button>
               <button className="btn btn-primary" onClick={() => setNovo(true)}>
-                <IconBackup size={15} /> Novo backup
-              </button>
+                <IconBackup size={15} />{t("Novo backup")}</button>
             </>
           )}
         </div>
@@ -150,10 +148,10 @@ export default function BackupsView() {
           style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 14 }}
         >
           <span className="small" style={{ color: "var(--amber-fg)" }}>
-            <strong>O painel nunca foi salvo.</strong> Se esta máquina morrer,
+            <strong>{t("O painel nunca foi salvo.")}</strong> Se esta máquina morrer,
             perdem-se o cadastro dos servidores, as credenciais cifradas, os
             agendamentos, o histórico e a auditoria. São alguns MB — use o
-            botão <strong>Backup do painel</strong>.
+            botão <strong>{t("Backup do painel")}</strong>.
           </span>
         </div>
       )}
@@ -161,8 +159,7 @@ export default function BackupsView() {
       {carregando ? (
         <Carregando />
       ) : lista.length === 0 ? (
-        <Vazio titulo="Nenhum backup ainda">
-          Dispare um backup <strong>Essencial</strong> para validar o caminho de
+        <Vazio titulo={t("Nenhum backup ainda")}>{t("Dispare um backup")}<strong>{t("Essencial")}</strong> para validar o caminho de
           ponta a ponta antes de programar a recorrência.
         </Vazio>
       ) : (
@@ -170,13 +167,13 @@ export default function BackupsView() {
           <table>
             <thead>
               <tr>
-                <th>Quando</th>
-                <th>Servidor</th>
-                <th>Perfil</th>
-                <th>Situação</th>
-                <th className="right">Tamanho</th>
-                <th>Destinos</th>
-                <th>Disparado por</th>
+                <th>{t("Quando")}</th>
+                <th>{t("Servidor")}</th>
+                <th>{t("Perfil")}</th>
+                <th>{t("Situação")}</th>
+                <th className="right">{t("Tamanho")}</th>
+                <th>{t("Destinos")}</th>
+                <th>{t("Disparado por")}</th>
                 <th style={{ width: 1 }}></th>
               </tr>
             </thead>
@@ -288,7 +285,7 @@ function LinhaBackup({ r, onDetalhe, onRemover }) {
       <td className="small muted">{r.triggered_by}</td>
       <td>
         <div className="stack-h" style={{ gap: 6, flexWrap: "nowrap" }}>
-          <button className="btn btn-secondary btn-sm" onClick={onDetalhe} title="Ver log">
+          <button className="btn btn-secondary btn-sm" onClick={onDetalhe} title={t("Ver log")}>
             <IconLogs size={14} />
           </button>
           {has("backups.download") && r.status === "sucesso" && !r.expired && (
@@ -296,7 +293,7 @@ function LinhaBackup({ r, onDetalhe, onRemover }) {
               type="button"
               className="btn btn-secondary btn-sm"
               onClick={() => api.baixarBackup(r.id).catch((e) => window.alert(e.message))}
-              title="Baixar artefato"
+              title={t("Baixar artefato")}
             >
               <IconDownload size={14} />
             </button>
@@ -306,7 +303,7 @@ function LinhaBackup({ r, onDetalhe, onRemover }) {
               className="btn btn-danger btn-sm"
               onClick={remover}
               disabled={removendo}
-              title="Apagar artefato"
+              title={t("Apagar artefato")}
             >
               <IconLixeira size={14} />
             </button>
@@ -360,13 +357,13 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
     <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <div className="modal-head">
-          <div className="modal-title">Novo backup</div>
+          <div className="modal-title">{t("Novo backup")}</div>
         </div>
         <div className="modal-body">
           {erro && <div className="login-err">{erro}</div>}
 
           <div className="field">
-            <label className="label label-required">Servidor</label>
+            <label className="label label-required">{t("Servidor")}</label>
             <select value={hostId ?? ""} onChange={(e) => setHostId(Number(e.target.value))}>
               {hosts.map((h) => (
                 <option key={h.id} value={h.id}>{h.name}</option>
@@ -375,7 +372,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
           </div>
 
           <div className="field">
-            <label className="label label-required">Perfil</label>
+            <label className="label label-required">{t("Perfil")}</label>
             <div className="stack-v" style={{ gap: 8 }}>
               {PERFIS.map((p) => (
                 <label
@@ -410,9 +407,9 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
           </div>
 
           <div className="field">
-            <label className="label label-required">Destinos</label>
+            <label className="label label-required">{t("Destinos")}</label>
             {carregandoDest ? (
-              <Carregando texto="Carregando destinos…" />
+              <Carregando texto={t("Carregando destinos…")} />
             ) : (
               <SeletorDestinos
                 destinos={ativos}
@@ -423,8 +420,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
                 }}
               />
             )}
-            <div className="field-help">
-              Cadastre e teste destinos em <strong>Destinos</strong>.
+            <div className="field-help">{t("Cadastre e teste destinos em")}<strong>{t("Destinos")}</strong>.
             </div>
           </div>
 
@@ -439,8 +435,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
                   checked={aceito}
                   onChange={(e) => setAceito(e.target.checked)}
                 />
-                <span style={{ color: "var(--red-fg)" }}>
-                  Entendo que o perfil Completo <strong>PARA o FindFace Multi</strong> em{" "}
+                <span style={{ color: "var(--red-fg)" }}>{t("Entendo que o perfil Completo")}<strong>{t("PARA o FindFace Multi")}</strong> em{" "}
                   <strong>{host ? host.name : "este servidor"}</strong> durante a cópia
                   (pode levar horas) e que o reconhecimento facial fica fora do ar nesse
                   período.
@@ -450,9 +445,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
           )}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn btn-secondary" onClick={onFechar}>
-            Cancelar
-          </button>
+          <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button
             className="btn btn-primary"
             disabled={enviando || (perfil === "completo" && !aceito)}
@@ -495,7 +488,7 @@ function ModalDetalhe({ runId, onFechar }) {
           <div className="modal-title">
             Execução #{runId} {run && `— ${run.host_nome} / ${run.profile}`}
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onFechar}>Fechar</button>
+          <button className="btn btn-ghost btn-sm" onClick={onFechar}>{t("Fechar")}</button>
         </div>
         <div className="modal-body">
           <Erro mensagem={erro} />
@@ -505,17 +498,17 @@ function ModalDetalhe({ runId, onFechar }) {
             <div className="stack-v">
               <div className="grid-stats">
                 <div className="card card-tight stat">
-                  <span className="stat-label">Situação</span>
+                  <span className="stat-label">{t("Situação")}</span>
                   <div><Selo status={run.status} /></div>
                   <span className="stat-sub">{run.stage}</span>
                 </div>
                 <div className="card card-tight stat">
-                  <span className="stat-label">Artefato</span>
+                  <span className="stat-label">{t("Artefato")}</span>
                   <div className="mono small">{run.artifact_name || "—"}</div>
                   <span className="stat-sub">{formatBytes(run.size_bytes)}</span>
                 </div>
                 <div className="card card-tight stat">
-                  <span className="stat-label">Checksum SHA-256</span>
+                  <span className="stat-label">{t("Checksum SHA-256")}</span>
                   <div className="mono small" style={{ wordBreak: "break-all" }}>
                     {run.checksum_sha256 ? run.checksum_sha256.slice(0, 32) + "…" : "—"}
                   </div>
@@ -529,7 +522,7 @@ function ModalDetalhe({ runId, onFechar }) {
               )}
 
               <div>
-                <div className="section-title">Log da execução</div>
+                <div className="section-title">{t("Log da execução")}</div>
                 <div className="log">{run.log || "(sem log ainda)"}</div>
               </div>
             </div>

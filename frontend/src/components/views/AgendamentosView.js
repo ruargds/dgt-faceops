@@ -96,12 +96,10 @@ export default function AgendamentosView() {
         </div>
         <div className="page-actions">
           <button className="btn btn-secondary" onClick={carregar}>
-            <IconAtualizar size={15} /> Atualizar
-          </button>
+            <IconAtualizar size={15} />{t("Atualizar")}</button>
           {has("schedules.manage") && hosts.length > 0 && (
             <button className="btn btn-primary" onClick={() => setEditando({})}>
-              <IconAgenda size={15} /> Novo agendamento
-            </button>
+              <IconAgenda size={15} />{t("Novo agendamento")}</button>
           )}
         </div>
       </div>
@@ -115,9 +113,9 @@ export default function AgendamentosView() {
       <Erro mensagem={erro} onTentar={carregar} />
 
       {lista.length === 0 ? (
-        <Vazio titulo="Nenhum agendamento">
-          Sugestão para começar: <strong>Essencial</strong> todo dia às 02:00 em cada
-          servidor, e <strong>Config</strong> a cada 6 horas. O <strong>Completo</strong>{" "}
+        <Vazio titulo={t("Nenhum agendamento")}>
+          Sugestão para começar: <strong>{t("Essencial")}</strong> todo dia às 02:00 em cada
+          servidor, e <strong>{t("Config")}</strong>{t("a cada 6 horas. O")}<strong>{t("Completo")}</strong>{" "}
           só mensal, em janela combinada.
         </Vazio>
       ) : (
@@ -125,13 +123,13 @@ export default function AgendamentosView() {
           <table>
             <thead>
               <tr>
-                <th>Nome</th>
-                <th>Servidor</th>
-                <th>Perfil</th>
-                <th>Recorrência</th>
-                <th>Próxima</th>
-                <th>Última</th>
-                <th>Retenção</th>
+                <th>{t("Nome")}</th>
+                <th>{t("Servidor")}</th>
+                <th>{t("Perfil")}</th>
+                <th>{t("Recorrência")}</th>
+                <th>{t("Próxima")}</th>
+                <th>{t("Última")}</th>
+                <th>{t("Retenção")}</th>
                 <th style={{ width: 1 }}></th>
               </tr>
             </thead>
@@ -149,10 +147,8 @@ export default function AgendamentosView() {
                       {(a.destinations || []).length === 0 && (
                         <span
                           className="pill pill-idle"
-                          title="Usa os destinos marcados como padrao"
-                        >
-                          padrão
-                        </span>
+                          title={t("Usa os destinos marcados como padrao")}
+                        >{t("padrão")}</span>
                       )}
                     </div>
                   </td>
@@ -160,9 +156,7 @@ export default function AgendamentosView() {
                   <td>
                     <span className="pill pill-idle">{a.profile}</span>
                     {a.profile === "completo" && (
-                      <div className="small" style={{ color: "var(--amber)", marginTop: 3 }}>
-                        com parada
-                      </div>
+                      <div className="small" style={{ color: "var(--amber)", marginTop: 3 }}>{t("com parada")}</div>
                     )}
                   </td>
                   <td>
@@ -196,7 +190,7 @@ export default function AgendamentosView() {
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={() => executar(a)}
-                          title="Executar agora"
+                          title={t("Executar agora")}
                         >
                           <IconPlay size={13} />
                         </button>
@@ -206,9 +200,7 @@ export default function AgendamentosView() {
                           <button className="btn btn-secondary btn-sm" onClick={() => alternar(a)}>
                             {a.enabled ? "Pausar" : "Ativar"}
                           </button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => setEditando(a)}>
-                            Editar
-                          </button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => setEditando(a)}>{t("Editar")}</button>
                           <button className="btn btn-danger btn-sm" onClick={() => remover(a)}>
                             <IconLixeira size={13} />
                           </button>
@@ -293,16 +285,16 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
 
           <div className="row row-2">
             <div className="field">
-              <label className="label label-required">Nome</label>
+              <label className="label label-required">{t("Nome")}</label>
               <input
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Essencial diário — appserver"
+                placeholder={t("Essencial diário — appserver")}
                 required
               />
             </div>
             <div className="field">
-              <label className="label label-required">Servidor</label>
+              <label className="label label-required">{t("Servidor")}</label>
               <select
                 value={hostId ?? ""}
                 onChange={(e) => setHostId(Number(e.target.value))}
@@ -322,7 +314,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
 
           <div className="row row-2">
             <div className="field">
-              <label className="label label-required">Perfil</label>
+              <label className="label label-required">{t("Perfil")}</label>
               <select value={perfil} onChange={(e) => setPerfil(e.target.value)}>
                 {PERFIS.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -348,7 +340,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
           </div>
 
           <div className="field">
-            <label className="label label-required">Recorrência</label>
+            <label className="label label-required">{t("Recorrência")}</label>
             <div className="stack-h" style={{ gap: 6, marginBottom: 8 }}>
               {ATALHOS.map((a) => (
                 <button
@@ -375,7 +367,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
           </div>
 
           <div className="field">
-            <label className="label">Destinos</label>
+            <label className="label">{t("Destinos")}</label>
             <SeletorDestinos
               destinos={destinosDisponiveis || []}
               selecionados={destinos}
@@ -401,7 +393,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
                 />
                 <span style={{ color: "var(--red-fg)" }}>
                   Autorizo janela de manutenção recorrente: este agendamento{" "}
-                  <strong>PARA o FindFace Multi</strong> em{" "}
+                  <strong>{t("PARA o FindFace Multi")}</strong> em{" "}
                   <strong>{host ? host.name : "este servidor"}</strong> toda vez que rodar.
                   Sem este aceite o agendamento é bloqueado na hora de executar.
                 </span>
@@ -410,7 +402,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
           )}
         </div>
         <div className="modal-foot">
-          <button type="button" className="btn btn-secondary" onClick={onFechar}>Cancelar</button>
+          <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button className="btn btn-primary" disabled={enviando || (perfil === "completo" && !aceito)}>
             {enviando ? "Salvando…" : editando ? "Salvar" : "Criar agendamento"}
           </button>

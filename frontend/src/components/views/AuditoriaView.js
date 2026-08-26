@@ -28,16 +28,12 @@ export default function AuditoriaView() {
           <button
             className={`btn ${aba === "acoes" ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setAba("acoes")}
-          >
-            Ações
-          </button>
+          >{t("Ações")}</button>
           {has("terminal.sessions.view") && (
             <button
               className={`btn ${aba === "sessoes" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => setAba("sessoes")}
-            >
-              Sessões de terminal
-            </button>
+            >{t("Sessões de terminal")}</button>
           )}
         </div>
       </div>
@@ -73,24 +69,22 @@ function Acoes() {
     <>
       <div className="stack-h" style={{ marginBottom: 14 }}>
         <select value={nivel} onChange={(e) => setNivel(e.target.value)} style={{ width: "auto" }}>
-          <option value="">Todos os níveis</option>
-          <option value="critical">Só críticos</option>
-          <option value="warning">Só atenção</option>
-          <option value="info">Só info</option>
+          <option value="">{t("Todos os níveis")}</option>
+          <option value="critical">{t("Só críticos")}</option>
+          <option value="warning">{t("Só atenção")}</option>
+          <option value="info">{t("Só info")}</option>
         </select>
         <button className="btn btn-secondary" onClick={carregar}>
-          <IconAtualizar size={15} /> Atualizar
-        </button>
+          <IconAtualizar size={15} />{t("Atualizar")}</button>
         <button
           type="button"
           className="btn btn-secondary"
           onClick={() =>
             api.baixar(api.urlExportarAuditoria(90), "auditoria-90d.csv").catch(() => {})
           }
-          title="Baixar 90 dias de auditoria em CSV"
+          title={t("Baixar 90 dias de auditoria em CSV")}
         >
-          <IconDownload size={15} /> Exportar 90 dias
-        </button>
+          <IconDownload size={15} />{t("Exportar 90 dias")}</button>
       </div>
 
       <Erro mensagem={erro} onTentar={carregar} />
@@ -98,18 +92,18 @@ function Acoes() {
       {carregando ? (
         <Carregando />
       ) : lista.length === 0 ? (
-        <Vazio titulo="Nenhum registro" />
+        <Vazio titulo={t("Nenhum registro")} />
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Quando</th>
-                <th>Usuário</th>
-                <th>Ação</th>
-                <th>Alvo</th>
-                <th>Nível</th>
-                <th>Detalhe</th>
+                <th>{t("Quando")}</th>
+                <th>{t("Usuário")}</th>
+                <th>{t("Ação")}</th>
+                <th>{t("Alvo")}</th>
+                <th>{t("Nível")}</th>
+                <th>{t("Detalhe")}</th>
               </tr>
             </thead>
             <tbody>
@@ -186,8 +180,7 @@ function Sessoes() {
 
       <div className="stack-h">
         <button className="btn btn-secondary" onClick={carregar}>
-          <IconAtualizar size={15} /> Atualizar
-        </button>
+          <IconAtualizar size={15} />{t("Atualizar")}</button>
         {ativas.length > 0 && (
           <span className="pill pill-info">{ativas.length} sessão(ões) aberta(s) agora</span>
         )}
@@ -195,16 +188,16 @@ function Sessoes() {
 
       {ativas.length > 0 && (
         <div className="card">
-          <div className="section-title">Abertas neste momento</div>
+          <div className="section-title">{t("Abertas neste momento")}</div>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Usuário</th>
-                  <th>Servidor</th>
+                  <th>{t("Usuário")}</th>
+                  <th>{t("Servidor")}</th>
                   <th>IP</th>
-                  <th className="right">Parada há</th>
-                  <th className="right">Tráfego</th>
+                  <th className="right">{t("Parada há")}</th>
+                  <th className="right">{t("Tráfego")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,21 +219,21 @@ function Sessoes() {
       )}
 
       <div>
-        <div className="section-title">Histórico de sessões</div>
+        <div className="section-title">{t("Histórico de sessões")}</div>
         {historico.length === 0 ? (
-          <Vazio titulo="Nenhuma sessão de terminal registrada" />
+          <Vazio titulo={t("Nenhuma sessão de terminal registrada")} />
         ) : (
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Início</th>
-                  <th>Usuário</th>
-                  <th>Servidor</th>
-                  <th>Duração</th>
+                  <th>{t("Início")}</th>
+                  <th>{t("Usuário")}</th>
+                  <th>{t("Servidor")}</th>
+                  <th>{t("Duração")}</th>
                   <th>sudo</th>
-                  <th className="right">Tráfego</th>
-                  <th>Encerrou por</th>
+                  <th className="right">{t("Tráfego")}</th>
+                  <th>{t("Encerrou por")}</th>
                   <th style={{ width: 1 }}></th>
                 </tr>
               </thead>
@@ -289,7 +282,7 @@ function Sessoes() {
           </div>
         )}
         <div className="small muted" style={{ marginTop: 8 }}>
-          Reproduzir uma gravação: <span className="mono">asciinema play arquivo.cast</span>
+          Reproduzir uma gravação: <span className="mono">{t("asciinema play arquivo.cast")}</span>
         </div>
       </div>
     </div>

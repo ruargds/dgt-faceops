@@ -65,6 +65,8 @@ COLUNAS_NOVAS = [
     ("hosts", "ff_api_url", "VARCHAR(255) NOT NULL DEFAULT ''"),
     ("hosts", "ff_api_token_enc", "TEXT NOT NULL DEFAULT ''"),
     ("amostras", "cpu_uso_pct", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+    ("hosts", "ff_api_user", "VARCHAR(120) NOT NULL DEFAULT ''"),
+    ("hosts", "ff_api_pass_enc", "TEXT NOT NULL DEFAULT ''"),
 ]
 
 # Alterações que não são "coluna nova". Escritas para serem idempotentes:

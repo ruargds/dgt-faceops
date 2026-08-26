@@ -52,7 +52,7 @@ export default function DescobertaView() {
 
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   return (
     <>
@@ -83,7 +83,7 @@ export default function DescobertaView() {
       )}
 
       {!carregando && !dados && !erro && (
-        <Vazio titulo="Selecione um servidor">
+        <Vazio titulo={t("Selecione um servidor")}>
           A varredura roda sozinha ao escolher o servidor. É uma sondagem
           única por SSH — não entra no monitor contínuo.
         </Vazio>
@@ -140,23 +140,23 @@ function ResumoServidor({ d }) {
       </div>
       <div style={GRID2}>
         <div className="stack-v" style={{ gap: 4 }}>
-          <Linha rotulo="Endereço" valor={d.endereco} />
-          <Linha rotulo="Sistema" valor={d.so} />
-          <Linha rotulo="Kernel" valor={d.kernel} />
-          <Linha rotulo="No ar há" valor={d.uptime} />
+          <Linha rotulo={t("Endereço")} valor={d.endereco} />
+          <Linha rotulo={t("Sistema")} valor={d.so} />
+          <Linha rotulo={t("Kernel")} valor={d.kernel} />
+          <Linha rotulo={t("No ar há")} valor={d.uptime} />
         </div>
         <div className="stack-v" style={{ gap: 4 }}>
           <Linha
-            rotulo="CPU"
+            rotulo={t("CPU")}
             valor={d.cpu_modelo ? `${d.cpu_modelo} (${d.cpus} núcleos)` : `${d.cpus} núcleos`}
           />
-          <Linha rotulo="Memória" valor={d.memoria_total_bytes ? formatBytes(d.memoria_total_bytes) : "—"} />
+          <Linha rotulo={t("Memória")} valor={d.memoria_total_bytes ? formatBytes(d.memoria_total_bytes) : "—"} />
           <Linha
-            rotulo="GPU"
+            rotulo={t("GPU")}
             valor={d.gpus && d.gpus.length ? d.gpus.map((g) => `${g.nome} (${g.memoria})`).join(", ") : "nenhuma"}
           />
-          <Linha rotulo="Docker" valor={d.docker.versao || "—"} />
-          <Linha rotulo="Compose" valor={d.docker.compose || "—"} />
+          <Linha rotulo={t("Docker")} valor={d.docker.versao || "—"} />
+          <Linha rotulo={t("Compose")} valor={d.docker.compose || "—"} />
         </div>
       </div>
       <div className="stack-h" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
@@ -164,9 +164,9 @@ function ResumoServidor({ d }) {
           {d.docker.rodando}/{d.docker.total_containers} containers de pé
         </span>
         {ff.presente && <span className="pill pill-ok">FindFace aqui ({ff.containers})</span>}
-        {ff.tem_banco && <span className="pill pill-ok">banco aqui</span>}
+        {ff.tem_banco && <span className="pill pill-ok">{t("banco aqui")}</span>}
         {ff.tem_tarantool && <span className="pill pill-ok">vetores (Tarantool) aqui</span>}
-        {!ff.presente && <span className="pill pill-warn">FindFace não roda neste servidor</span>}
+        {!ff.presente && <span className="pill pill-warn">{t("FindFace não roda neste servidor")}</span>}
       </div>
     </div>
   );
@@ -176,8 +176,7 @@ function BancosDados({ servicos }) {
   const bancos = servicos || [];
   return (
     <div className="card">
-      <div className="section-title" style={{ marginBottom: 8 }}>
-        Serviços de dados <span className="small muted">— onde moram câmeras, usuários e vetores</span>
+      <div className="section-title" style={{ marginBottom: 8 }}>{t("Serviços de dados")}<span className="small muted">— onde moram câmeras, usuários e vetores</span>
       </div>
       {bancos.length === 0 ? (
         <div className="small muted">
@@ -189,11 +188,11 @@ function BancosDados({ servicos }) {
           <table>
             <thead>
               <tr>
-                <th>Tipo</th>
-                <th>Para que serve</th>
-                <th>Container</th>
-                <th>Estado</th>
-                <th>Portas</th>
+                <th>{t("Tipo")}</th>
+                <th>{t("Para que serve")}</th>
+                <th>{t("Container")}</th>
+                <th>{t("Estado")}</th>
+                <th>{t("Portas")}</th>
               </tr>
             </thead>
             <tbody>
@@ -233,11 +232,11 @@ function Containers({ containers, projetos }) {
         <table>
           <thead>
             <tr>
-              <th>Serviço</th>
-              <th>Imagem</th>
-              <th>Estado</th>
-              <th>Status</th>
-              <th>Portas</th>
+              <th>{t("Serviço")}</th>
+              <th>{t("Imagem")}</th>
+              <th>{t("Estado")}</th>
+              <th>{t("Status")}</th>
+              <th>{t("Portas")}</th>
             </tr>
           </thead>
           <tbody>
@@ -279,7 +278,7 @@ function Portas({ portas }) {
         Portas ouvindo ({portas.length})
       </div>
       {portas.length === 0 ? (
-        <div className="small muted">Nenhuma porta TCP em LISTEN detectada.</div>
+        <div className="small muted">{t("Nenhuma porta TCP em LISTEN detectada.")}</div>
       ) : (
         <div className="stack-h" style={{ flexWrap: "wrap", gap: 6 }}>
           {portas.map((p, i) => (
@@ -324,8 +323,7 @@ function Cloudflared({ cf, hostId }) {
   return (
     <div className="card">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-        <div className="section-title" style={{ marginBottom: 0 }}>
-          Cloudflare Tunnel <span className="small muted">— publica o painel para fora</span>
+        <div className="section-title" style={{ marginBottom: 0 }}>{t("Cloudflare Tunnel")}<span className="small muted">— publica o painel para fora</span>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={reiniciar} disabled={reiniciando}>
           {reiniciando ? "Reiniciando…" : "Reiniciar túnel"}
@@ -357,7 +355,7 @@ function Discos({ discos }) {
   const nivel = (p) => (p >= 90 ? "err" : p >= 75 ? "warn" : "ok");
   return (
     <div className="card">
-      <div className="section-title" style={{ marginBottom: 8 }}>Discos</div>
+      <div className="section-title" style={{ marginBottom: 8 }}>{t("Discos")}</div>
       <div className="stack-v" style={{ gap: 10 }}>
         {discos.map((d, i) => (
           <div key={i}>

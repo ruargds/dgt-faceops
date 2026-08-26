@@ -241,7 +241,7 @@ export default function LogsView() {
   }
 
   if (carregandoHosts) return <Carregando />;
-  if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
+  if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   const visiveis = filtroRapido
     ? linhas.filter((l) => l.texto.toLowerCase().includes(filtroRapido.toLowerCase()))
@@ -271,13 +271,11 @@ export default function LogsView() {
       {/* ── Visões salvas ───────────────────────────────────────── */}
       <div className="card card-tight" style={{ marginBottom: 12 }}>
         <div className="stack-h" style={{ gap: 6, flexWrap: "wrap" }}>
-          <span className="stat-label" style={{ marginRight: 4 }}>Visões</span>
+          <span className="stat-label" style={{ marginRight: 4 }}>{t("Visões")}</span>
           <button
             className={`btn btn-sm ${visaoId === null ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setVisaoId(null)}
-          >
-            Linha crua
-          </button>
+          >{t("Linha crua")}</button>
           {visoes.map((v) => (
             <span key={v.id} className="stack-h" style={{ gap: 2 }}>
               <button
@@ -295,7 +293,7 @@ export default function LogsView() {
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => removerVisao(v)}
-                title="Remover visão"
+                title={t("Remover visão")}
                 style={{ padding: "4px 5px" }}
               >
                 <IconLixeira size={12} />
@@ -306,10 +304,9 @@ export default function LogsView() {
             className="btn btn-secondary btn-sm"
             onClick={salvarComoVisao}
             disabled={!container || salvando}
-            title="Salva o container e o formato atual como visão"
+            title={t("Salva o container e o formato atual como visão")}
           >
-            <IconMais size={13} /> Salvar visão
-          </button>
+            <IconMais size={13} />{t("Salvar visão")}</button>
         </div>
         {visao.descricao && (
           <div className="small muted" style={{ marginTop: 8 }}>{visao.descricao}</div>
@@ -320,7 +317,7 @@ export default function LogsView() {
       <div className="card card-tight" style={{ marginBottom: 12 }}>
         <div className="row row-4" style={{ gap: 10, marginBottom: 0 }}>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label className="label">Container</label>
+            <label className="label">{t("Container")}</label>
             <select value={container} onChange={(e) => setContainer(e.target.value)}>
               {containers.length === 0 && <option value="">(nenhum)</option>}
               {containers.map((c) => (
@@ -332,30 +329,29 @@ export default function LogsView() {
             </select>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label className="label">Filtrar na tela</label>
+            <label className="label">{t("Filtrar na tela")}</label>
             <input
               value={filtroRapido}
               onChange={(e) => setFiltroRapido(e.target.value)}
-              placeholder="texto…"
+              placeholder={t("texto…")}
             />
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label className="label">Rolagem</label>
+            <label className="label">{t("Rolagem")}</label>
             <label className="check" style={{ marginTop: 6 }}>
               <input
                 type="checkbox"
                 checked={autoScroll}
                 onChange={(e) => setAutoScroll(e.target.checked)}
               />
-              <span>Acompanhar o fim</span>
+              <span>{t("Acompanhar o fim")}</span>
             </label>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
             <label className="label">&nbsp;</label>
             {seguindo || estado === "conectando" ? (
               <button className="btn btn-danger" style={{ width: "100%" }} onClick={parar}>
-                <IconStop size={15} /> Parar
-              </button>
+                <IconStop size={15} />{t("Parar")}</button>
             ) : (
               <button
                 className="btn btn-primary"
@@ -363,8 +359,7 @@ export default function LogsView() {
                 onClick={iniciar}
                 disabled={!container}
               >
-                <IconLogs size={15} /> Seguir
-              </button>
+                <IconLogs size={15} />{t("Seguir")}</button>
             )}
           </div>
         </div>
