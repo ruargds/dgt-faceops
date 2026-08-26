@@ -21,8 +21,10 @@ import asyncssh
 
 from app.core.vault import decrypt_secret
 
-# Teto de saída por comando — evita que um `cat` acidental num arquivo de
-# 4 GB estoure a memória do painel.
+# Referência de tamanho para a proteção contra saída gigante. O teto real
+# é aplicado pelos próprios comandos (head, --tail, -d1), não por um kwarg
+# do asyncssh: versões recentes removeram `max_buffer_size` do run(), e
+# passá-lo quebra TODA conexão com TypeError.
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 
 # Conexão ociosa é fechada depois disso
@@ -250,12 +252,7 @@ class SSHService:
         inicio = time.monotonic()
         try:
             proc = await asyncio.wait_for(
-                conn.run(
-                    alvo,
-                    input=entrada,
-                    check=False,
-                    max_buffer_size=MAX_OUTPUT_BYTES,
-                ),
+                conn.run(alvo, input=entrada, check=False),
                 timeout=timeout,
             )
         except asyncio.TimeoutError as exc:
@@ -302,7 +299,7 @@ class SSHService:
         inicio = time.monotonic()
         try:
             proc = await asyncio.wait_for(
-                conn.run(alvo, input=entrada, check=False, max_buffer_size=MAX_OUTPUT_BYTES),
+                conn.run(alvo, input=entrada, check=False),
                 timeout=timeout,
             )
         except asyncio.TimeoutError as exc:
