@@ -281,7 +281,7 @@ async def iniciar() -> None:
     app.state.processos = ProcessosService(ssh)
     app.state.stack = StackService(ssh, config, limpeza=app.state.limpeza)
     app.state.manutencao = MaintenanceService(ssh)
-    app.state.backups = BackupService(ssh, storage, config)
+    app.state.backups = BackupService(ssh, storage, config, stack=app.state.stack)
     app.state.terminals = TerminalManager()
     app.state.logs = LogManager()
     app.state.faxina = FaxinaService(config)

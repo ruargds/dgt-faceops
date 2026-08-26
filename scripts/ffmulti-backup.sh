@@ -529,7 +529,39 @@ log " FaceOps — backup perfil '$PROFILE'"
 log "════════════════════════════════════════════════════"
 
 command -v docker >/dev/null 2>&1 || die "docker não encontrado neste servidor"
-[ -d "$FF_DIR" ] || die "$FF_DIR nao existe. Confira o caminho cadastrado para este servidor."
+# O caminho cadastrado pode estar errado -- ou o FindFace pode nem rodar
+# nesta maquina, o que e comum em instalacao distribuida. Em vez de so
+# dizer "nao existe", o script PROCURA: o diretorio de trabalho do compose
+# de um container em execucao e a resposta autoritativa, porque e de onde a
+# propria instalacao subiu.
+if [ ! -d "$FF_DIR" ]; then
+    ACHADO=""
+    if command -v docker >/dev/null 2>&1; then
+        ACHADO="$(docker ps --filter label=com.docker.compose.project             --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null             | grep -i -E 'findface|ffmulti' | head -1)"
+        if [ -z "$ACHADO" ]; then
+            # Sem o rotulo de working_dir (compose v1), tenta pelo nome.
+            NOME_CT="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | head -1)"
+            if [ -n "$NOME_CT" ]; then
+                ACHADO="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$NOME_CT" 2>/dev/null)"
+            fi
+        fi
+    fi
+    if [ -z "$ACHADO" ]; then
+        for CANDIDATO in /opt/findface-multi /opt/ffmulti /opt/findface /srv/findface-multi; do
+            [ -f "$CANDIDATO/docker-compose.yaml" ] || [ -f "$CANDIDATO/docker-compose.yml" ] || continue
+            ACHADO="$CANDIDATO"
+            break
+        done
+    fi
+
+    if [ -n "$ACHADO" ] && [ -d "$ACHADO" ]; then
+        die "$FF_DIR nao existe neste servidor, mas encontrei a instalacao do FindFace em $ACHADO. Corrija o Diretorio de instalacao em Servidores -> editar."
+    fi
+    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qi -E 'findface|ffmulti'; then
+        die "$FF_DIR nao existe e nenhum container do FindFace roda neste servidor. Provavelmente a aplicacao esta em outra maquina -- veja em Topologia."
+    fi
+    die "$FF_DIR nao existe. Confira o caminho cadastrado para este servidor."
+fi
 
 PROJETO="$(projeto_compose)"
 log "Projeto compose: $PROJETO"

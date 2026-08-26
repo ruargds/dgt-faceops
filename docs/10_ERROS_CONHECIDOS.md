@@ -103,6 +103,37 @@ Se voltar a acontecer depois de um deploy, é cache do navegador com o
 bundle antigo — confira o selo de versão no rodapé da barra lateral e dê
 `Ctrl+F5`.
 
+### `/opt/findface-multi nao existe. Confira o caminho cadastrado`
+
+Sintoma: o backup falha em 0s, logo na primeira linha.
+
+Causa: o **Diretório de instalação** cadastrado para aquele servidor não
+existe lá. Acontece em instalação distribuída — o servidor escolhido pode
+não ser o que hospeda a aplicação — e em instalação fora do caminho padrão.
+
+O que o painel faz agora, nesta ordem:
+
+1. **Antes de disparar**, se o caminho cadastrado não existe, ele detecta a
+   instalação pelo diretório de trabalho do compose de um container em
+   execução (a resposta autoritativa: é de onde a instalação subiu),
+   corrige o cadastro e segue. A correção fica registrada no log da
+   execução.
+2. **Se não achar**, a mensagem diz o que encontrou: ou o caminho real
+   (`encontrei a instalação em X`), ou que **nenhum container do FindFace
+   roda ali** — caso em que a aplicação está em outra máquina, e a
+   Topologia mostra qual.
+
+Se ainda assim aparecer, o servidor provavelmente não hospeda o FindFace:
+confira em Topologia e dispare o backup no servidor certo.
+
+### `nenhum destino aceitou o artefato` logo após copiar
+
+Se a mensagem for `'int' object has no attribute 'tipo'`, é a versão
+anterior a 15deb11: o serviço mandava os IDs dos destinos onde o
+armazenamento esperava o objeto, e **toda execução com destino morria**
+depois de já ter copiado o artefato do servidor de produção. Corrigido —
+atualize o painel.
+
 ## Serviços
 
 ### `nem 'docker compose' nem 'docker-compose' encontrados`

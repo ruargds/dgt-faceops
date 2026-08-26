@@ -67,9 +67,14 @@ def _detectar_etapa(linha: str) -> tuple[str, int] | None:
 
 
 class BackupService:
-    def __init__(self, ssh: SSHService, storage: StorageService, config=None) -> None:
+    def __init__(
+        self, ssh: SSHService, storage: StorageService, config=None, stack=None
+    ) -> None:
         self.ssh = ssh
         self.storage = storage
+        # Opcional: com ele, um caminho de instalacao errado no cadastro se
+        # corrige sozinho antes de o backup falhar la no servidor.
+        self.stack = stack
         # Opcional: sem configuracao, valem os padroes do .env
         self.config = config
         # Uma execução por host de cada vez: dois backups concorrentes no
@@ -169,6 +174,28 @@ class BackupService:
     ) -> None:
         ff_dir = host.ffmulti_dir or settings.FFMULTI_DIR
         compose = host.compose_file or f"{ff_dir}/docker-compose.yaml"
+
+        # Caminho cadastrado que nao existe mais e o motivo mais comum de
+        # backup que falha em 0s. O painel ja sabe descobrir onde a
+        # instalacao esta (mesma deteccao do botao Testar conexao); usar
+        # isso aqui poupa uma ida ao cadastro e uma execucao perdida.
+        if self.stack is not None:
+            existe = await self.ssh.run(
+                host, f"test -d {shlex.quote(ff_dir)} && echo sim || echo nao", timeout=30
+            )
+            if (existe.stdout or "").strip() != "sim":
+                achado = await self.stack.detectar_instalacao(host)
+                if achado.get("working_dir"):
+                    ff_dir = achado["working_dir"]
+                    compose = achado.get("compose_file") or f"{ff_dir}/docker-compose.yaml"
+                    host.ffmulti_dir = ff_dir
+                    host.compose_file = compose
+                    await db.commit()
+                    run.log += (
+                        "\n[deteccao] o caminho cadastrado nao existia; "
+                        f"encontrei a instalacao em {ff_dir} e corrigi o cadastro"
+                    )
+
         staging = self._cfg("servidores.staging_remoto", settings.REMOTE_STAGING_DIR)
         rotulo = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
 
