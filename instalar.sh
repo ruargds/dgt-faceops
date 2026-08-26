@@ -139,8 +139,8 @@ else
     echo
     echo "  O painel responde em HTTPS. O HTTP so redireciona para ele —"
     echo "  assim usuario e senha nao trafegam em claro na rede."
-    read -r -p "  Porta HTTPS [8443]: " PORTA_S
-    PORTA_S="${PORTA_S:-8443}"
+    read -r -p "  Porta HTTPS [30333]: " PORTA_S
+    PORTA_S="${PORTA_S:-30333}"
     read -r -p "  Porta HTTP (redireciona) [8080]: " PORTA
     PORTA="${PORTA:-8080}"
 
@@ -174,7 +174,7 @@ fi
 PORTA="$(grep -E '^PORTA_HTTP=' .env | cut -d= -f2)"
 PORTA="${PORTA:-8080}"
 PORTA_S="$(grep -E '^PORTA_HTTPS=' .env | cut -d= -f2)"
-PORTA_S="${PORTA_S:-8443}"
+PORTA_S="${PORTA_S:-30333}"
 
 # ── 6. Diretórios e fim de linha ───────────────────────────────────────
 passo "6/9" "Diretórios e scripts..."

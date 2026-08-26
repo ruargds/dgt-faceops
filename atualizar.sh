@@ -220,7 +220,7 @@ if [ "$PRONTO" = "1" ]; then
     echo "════════════════════════════════════════════════════"
     PORTA_S="$(grep -E '^PORTA_HTTPS=' .env 2>/dev/null | cut -d= -f2)"
     echo "  ${V}Atualizado${Z} — revisão ${REV:-$FACEOPS_REVISAO}"
-    echo "  https://localhost:${PORTA_S:-8443}"
+    echo "  https://localhost:${PORTA_S:-30333}"
     echo "════════════════════════════════════════════════════"
     echo
     echo "  O FindFace Multi não foi tocado. Os agendamentos voltaram"

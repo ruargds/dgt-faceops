@@ -76,7 +76,7 @@ Ver [12_INSTALACAO_WINDOWS](12_INSTALACAO_WINDOWS.md).
 | Requisito | Detalhe |
 |---|---|
 | Alcance aos servidores | Porta **22** em cada VM do FindFace |
-| Porta do painel | HTTPS (padrão 8443) e HTTP (8080, só redireciona) |
+| Porta do painel | HTTPS (padrão 30333) e HTTP (8080, só redireciona) |
 | Saída para a internet | Só se usar destino em nuvem (Azure Blob, rclone) |
 
 Verificação antes de instalar:

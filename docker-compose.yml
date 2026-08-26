@@ -87,10 +87,10 @@ services:
       - backend
     environment:
       # Usada pelo envsubst do nginx no redirecionamento HTTP -> HTTPS
-      PORTA_HTTPS: ${PORTA_HTTPS:-8443}
+      PORTA_HTTPS: ${PORTA_HTTPS:-30333}
     ports:
       - "${PORTA_HTTP:-8080}:80"
-      - "${PORTA_HTTPS:-8443}:443"
+      - "${PORTA_HTTPS:-30333}:443"
     volumes:
       # Certificado autoassinado, gerado pelo instalador. Somente leitura:
       # o container não tem motivo para escrever aqui.
