@@ -76,9 +76,9 @@ export default function Login({ onEntrar, marca }) {
         </button>
 
         <div className="login-hint">
-          Primeiro acesso: <strong>admin</strong> / <strong>admin123</strong>
+          Use as credenciais fornecidas pelo administrador.
           <br />
-          Troque a senha logo após entrar.
+          Troque a senha logo após o primeiro acesso.
         </div>
       </form>
     </div>

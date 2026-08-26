@@ -121,7 +121,7 @@ export default function AppShell() {
       <main className="main">
         {usuario.senha_padrao && (
           <div className="banner banner-warn">
-            Este usuário ainda está com a senha de fábrica (<strong>admin123</strong>).
+            Este usuário ainda está com a <strong>senha de fábrica</strong>.
             Qualquer pessoa com acesso à rede consegue entrar no painel e nos servidores.
             <button className="btn btn-secondary btn-sm" onClick={() => setTrocandoSenha(true)}>
               Trocar senha
