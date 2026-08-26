@@ -162,7 +162,13 @@ if [ -d .git ] && [ "$ATUAL" != "$NOVA" ]; then
     # Descarta diff cosmetico de fim-de-linha nos scripts, senao o pull
     # aborta por "local changes". Nao toca em .env, tls/ nem data/.
     git checkout -- '*.sh' 'scripts/*.sh' 2>/dev/null || true
+    ANTES_SELF="$(md5sum "$0" 2>/dev/null | cut -d' ' -f1)"
     if git pull --ff-only --quiet origin main 2>/dev/null; then
+        DEPOIS_SELF="$(md5sum "$0" 2>/dev/null | cut -d' ' -f1)"
+        if [ -n "$ANTES_SELF" ] && [ "$ANTES_SELF" != "$DEPOIS_SELF" ]; then
+            echo "  atualizador atualizado — reiniciando com a versao nova"
+            exec bash "$0" "$@"
+        fi
         ok "código atualizado para $NOVA"
     else
         erro "git pull falhou — há alteração local não commitada?"

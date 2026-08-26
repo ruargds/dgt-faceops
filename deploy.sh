@@ -73,7 +73,16 @@ if [ -d .git ] && git remote get-url origin >/dev/null 2>&1; then
     # que senao faz o git pull abortar por "local changes". So afeta
     # arquivo versionado; .env, tls/ e data/ sao ignorados pelo git.
     git checkout -- '*.sh' 'scripts/*.sh' 2>/dev/null || true
+    ANTES="$(md5sum "$0" 2>/dev/null | cut -d' ' -f1)"
     git pull --ff-only || echo "  aviso: git pull falhou, seguindo com o código local"
+    DEPOIS="$(md5sum "$0" 2>/dev/null | cut -d' ' -f1)"
+    # Se o proprio deploy.sh mudou no pull, o bash ainda roda a versao
+    # antiga (carregada na memoria). Reinicia com a nova. Sem loop: na
+    # segunda passada ANTES == DEPOIS.
+    if [ -n "$ANTES" ] && [ "$ANTES" != "$DEPOIS" ]; then
+        echo "  script atualizado — reiniciando com a versao nova"
+        exec bash "$0" "$@"
+    fi
 else
     echo "[1/4] Sem remote configurado — usando o código local"
 fi
