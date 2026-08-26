@@ -373,7 +373,6 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
                     Carregar arquivo .pem
                     <input
                       type="file"
-                      accept=".pem,.key,.txt,application/x-pem-file,text/plain"
                       style={{ display: "none" }}
                       onChange={(e) => {
                         const arq = e.target.files && e.target.files[0];

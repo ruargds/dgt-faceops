@@ -318,11 +318,20 @@ async def testar(
             "caminho_corrigido": corrigido,
             "instalacao": instalacao,
         }
-    except SSHError as exc:
+    except Exception as exc:
+        # Qualquer falha no teste vira RESULTADO, nunca 500: o operador
+        # precisa ver o motivo (chave inválida, sem rota, sudo negado), não
+        # "Internal Server Error". SSHError já traz mensagem legível; para
+        # o resto, incluímos o tipo para diagnóstico.
+        mensagem = str(exc) if isinstance(exc, SSHError) else f"{type(exc).__name__}: {exc}"
+
         host.last_status = "erro"
-        host.last_error = str(exc)[:2000]
+        host.last_error = mensagem[:2000]
         host.last_seen_at = datetime.now(timezone.utc)
-        await db.commit()
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
 
         await audit_service.registrar(
             db,
@@ -331,6 +340,6 @@ async def testar(
             target=host.name,
             ip=client_ip(request),
             success=False,
-            detail={"erro": str(exc)[:500]},
+            detail={"erro": mensagem[:500]},
         )
-        return {"ok": False, "erro": str(exc)}
+        return {"ok": False, "erro": mensagem}
