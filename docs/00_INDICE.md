@@ -93,6 +93,19 @@
 - **[07_INTERMINAL](07_INTERMINAL.md)** — terminal web: protocolo do
   WebSocket, ticket de uso único, formato da gravação e como reproduzir.
 
+### Referência
+
+- **[21_REQUISITOS](21_REQUISITOS.md)** — o que a máquina precisa ter.
+  Números medidos, incluindo a armadilha da RAM: o pico não é o regime
+  (1,6 GB), é o build (2 GB), e ele acontece na primeira subida.
+  Traz também a ocupação real medida nas VMs e o dimensionamento do
+  disco de backup.
+
+- **[22_REFERENCIAS](22_REFERENCIAS.md)** — cada página do manual da
+  NtechLab e o que ela entregou ao projeto, o que o manual **não**
+  entrega, e os achados fora dele — inclusive a incompatibilidade da base
+  do Tarantool entre versões maiores.
+
 ### Desenvolvimento
 
 - **[08_API](08_API.md)** — referência dos endpoints, com corpo de exemplo

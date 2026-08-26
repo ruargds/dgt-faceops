@@ -190,6 +190,8 @@ Docker Desktop instalado → botão direito em `windows\instalar.bat` →
 | [18_LIMPEZA_DE_EVENTOS](docs/18_LIMPEZA_DE_EVENTOS.md) | Liberar disco de verdade — procedimento oficial da NtechLab |
 | [19_BACKUP_DO_PAINEL](docs/19_BACKUP_DO_PAINEL.md) | Salvar o próprio painel, e por que a SECRET_KEY fica fora |
 | [20_PERSISTENCIA](docs/20_PERSISTENCIA.md) | O que sobrevive a quê, e por que não há volume fantasma |
+| [21_REQUISITOS](docs/21_REQUISITOS.md) | Especificações de máquina, medições de campo e dimensionamento |
+| [22_REFERENCIAS](docs/22_REFERENCIAS.md) | Manuais consultados e o que cada página entregou |
 
 ## Scripts
 
