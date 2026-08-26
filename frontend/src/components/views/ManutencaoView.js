@@ -94,7 +94,7 @@ function Limpeza({ hostId, hostNome }) {
       )}
 
       {dados && !dados.confirmado_pelo_servidor && (
-        <div className="small" style={{ color: "var(--amber)", marginBottom: 10 }}>{t("O servidor não respondeu ao")}<span className="mono">--help</span>. A
+        <div className="small" style={{ color: "var(--amber)", marginBottom: 10 }}>{t("O servidor não respondeu ao")} <span className="mono">--help</span>. A
           lista abaixo é a documentada para a 2.4.1 e pode não bater com esta
           instalação.
         </div>
@@ -169,7 +169,7 @@ function Limpeza({ hostId, hostNome }) {
               style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)", marginBottom: 12 }}
             >
               <span className="small" style={{ color: "var(--red-fg)" }}>
-                <IconAlerta size={13} />{t("Há item com")}<strong>{t("0 dias")}</strong>. Isso
+                <IconAlerta size={13} /> {t("Há item com")} <strong>{t("0 dias")}</strong>. Isso
                 apaga <strong>{t("TODOS")}</strong> os registros daquele tipo, não só os
                 antigos.
               </span>
@@ -535,7 +535,7 @@ function LimpezaPontual() {
         >
           <span className="small" style={{ color: "var(--amber-fg)" }}>
             {total > 0 ? (
-              <>{t("Sairiam")}<strong>{total}</strong> item(ns) com mais de{" "}
+              <>{t("Sairiam")} <strong>{total}</strong> item(ns) com mais de{" "}
                 <strong>{previa.dias}</strong> dias
                 {bytes > 0 ? <> e {formatBytes(bytes)} de disco</> : null}.
               </>
@@ -707,7 +707,7 @@ export default function ManutencaoView() {
             <button className="btn btn-danger" onClick={pararDiagnostico}>{t("Parar")}</button>
           ) : (
             <button className="btn btn-primary" onClick={diagnosticar} disabled={!hostId}>
-              <IconAtualizar size={15} />{t("Diagnosticar")}</button>
+              <IconAtualizar size={15} /> {t("Diagnosticar")}</button>
           )}
         </div>
       </div>
@@ -827,7 +827,7 @@ export default function ManutencaoView() {
             <div className="section-title">{t("1. Conter o crescimento do log")}</div>
 
             {diag.container_polui_syslog ? (
-              <div className="small" style={{ marginBottom: 12 }}>{t("Os containers estão gravando no")}<span className="mono">/var/log/syslog</span> —{" "}
+              <div className="small" style={{ marginBottom: 12 }}>{t("Os containers estão gravando no")} <span className="mono">/var/log/syslog</span> —{" "}
                 <strong>{diag.linhas_container_no_syslog} das últimas 2000 linhas</strong>.
                 O filtro descarta apenas requisição HTTP bem-sucedida (2xx/3xx);
                 erro e aviso continuam sendo gravados.
@@ -852,7 +852,7 @@ export default function ManutencaoView() {
 
             <div className="stack-h">
               <button className="btn btn-secondary" onClick={() => simular("contencao")}>
-                <IconLogs size={15} />{t("Ver o que será alterado")}</button>
+                <IconLogs size={15} /> {t("Ver o que será alterado")}</button>
               {has("maintenance.apply") && (
                 <button className="btn btn-primary" onClick={() => setConfirmando("contencao")}>{t("Aplicar contenção")}</button>
               )}
@@ -892,7 +892,7 @@ export default function ManutencaoView() {
                     checked={incluirAtivo}
                     onChange={(e) => setIncluirAtivo(e.target.checked)}
                   />
-                  <span>{t("Copiar o")}<span className="mono">/var/log/syslog</span>{t("atual e zerá-lo com")}<span className="mono">truncate</span> (nunca{" "}
+                  <span>{t("Copiar o")} <span className="mono">/var/log/syslog</span> {t("atual e zerá-lo com")} <span className="mono">truncate</span> (nunca{" "}
                     <span className="mono">rm</span> — o rsyslog o mantém aberto e
                     apagar não devolveria o espaço)
                   </span>
@@ -906,7 +906,7 @@ export default function ManutencaoView() {
                 onClick={() => simular("arquivar")}
                 disabled={!destino}
               >
-                <IconLogs size={15} />{t("Ver o que será movido")}</button>
+                <IconLogs size={15} /> {t("Ver o que será movido")}</button>
               {has("maintenance.apply") && (
                 <button
                   className="btn btn-primary"
@@ -936,9 +936,9 @@ export default function ManutencaoView() {
 
               {previa.tipo === "arquivar" && (
                 <>
-                  <div className="small" style={{ marginBottom: 10 }}>{t("Destino")}<span className="mono">{previa.destino}</span> ·{" "}
+                  <div className="small" style={{ marginBottom: 10 }}>{t("Destino")} <span className="mono">{previa.destino}</span> ·{" "}
                     {previa.candidatos.length} arquivo(s) ·{" "}
-                    <strong>{formatBytes(previa.total_bytes)}</strong>{t("a liberar")}</div>
+                    <strong>{formatBytes(previa.total_bytes)}</strong> {t("a liberar")}</div>
                   <div className="table-wrap">
                     <table>
                       <thead>

@@ -176,7 +176,7 @@ function BancosDados({ servicos }) {
   const bancos = servicos || [];
   return (
     <div className="card">
-      <div className="section-title" style={{ marginBottom: 8 }}>{t("Serviços de dados")}<span className="small muted">— onde moram câmeras, usuários e vetores</span>
+      <div className="section-title" style={{ marginBottom: 8 }}>{t("Serviços de dados")} <span className="small muted">— onde moram câmeras, usuários e vetores</span>
       </div>
       {bancos.length === 0 ? (
         <div className="small muted">
@@ -323,7 +323,7 @@ function Cloudflared({ cf, hostId }) {
   return (
     <div className="card">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-        <div className="section-title" style={{ marginBottom: 0 }}>{t("Cloudflare Tunnel")}<span className="small muted">— publica o painel para fora</span>
+        <div className="section-title" style={{ marginBottom: 0 }}>{t("Cloudflare Tunnel")} <span className="small muted">— publica o painel para fora</span>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={reiniciar} disabled={reiniciando}>
           {reiniciando ? "Reiniciando…" : "Reiniciar túnel"}

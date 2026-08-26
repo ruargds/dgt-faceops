@@ -66,7 +66,7 @@ export default function UsuariosView() {
         </div>
         <div className="page-actions">
           <button className="btn btn-primary" onClick={() => setEditando({})}>
-            <IconMais size={15} />{t("Novo usuário")}</button>
+            <IconMais size={15} /> {t("Novo usuário")}</button>
         </div>
       </div>
 
@@ -244,7 +244,7 @@ function ModalUsuario({ inicial, perfis, onFechar, onPronto }) {
               <strong>{t("Observador")}</strong> vê tudo e não executa nada.{" "}
               <strong>{t("Operador")}</strong> reinicia container e dispara backup.{" "}
               <strong>{t("Técnico")}</strong> soma terminal com sudo e agendamentos.{" "}
-              <strong>{t("Administrador")}</strong>{t("tem tudo, inclusive restore e parada do stack.")}</div>
+              <strong>{t("Administrador")}</strong> {t("tem tudo, inclusive restore e parada do stack.")}</div>
           </div>
 
           <div className="field">

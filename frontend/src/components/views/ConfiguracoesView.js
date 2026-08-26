@@ -234,7 +234,7 @@ export default function ConfiguracoesView() {
         </div>
         <div className="page-actions">
           <button className="btn btn-secondary" onClick={carregar} disabled={salvando}>
-            <IconAtualizar size={15} />{t("Recarregar")}</button>
+            <IconAtualizar size={15} /> {t("Recarregar")}</button>
           {podeEditar && (
             <button
               className="btn btn-primary"
@@ -366,7 +366,7 @@ export default function ConfiguracoesView() {
         ))}
       </div>
 
-      <div className="small muted" style={{ marginTop: 16 }}>{t("O que")}<strong>{t("não")}</strong> fica aqui, por precisar existir antes do banco
+      <div className="small muted" style={{ marginTop: 16 }}>{t("O que")} <strong>{t("não")}</strong> fica aqui, por precisar existir antes do banco
         subir: <span className="mono">{t("SECRET_KEY")}</span>,{" "}
         <span className="mono">{t("POSTGRES_PASSWORD")}</span> e{" "}
         <span className="mono">{t("PORTA_HTTP")}</span> continuam no{" "}

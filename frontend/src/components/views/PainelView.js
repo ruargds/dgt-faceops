@@ -46,7 +46,7 @@ export default function PainelView() {
         </div>
         <div className="page-actions">
           <button className="btn btn-secondary" onClick={carregar} disabled={carregando}>
-            <IconAtualizar size={15} />{t("Atualizar")}</button>
+            <IconAtualizar size={15} /> {t("Atualizar")}</button>
         </div>
       </div>
 
@@ -83,7 +83,7 @@ export default function PainelView() {
           )}
 
           {dados.servidores.length === 0 ? (
-            <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as VMs do FindFace Multi em")}<strong>{t("Servidores")}</strong>{t("para começar a operar por aqui.")}</Vazio>
+            <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as VMs do FindFace Multi em")} <strong>{t("Servidores")}</strong> {t("para começar a operar por aqui.")}</Vazio>
           ) : (
             <div className="grid-cards">
               {dados.servidores.map((s) => (
@@ -132,7 +132,7 @@ function CartaoServidor({ s }) {
         <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{s.nome}</strong>
         {s.tem_gpu && (
           <span className="pill pill-info">
-            <IconGPU size={12} />{t("GPU")}</span>
+            <IconGPU size={12} /> {t("GPU")}</span>
         )}
       </div>
 

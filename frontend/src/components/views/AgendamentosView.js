@@ -96,10 +96,10 @@ export default function AgendamentosView() {
         </div>
         <div className="page-actions">
           <button className="btn btn-secondary" onClick={carregar}>
-            <IconAtualizar size={15} />{t("Atualizar")}</button>
+            <IconAtualizar size={15} /> {t("Atualizar")}</button>
           {has("schedules.manage") && hosts.length > 0 && (
             <button className="btn btn-primary" onClick={() => setEditando({})}>
-              <IconAgenda size={15} />{t("Novo agendamento")}</button>
+              <IconAgenda size={15} /> {t("Novo agendamento")}</button>
           )}
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function AgendamentosView() {
       {lista.length === 0 ? (
         <Vazio titulo={t("Nenhum agendamento")}>
           Sugestão para começar: <strong>{t("Essencial")}</strong> todo dia às 02:00 em cada
-          servidor, e <strong>{t("Config")}</strong>{t("a cada 6 horas. O")}<strong>{t("Completo")}</strong>{" "}
+          servidor, e <strong>{t("Config")}</strong> {t("a cada 6 horas. O")} <strong>{t("Completo")}</strong>{" "}
           só mensal, em janela combinada.
         </Vazio>
       ) : (

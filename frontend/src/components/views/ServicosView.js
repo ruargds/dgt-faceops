@@ -94,7 +94,7 @@ export default function ServicosView() {
         <div className="page-actions">
           <SeletorHost hosts={hosts} hostId={hostId} onMudar={setHostId} />
           <button className="btn btn-secondary" onClick={carregar} disabled={carregando}>
-            <IconAtualizar size={15} />{t("Atualizar")}</button>
+            <IconAtualizar size={15} /> {t("Atualizar")}</button>
           {has("services.stack") && dados && (
             <>
               <button
@@ -102,9 +102,9 @@ export default function ServicosView() {
                 onClick={() => setAcaoStack("up")}
                 title={t("Sobe os containers que estiverem parados")}
               >
-                <IconPlay size={15} />{t("Subir stack")}</button>
+                <IconPlay size={15} /> {t("Subir stack")}</button>
               <button className="btn btn-danger" onClick={() => setAcaoStack("stop")}>
-                <IconStop size={15} />{t("Parar stack")}</button>
+                <IconStop size={15} /> {t("Parar stack")}</button>
             </>
           )}
         </div>
@@ -122,7 +122,7 @@ export default function ServicosView() {
 
       {dados && (
         <div className="stack-v">
-          <div className="stack-h small muted">{t("Projeto compose")}<span className="mono">{dados.projeto}</span> ·{" "}
+          <div className="stack-h small muted">{t("Projeto compose")} <span className="mono">{dados.projeto}</span> ·{" "}
             <span className="mono">{dados.compose_file}</span> · {dados.rodando} de{" "}
             {dados.total} rodando
             {dados.jobs > 0 && (

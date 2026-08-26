@@ -92,13 +92,13 @@ export default function TopologiaView() {
           >
             <span className="small">
               {dados.distribuido ? (
-                <>{t("Instalação")}<strong>{t("distribuída")}</strong>: o processamento está
+                <>{t("Instalação")} <strong>{t("distribuída")}</strong>: o processamento está
                   repartido entre {dados.servidores.filter((s) => s.camadas.length).length}{" "}
                   servidores. Cada coluna abaixo é uma etapa do reconhecimento; os
                   blocos coloridos dizem em que máquina ela roda.
                 </>
               ) : (
-                <>{t("Instalação")}<strong>concentrada</strong>: as etapas rodam
+                <>{t("Instalação")} <strong>concentrada</strong>: as etapas rodam
                   praticamente num servidor só. O mesmo mapa vale — só que numa
                   coluna de cor única.
                 </>
@@ -172,7 +172,7 @@ function ColunaCamada({ camada, hosts, corDe, nomeDe }) {
           <strong style={{ fontSize: 13.5 }}>{camada.nome}</strong>
           {camada.gpu && (
             <span className="pill pill-info" title={t("Usa GPU")}>
-              <IconGPU size={11} />{t("GPU")}</span>
+              <IconGPU size={11} /> {t("GPU")}</span>
           )}
         </div>
         <div className="small muted" style={{ marginTop: 2, minHeight: 30 }}>

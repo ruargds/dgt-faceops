@@ -192,10 +192,31 @@ sem avisar ninguém.
 ### Credencial da API: usuário e senha
 
 O FindFace é acessado com **usuário e senha** — os mesmos da plataforma da
-NtechLab. O painel faz login na API e reaproveita a sessão por 20 minutos,
-em memória; não repete o login a cada leitura, e nada disso é gravado além
-da senha cifrada no cofre. Token continua aceito para instalação que gere
-um: preenchido, ele substitui usuário e senha e não expira com a sessão.
+NtechLab. O contrato está na documentação da própria instalação
+(`/api-docs/`, spec em `/swagger.json`):
+
+```
+POST /auth/login/
+Authorization: Basic base64(usuario:senha)
+{"uuid": "dgt-faceops-<id do host>", "mobile": false, "device_info": {…}}
+→ {"token": "…", "token_expiration_datetime": "…", "user": {…}}
+```
+
+Detalhes que custaram uma tentativa frustrada: a credencial vai no
+cabeçalho **Basic**, não no corpo, e o `uuid` de dispositivo é
+**obrigatório**. O painel se identifica como `dgt-faceops-<id>`, estável
+por servidor — assim a sessão aberta por ele é reconhecível na tela de
+sessões da plataforma em vez de virar um dispositivo novo a cada login. O
+token devolvido vira `Authorization: Token <token>` nas leituras
+seguintes, reaproveitado por 20 minutos em memória.
+
+A URL pode ser cadastrada com ou sem `/api` no fim: o painel tenta as duas
+e guarda a que autenticou. Token continua aceito para instalação que gere
+um — preenchido, substitui usuário e senha.
+
+O botão **Testar API** consulta `/users/me/` antes da contagem de câmeras
+e mostra sob que conta o painel entrou: conta errada aparece ali, e não
+depois, numa permissão negada no meio de uma operação.
 
 O certificado do FindFace é autoassinado em rede interna, então a
 verificação de cadeia é dispensada **nesta chamada e em mais nenhuma** —

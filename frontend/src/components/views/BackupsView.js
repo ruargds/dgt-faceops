@@ -122,7 +122,7 @@ export default function BackupsView() {
             incluirTodos
           />
           <button className="btn btn-secondary" onClick={carregar}>
-            <IconAtualizar size={15} />{t("Atualizar")}</button>
+            <IconAtualizar size={15} /> {t("Atualizar")}</button>
           {has("backups.run") && (
             <>
               <button
@@ -134,7 +134,7 @@ export default function BackupsView() {
                 {painelRodando ? "Salvando…" : "Backup do painel"}
               </button>
               <button className="btn btn-primary" onClick={() => setNovo(true)}>
-                <IconBackup size={15} />{t("Novo backup")}</button>
+                <IconBackup size={15} /> {t("Novo backup")}</button>
             </>
           )}
         </div>
@@ -159,7 +159,7 @@ export default function BackupsView() {
       {carregando ? (
         <Carregando />
       ) : lista.length === 0 ? (
-        <Vazio titulo={t("Nenhum backup ainda")}>{t("Dispare um backup")}<strong>{t("Essencial")}</strong> para validar o caminho de
+        <Vazio titulo={t("Nenhum backup ainda")}>{t("Dispare um backup")} <strong>{t("Essencial")}</strong> para validar o caminho de
           ponta a ponta antes de programar a recorrência.
         </Vazio>
       ) : (
@@ -420,7 +420,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
                 }}
               />
             )}
-            <div className="field-help">{t("Cadastre e teste destinos em")}<strong>{t("Destinos")}</strong>.
+            <div className="field-help">{t("Cadastre e teste destinos em")} <strong>{t("Destinos")}</strong>.
             </div>
           </div>
 
@@ -435,7 +435,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
                   checked={aceito}
                   onChange={(e) => setAceito(e.target.checked)}
                 />
-                <span style={{ color: "var(--red-fg)" }}>{t("Entendo que o perfil Completo")}<strong>{t("PARA o FindFace Multi")}</strong> em{" "}
+                <span style={{ color: "var(--red-fg)" }}>{t("Entendo que o perfil Completo")} <strong>{t("PARA o FindFace Multi")}</strong> em{" "}
                   <strong>{host ? host.name : "este servidor"}</strong> durante a cópia
                   (pode levar horas) e que o reconhecimento facial fica fora do ar nesse
                   período.

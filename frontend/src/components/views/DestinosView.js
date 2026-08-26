@@ -92,7 +92,7 @@ export default function DestinosView() {
         {has("destinations.manage") && (
           <div className="page-actions">
             <button className="btn btn-primary" onClick={() => setEditando({ tipo: "local" })}>
-              <IconMais size={15} />{t("Novo destino")}</button>
+              <IconMais size={15} /> {t("Novo destino")}</button>
           </div>
         )}
       </div>
@@ -131,7 +131,7 @@ export default function DestinosView() {
 
                 {d.tem_credencial && (
                   <div className="stack-h small muted" style={{ gap: 6, marginBottom: 8 }}>
-                    <IconChave size={13} />{t("credencial guardada ·")}<span className="mono">{d.cred_fingerprint}</span>
+                    <IconChave size={13} /> {t("credencial guardada ·")} <span className="mono">{d.cred_fingerprint}</span>
                   </div>
                 )}
 
@@ -330,7 +330,7 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
             <div className="field">
               <label className="label label-required">{t("Caminho")}</label>
               <input className="mono" value={f.caminho} onChange={set("caminho")} required />
-              <div className="field-help">{t("Caminho")}<strong>{t("dentro do container")}</strong> do painel. O padrão{" "}
+              <div className="field-help">{t("Caminho")} <strong>{t("dentro do container")}</strong> do painel. O padrão{" "}
                 <span className="mono">/data/backups</span> já está mapeado para o disco
                 do host no docker-compose.
               </div>
@@ -407,7 +407,7 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
                   }
                   required={!editando}
                 />
-                <div className="field-help">{t("Gere com")}<span className="mono">{t("rclone config")}</span> em qualquer máquina
+                <div className="field-help">{t("Gere com")} <span className="mono">{t("rclone config")}</span> em qualquer máquina
                   e cole aqui a seção do remote, <strong>{t("incluindo a linha entre colchetes")}</strong>. Contém token e chave — vai cifrada para o cofre e é
                   materializada em arquivo temporário (modo 0600) só durante o envio.
                 </div>
@@ -459,7 +459,7 @@ function ModalDestino({ inicial, onFechar, onPronto }) {
           </div>
 
           {tipoInfo && (
-            <div className="small muted" style={{ marginTop: 6 }}>{t("Depois de salvar, use")}<strong>{t("Testar")}</strong>: o painel grava um arquivo
+            <div className="small muted" style={{ marginTop: 6 }}>{t("Depois de salvar, use")} <strong>{t("Testar")}</strong>: o painel grava um arquivo
               pequeno, confere e apaga. Permissão de escrita e cota só aparecem na hora
               de gravar — melhor descobrir agora que no meio do backup.
             </div>

@@ -75,7 +75,7 @@ function Acoes() {
           <option value="info">{t("Só info")}</option>
         </select>
         <button className="btn btn-secondary" onClick={carregar}>
-          <IconAtualizar size={15} />{t("Atualizar")}</button>
+          <IconAtualizar size={15} /> {t("Atualizar")}</button>
         <button
           type="button"
           className="btn btn-secondary"
@@ -84,7 +84,7 @@ function Acoes() {
           }
           title={t("Baixar 90 dias de auditoria em CSV")}
         >
-          <IconDownload size={15} />{t("Exportar 90 dias")}</button>
+          <IconDownload size={15} /> {t("Exportar 90 dias")}</button>
       </div>
 
       <Erro mensagem={erro} onTentar={carregar} />
@@ -180,7 +180,7 @@ function Sessoes() {
 
       <div className="stack-h">
         <button className="btn btn-secondary" onClick={carregar}>
-          <IconAtualizar size={15} />{t("Atualizar")}</button>
+          <IconAtualizar size={15} /> {t("Atualizar")}</button>
         {ativas.length > 0 && (
           <span className="pill pill-info">{ativas.length} sessão(ões) aberta(s) agora</span>
         )}

@@ -149,7 +149,7 @@ export default function MonitorView() {
             <span>{t("Aviso sonoro")}</span>
           </label>
           <button className="btn btn-secondary" onClick={carregar}>
-            <IconAtualizar size={15} />{t("Atualizar")}</button>
+            <IconAtualizar size={15} /> {t("Atualizar")}</button>
         </div>
       </div>
 
@@ -218,7 +218,7 @@ export default function MonitorView() {
 
       {/* ── Cartões ──────────────────────────────────────────────── */}
       {servidores.length === 0 ? (
-        <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as máquinas em")}<strong>{t("Servidores")}</strong>{t("para o monitor começar a acompanhar.")}</Vazio>
+        <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as máquinas em")} <strong>{t("Servidores")}</strong> {t("para o monitor começar a acompanhar.")}</Vazio>
       ) : (
         <div className="grid-cards">
           {servidores.map((s) => (
@@ -408,7 +408,7 @@ function CartaoMonitor({ s, alertas, selecionado, onSelecionar }) {
           <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{s.host}</strong>
         </div>
         {s.tem_gpu && (
-          <span className="pill pill-info"><IconGPU size={12} />{t("GPU")}</span>
+          <span className="pill pill-info"><IconGPU size={12} /> {t("GPU")}</span>
         )}
       </div>
 

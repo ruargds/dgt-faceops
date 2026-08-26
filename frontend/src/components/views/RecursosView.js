@@ -224,7 +224,7 @@ export default function RecursosView() {
             <div>
               <div className="section-title">
                 <span className="stack-h">
-                  <IconGPU size={14} />{t("GPU")}</span>
+                  <IconGPU size={14} /> {t("GPU")}</span>
               </div>
               <div className="grid-cards">
                 {dados.gpus.map((g) => (
@@ -419,7 +419,7 @@ function AnaliseArmazenamento({ hostId }) {
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <div>
           <div className="section-title" style={{ marginBottom: 2 }}>{t("Onde o disco do FindFace está sendo gasto")}</div>
-          <div className="small muted">{t("Varre")}<span className="mono">/opt/findface-multi/data</span>. Leva alguns
+          <div className="small muted">{t("Varre")} <span className="mono">/opt/findface-multi/data</span>. Leva alguns
             minutos em servidor com muitos eventos.
           </div>
         </div>
@@ -434,7 +434,7 @@ function AnaliseArmazenamento({ hostId }) {
 
       {dados && (
         <>
-          <div className="small muted" style={{ marginBottom: 10 }}>{t("Total em")}<span className="mono">{dados.base}</span>:{" "}
+          <div className="small muted" style={{ marginBottom: 10 }}>{t("Total em")} <span className="mono">{dados.base}</span>:{" "}
             <strong>{formatBytes(dados.total_bytes)}</strong>
             {dados.parcial && " (leitura parcial — houve timeout em parte da árvore)"}
           </div>

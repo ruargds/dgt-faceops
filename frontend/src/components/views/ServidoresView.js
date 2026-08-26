@@ -73,7 +73,7 @@ export default function ServidoresView() {
         {has("hosts.manage") && (
           <div className="page-actions">
             <button className="btn btn-primary" onClick={() => setEditando({})}>
-              <IconMais size={15} />{t("Cadastrar servidor")}</button>
+              <IconMais size={15} /> {t("Cadastrar servidor")}</button>
           </div>
         )}
       </div>
@@ -95,7 +95,7 @@ export default function ServidoresView() {
                   <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{h.name}</strong>
                   <div className="stack-h" style={{ gap: 5 }}>
                     {h.has_gpu && (
-                      <span className="pill pill-info"><IconGPU size={12} />{t("GPU")}</span>
+                      <span className="pill pill-info"><IconGPU size={12} /> {t("GPU")}</span>
                     )}
                     {!h.enabled && <span className="pill pill-idle">desativado</span>}
                   </div>
@@ -343,7 +343,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               <label className="label" style={{ marginBottom: 0 }}>{t("Identidade do servidor")}</label>
               <button type="button" className="btn btn-secondary btn-sm" onClick={lerChaveHost}>{t("Ler chave do servidor")}</button>
             </div>
-            <div className="field-help" style={{ marginTop: 6 }}>{t("O painel lê a chave pública do servidor")}<strong>antes</strong> de qualquer
+            <div className="field-help" style={{ marginTop: 6 }}>{t("O painel lê a chave pública do servidor")} <strong>antes</strong> de qualquer
               credencial trafegar, e fixa essa identidade. Se a chave mudar depois, a
               conexão é recusada em vez de entregar a senha de sudo a um impostor.
               {editando && " Ao salvar, a leitura é refeita se o endereço mudar."}
@@ -421,7 +421,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
                   required={!editando}
                   style={{ marginTop: 6 }}
                 />
-                <div className="field-help">{t("Cole a chave ou carregue o arquivo")}<span className="mono">.pem</span>.
+                <div className="field-help">{t("Cole a chave ou carregue o arquivo")} <span className="mono">.pem</span>.
                   Guardada cifrada (Fernet AES-128) no cofre. Nunca é exibida nem
                   devolvida pela API depois de salva.
                   {editando && inicial.key_fingerprint && (
@@ -464,7 +464,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               autoComplete="new-password"
               placeholder={editando ? "Deixe em branco para manter" : ""}
             />
-            <div className="field-help">{t("Deixe vazio se o usuário tem")}<span className="mono">{t("NOPASSWD")}</span> no
+            <div className="field-help">{t("Deixe vazio se o usuário tem")} <span className="mono">{t("NOPASSWD")}</span> no
               sudoers. Backup e restart de container precisam de root.
             </div>
           </div>
@@ -481,7 +481,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
             </div>
           </div>
 
-          <div className="section-title" style={{ marginTop: 18 }}>{t("API do FindFace")}<span className="small muted">— coleta de câmeras por IP (recomendado)</span>
+          <div className="section-title" style={{ marginTop: 18 }}>{t("API do FindFace")} <span className="small muted">— coleta de câmeras por IP (recomendado)</span>
           </div>
           <div className="field-help" style={{ marginBottom: 8 }}>
             Caminho preferido para contar câmeras, eventos e licenças: o painel
@@ -528,7 +528,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
             </div>
           </div>
           <div className="field">
-            <label className="label">{t("Token da API")}<span className="small muted">— opcional</span>
+            <label className="label">{t("Token da API")} <span className="small muted">— opcional</span>
             </label>
             <input
               type="password"
@@ -549,7 +549,8 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               </button>
               {testeApi && !testeApi.carregando && testeApi.ok && (
                 <span className="small" style={{ color: "var(--green)" }}>
-                  OK — {testeApi.cameras != null ? `${testeApi.cameras} câmera(s)` : "conectou"}
+                  OK — {testeApi.usuario ? `${testeApi.usuario} · ` : ""}
+                  {testeApi.cameras != null ? `${testeApi.cameras} câmera(s)` : "conectou"}
                 </span>
               )}
               {testeApi && !testeApi.carregando && testeApi.ok === false && (

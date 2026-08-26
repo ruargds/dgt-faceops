@@ -129,7 +129,7 @@ export default function ProcessosView() {
           <Resumo d={dados} />
 
           <div className="card" style={{ marginTop: 16 }}>
-            <div className="section-title" style={{ marginBottom: 8 }}>{t("Processos que mais consomem")}<span className="small muted" style={{ fontWeight: 400 }}>
+            <div className="section-title" style={{ marginBottom: 8 }}>{t("Processos que mais consomem")} <span className="small muted" style={{ fontWeight: 400 }}>
                 {" "}— clique numa coluna para ordenar
               </span>
             </div>

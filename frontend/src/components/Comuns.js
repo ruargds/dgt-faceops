@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api, nivel } from "../api";
-import { t as traduzir } from "../i18n";
+import { t } from "../i18n";
 import { IconAlerta } from "./Icons";
 
 /** Barra de uso com cor por faixa: verde <70%, âmbar <88%, vermelho acima. */
@@ -45,7 +45,7 @@ export function Erro({ mensagem, onTentar }) {
         <div style={{ flex: 1, fontSize: 13 }}>{mensagem}</div>
         {onTentar && (
           <button className="btn btn-secondary btn-sm" onClick={onTentar}>
-            {traduzir("comum.tentar")}
+            {t("comum.tentar")}
           </button>
         )}
       </div>
@@ -54,7 +54,7 @@ export function Erro({ mensagem, onTentar }) {
 }
 
 export function Carregando({ texto }) {
-  const rotulo = texto || traduzir("comum.carregando");
+  const rotulo = texto || t("comum.carregando");
   return (
     <div className="stack-h" style={{ padding: 18, color: "var(--text-3)" }}>
       <div className="spin" /> {rotulo}
@@ -144,7 +144,7 @@ export function useDestinos() {
 export function SeletorDestinos({ destinos, selecionados, onMudar }) {
   if (!destinos.length) {
     return (
-      <div className="small" style={{ color: "var(--amber)" }}>{t("Nenhum destino ativo. Cadastre um em")}<strong>{t("Destinos")}</strong>{t("antes de continuar.")}</div>
+      <div className="small" style={{ color: "var(--amber)" }}>{t("Nenhum destino ativo. Cadastre um em")} <strong>{t("Destinos")}</strong> {t("antes de continuar.")}</div>
     );
   }
   return (
@@ -265,7 +265,7 @@ export function ConfirmarDigitando({ titulo, aviso, palavra, rotuloBotao, onConf
           </div>
           {erro && <div className="login-err">{erro}</div>}
           <div className="field">
-            <label className="label">{t("Digite")}<strong className="mono">{palavra}</strong>{t("para confirmar")}</label>
+            <label className="label">{t("Digite")} <strong className="mono">{palavra}</strong> {t("para confirmar")}</label>
             <input value={texto} onChange={(e) => setTexto(e.target.value)} autoFocus />
           </div>
         </div>

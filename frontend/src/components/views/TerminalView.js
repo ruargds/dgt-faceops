@@ -357,7 +357,7 @@ export default function TerminalView() {
         como em qualquer terminal.
         <br />
         A sessão cai sozinha depois de 30 minutos parada. Tudo o que for digitado
-        fica registrado em <span className="mono">.cast</span>{t("e pode ser reproduzido com")}<span className="mono">{t("asciinema play")}</span>{t("na tela de Auditoria.")}</div>
+        fica registrado em <span className="mono">.cast</span> {t("e pode ser reproduzido com")} <span className="mono">{t("asciinema play")}</span> {t("na tela de Auditoria.")}</div>
 
       {pedindoLogin && (
         <ModalLoginSsh
@@ -446,7 +446,7 @@ function ModalLoginSsh({ host, onFechar, onEntrar }) {
         <div className="modal-foot">
           <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button className="btn btn-primary" disabled={!usuario.trim()}>
-            <IconTerminal size={15} />{t("Conectar")}</button>
+            <IconTerminal size={15} /> {t("Conectar")}</button>
         </div>
       </form>
     </div>

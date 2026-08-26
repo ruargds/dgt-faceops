@@ -81,7 +81,7 @@ function Licenciamento({ dados, erro, lendo, onAtualizar }) {
           )}
           {dados.estourados === 0 && cab.valido && (
             <span className="pill pill-ok" style={{ marginLeft: 8 }}>
-              <IconOk size={11} />{t("válida")}</span>
+              <IconOk size={11} /> {t("válida")}</span>
           )}
         </div>
         <button className="btn btn-secondary btn-sm" onClick={onAtualizar} disabled={lendo}>
@@ -189,7 +189,7 @@ function Licenciamento({ dados, erro, lendo, onAtualizar }) {
       )}
 
       <div className="stack-h" style={{ marginTop: 10 }}>
-        <span className="small muted" style={{ flex: 1 }}>{t("Lido de")}<span className="mono">{dados.url}{dados.caminho}</span>. O uso é o
+        <span className="small muted" style={{ flex: 1 }}>{t("Lido de")} <span className="mono">{dados.url}{dados.caminho}</span>. O uso é o
           do instante da leitura — clique em Atualizar uso para o número de agora.
         </span>
         <button className="btn btn-ghost btn-sm" onClick={() => setVerBruto((v) => !v)}>
@@ -300,7 +300,7 @@ export default function DispositivosView() {
               }
               title={t("Baixar em CSV")}
             >
-              <IconDownload size={15} />{t("Exportar")}</button>
+              <IconDownload size={15} /> {t("Exportar")}</button>
           )}
         </div>
       </div>
@@ -395,7 +395,7 @@ export default function DispositivosView() {
                       <td>
                         {muda ? (
                           <span className="pill pill-warn">
-                            <IconAlerta size={11} />{t("sem eventos")}</span>
+                            <IconAlerta size={11} /> {t("sem eventos")}</span>
                         ) : (
                           <span className="pill pill-ok">
                             <IconOk size={11} /> ativa

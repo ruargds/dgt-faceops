@@ -76,7 +76,7 @@ export default function Login({ onEntrar, marca }) {
           {enviando ? t("login.entrando") : t("login.entrar")}
         </button>
 
-        <div className="login-hint">{t("Use as credenciais fornecidas pelo administrador.")}<br />{t("Troque a senha logo após o primeiro acesso.")}</div>
+        <div className="login-hint">{t("Use as credenciais fornecidas pelo administrador.")}<br /> {t("Troque a senha logo após o primeiro acesso.")}</div>
       </form>
     </div>
   );

@@ -306,7 +306,7 @@ export default function LogsView() {
             disabled={!container || salvando}
             title={t("Salva o container e o formato atual como visão")}
           >
-            <IconMais size={13} />{t("Salvar visão")}</button>
+            <IconMais size={13} /> {t("Salvar visão")}</button>
         </div>
         {visao.descricao && (
           <div className="small muted" style={{ marginTop: 8 }}>{visao.descricao}</div>
@@ -351,7 +351,7 @@ export default function LogsView() {
             <label className="label">&nbsp;</label>
             {seguindo || estado === "conectando" ? (
               <button className="btn btn-danger" style={{ width: "100%" }} onClick={parar}>
-                <IconStop size={15} />{t("Parar")}</button>
+                <IconStop size={15} /> {t("Parar")}</button>
             ) : (
               <button
                 className="btn btn-primary"
@@ -359,7 +359,7 @@ export default function LogsView() {
                 onClick={iniciar}
                 disabled={!container}
               >
-                <IconLogs size={15} />{t("Seguir")}</button>
+                <IconLogs size={15} /> {t("Seguir")}</button>
             )}
           </div>
         </div>

@@ -210,7 +210,17 @@ class FFApiError(Exception):
 # Caminhos de login observados nas versões 2.x. Mesma lógica dos caminhos
 # de licença: tenta em ordem, o primeiro que autenticar ganha, e o que foi
 # tentado volta na mensagem de erro.
-CAMINHOS_LOGIN = ("/login/", "/auth/login/", "/v1/login/")
+# `POST /auth/login/` é o que a documentação da instalação descreve
+# (swagger 3.0.3, tag `auth`): credencial vai por **Basic auth** no
+# cabeçalho, o corpo leva um `uuid` de dispositivo — obrigatório — e a
+# resposta traz `token` e `token_expiration_datetime`. Os outros caminhos
+# ficam como rede de segurança para instalação mais antiga.
+CAMINHOS_LOGIN = ("/auth/login/", "/login/", "/v1/login/")
+
+# Identificador deste painel como "dispositivo" no FindFace. Estável por
+# host: assim a sessão aberta pelo painel é reconhecível na tela de
+# sessões da plataforma, em vez de virar um dispositivo novo por login.
+UUID_PAINEL = "dgt-faceops"
 
 
 def configurado(host) -> bool:
@@ -246,6 +256,24 @@ class FFApiService:
 
     # ── Autenticação ───────────────────────────────────────────────────
 
+    @staticmethod
+    def _bases(host) -> list:
+        """
+        Candidatos de URL base, na ordem em que serão tentados.
+
+        Quem cadastra digita ora `https://ip`, ora `https://ip/api` — e as
+        duas formas existem em instalação real. Em vez de exigir a certa,
+        o painel tenta as duas e guarda a que respondeu.
+        """
+        base = (host.ff_api_url or "").rstrip("/")
+        candidatos = [base]
+        if base.endswith("/api"):
+            candidatos.append(base[: -len("/api")])
+        else:
+            candidatos.append(base + "/api")
+        # Sem duplicata e sem vazio
+        return [c for i, c in enumerate(candidatos) if c and c not in candidatos[:i]]
+
     async def _credenciais(self, host) -> dict:
         """
         Cabeçalhos que autenticam neste host.
@@ -271,48 +299,94 @@ class FFApiService:
         if guardada and (time.monotonic() - guardada["em"]) < SESSAO_TTL:
             return dict(guardada["cabecalhos"])
 
-        cabecalhos = await self._login(host, usuario, senha)
-        self._sessoes[chave] = {"cabecalhos": cabecalhos, "em": time.monotonic()}
+        cabecalhos, base = await self._login(host, usuario, senha)
+        self._sessoes[chave] = {
+            "cabecalhos": cabecalhos,
+            "base": base,
+            "em": time.monotonic(),
+        }
         return dict(cabecalhos)
 
-    async def _login(self, host, usuario: str, senha: str) -> dict:
+    async def _base(self, host) -> str:
         """
-        Entra na API e devolve o que autentica as próximas chamadas.
+        A URL base que autenticou — e não a que foi digitada.
 
-        Duas formas de resposta convivem nas instalações 2.x: JSON com
-        token, ou cookie de sessão. O cliente aceita as duas em vez de
-        exigir uma — quem opera não escolheu qual a instalação usa.
+        Quem cadastrou pode ter escrito `https://ip/api` numa instalação
+        que atende em `https://ip`. Depois do login sabemos qual das duas
+        responde; usar a outra devolveria 404 em toda leitura.
         """
-        base = host.ff_api_url.rstrip("/")
-        corpo = {"login": usuario, "password": senha, "username": usuario}
+        chave = getattr(host, "id", None) or host.ff_api_url
+        guardada = self._sessoes.get(chave)
+        if guardada and guardada.get("base"):
+            return guardada["base"]
+        return (host.ff_api_url or "").rstrip("/")
+
+    async def _login(self, host, usuario: str, senha: str) -> tuple:
+        """
+        Entra na API e devolve `(cabeçalhos, base_que_funcionou)`.
+
+        Forma documentada: **Basic auth** no cabeçalho e `{"uuid": ...}` no
+        corpo — o `uuid` é obrigatório e identifica o "dispositivo" que
+        está entrando. A resposta traz `token`, usado como
+        `Authorization: Token <token>` daqui em diante.
+
+        A tentativa em JSON puro fica depois, como rede de segurança para
+        instalação que não siga esse contrato; e cookie de sessão é aceito
+        se for tudo o que vier.
+        """
+        import base64
+
+        basico = base64.b64encode(f"{usuario}:{senha}".encode("utf-8")).decode("ascii")
+        uuid_dispositivo = f"{UUID_PAINEL}-{getattr(host, 'id', 0) or 0}"
         tentativas = []
 
-        for caminho in CAMINHOS_LOGIN:
-            try:
-                dados, cookies = await self._post(f"{base}{caminho}", corpo)
-            except FFApiError as exc:
-                tentativas.append(f"{caminho} → {exc}")
-                continue
-
-            token = ""
-            if isinstance(dados, dict):
-                for campo in ("token", "key", "access_token", "auth_token"):
-                    if dados.get(campo):
-                        token = str(dados[campo])
-                        break
-            if token:
-                return {"Authorization": f"Token {token}"}
-            if cookies:
-                return {"Cookie": cookies}
-            tentativas.append(f"{caminho} → respondeu sem token nem cookie")
-
-        raise FFApiError(
-            "login na API do FindFace falhou. Tentativas: " + "; ".join(tentativas)
+        formas = (
+            # (rótulo, cabeçalhos extras, corpo)
+            (
+                "basic+uuid",
+                {"Authorization": f"Basic {basico}"},
+                {
+                    "uuid": uuid_dispositivo,
+                    "mobile": False,
+                    "device_info": {"name": "DGT FaceOps", "type": "panel"},
+                },
+            ),
+            ("json", {}, {"login": usuario, "password": senha, "username": usuario}),
         )
 
-    async def _post(self, url: str, corpo: dict) -> tuple:
+        for base in self._bases(host):
+            for caminho in CAMINHOS_LOGIN:
+                for rotulo, extras, corpo in formas:
+                    alvo = f"{base}{caminho}"
+                    try:
+                        dados, cookies = await self._post(alvo, corpo, extras)
+                    except FFApiError as exc:
+                        tentativas.append(f"{alvo} [{rotulo}] → {exc}")
+                        continue
+
+                    token = ""
+                    if isinstance(dados, dict):
+                        for campo in ("token", "key", "access_token", "auth_token"):
+                            if dados.get(campo):
+                                token = str(dados[campo])
+                                break
+                    if token:
+                        return {"Authorization": f"Token {token}"}, base
+                    if cookies:
+                        return {"Cookie": cookies}, base
+                    tentativas.append(f"{alvo} [{rotulo}] → sem token nem cookie")
+
+        raise FFApiError(
+            "login na API do FindFace falhou. Tentativas: " + "; ".join(tentativas[:6])
+        )
+
+    async def _post(self, url: str, corpo: dict, extras: dict | None = None) -> tuple:
         """POST de login. Devolve (json, cookies) — cookies como string."""
-        cabecalhos = {"Content-Type": "application/json", "Accept": "application/json"}
+        cabecalhos = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            **(extras or {}),
+        }
 
         if self._httpx is not None:
             try:
@@ -419,15 +493,35 @@ class FFApiService:
         return await asyncio.to_thread(_fetch)
 
     async def testar(self, host) -> dict:
-        """Confere URL e token com uma consulta barata."""
+        """
+        Confere credencial e URL com duas consultas baratas.
+
+        `/users/me/` primeiro porque ele prova a autenticação e diz QUEM o
+        painel virou lá dentro — se a conta cadastrada não for a esperada,
+        aparece aqui e não depois, numa permissão negada no meio de uma
+        operação. Depois a contagem de câmeras, que prova o acesso a dado.
+        """
         if not configurado(host):
-            raise FFApiError("URL ou token da API não cadastrados neste servidor")
+            raise FFApiError(
+                "credencial da API não cadastrada neste servidor: informe "
+                "usuário e senha do FindFace"
+            )
         auth = await self._credenciais(host)
-        base = host.ff_api_url.rstrip("/")
+        base = await self._base(host)
+
+        quem = ""
+        try:
+            eu = await self._get(f"{base}/users/me/", auth)
+            if isinstance(eu, dict):
+                quem = str(eu.get("name") or eu.get("login") or eu.get("email") or "")
+        except FFApiError:
+            # Instalação sem /users/me/ não invalida o teste; a contagem
+            # abaixo continua sendo prova de acesso.
+            quem = ""
 
         dados = await self._get(f"{base}/cameras/count/", auth)
         total = dados.get("count", dados.get("total", dados))
-        return {"ok": True, "cameras": total, "url": base}
+        return {"ok": True, "cameras": total, "url": base, "usuario": quem}
 
     async def licenca(self, host) -> dict:
         """
@@ -446,7 +540,7 @@ class FFApiService:
             )
 
         auth = await self._credenciais(host)
-        base = host.ff_api_url.rstrip("/")
+        base = await self._base(host)
 
         bruto = None
         caminho_ok = ""
@@ -523,7 +617,7 @@ class FFApiService:
             raise FFApiError("URL ou token da API não cadastrados")
 
         auth = await self._credenciais(host)
-        base = host.ff_api_url.rstrip("/")
+        base = await self._base(host)
         desde = (datetime.now(timezone.utc) - PERIODOS[periodo]).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
