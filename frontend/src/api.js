@@ -71,6 +71,60 @@ async function request(caminho, opcoes = {}) {
 
 const get = (c, opts) => request(c, opts);
 const post = (c, corpo) => request(c, { method: "POST", body: JSON.stringify(corpo || {}) });
+
+/**
+ * Baixa um arquivo de endpoint autenticado.
+ *
+ * Um <a href> comum NÃO manda o header Authorization (o token está no
+ * localStorage, não em cookie), então a navegação cairia em 401. Aqui o
+ * fetch anexa o Bearer, e o blob vira download via <a download> temporário.
+ * Serve para arquivos pequenos (CSV, gravação .cast). Para artefatos
+ * grandes de backup use o ticket de streaming, que não bufferiza memória.
+ */
+async function baixar(url, nomeSugerido) {
+  const token = getToken();
+  const resp = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (resp.status === 401) {
+    clearToken();
+    window.location.reload();
+    throw new ApiError("Sessão expirada.", 401, null);
+  }
+  if (!resp.ok) {
+    let detalhe = `Erro ${resp.status}`;
+    try {
+      const j = await resp.json();
+      detalhe = j.detail || detalhe;
+    } catch {
+      /* corpo não-JSON */
+    }
+    throw new ApiError(detalhe, resp.status, null);
+  }
+  const blob = await resp.blob();
+  let nome = nomeSugerido || "download";
+  const cd = resp.headers.get("content-disposition") || "";
+  const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+  if (m) nome = decodeURIComponent(m[1]);
+  const objurl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objurl;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(objurl), 10000);
+}
+
+/**
+ * Baixa o artefato de backup em streaming, via ticket de uso único.
+ * O navegador NAVEGA para a URL (o nginx faz streaming), sem header e sem
+ * bufferizar dezenas de GB na memória.
+ */
+async function baixarBackup(runId) {
+  const r = await post(`/backups/${runId}/download-ticket`);
+  window.location.href = `/api/backups/download?ticket=${encodeURIComponent(r.ticket)}`;
+}
 const patch = (c, corpo) => request(c, { method: "PATCH", body: JSON.stringify(corpo || {}) });
 const del = (c) => request(c, { method: "DELETE" });
 
@@ -109,6 +163,7 @@ export const api = {
   atualizarHost: (id, d) => patch(`/hosts/${id}`, d),
   removerHost: (id) => del(`/hosts/${id}`),
   testarHost: (id) => post(`/hosts/${id}/testar`),
+  testarApiHost: (id, corpo) => post(`/hosts/${id}/testar-api`, corpo),
 
   // Painel e recursos
   painel: () => get("/painel"),
@@ -193,6 +248,10 @@ export const api = {
   sessoesAtivas: () => get("/terminal/ativas"),
   sessoesTerminal: (params = "") => get(`/terminal/sessoes${params}`),
   urlGravacao: (id) => `/api/terminal/sessoes/${id}/gravacao`,
+
+  // Downloads autenticados
+  baixar,
+  baixarBackup,
 
   // Auditoria
   auditoria: (params = "") => get(`/auditoria${params}`),

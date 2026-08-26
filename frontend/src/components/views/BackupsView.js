@@ -291,13 +291,14 @@ function LinhaBackup({ r, onDetalhe, onRemover }) {
             <IconLogs size={14} />
           </button>
           {has("backups.download") && r.status === "sucesso" && !r.expired && (
-            <a
+            <button
+              type="button"
               className="btn btn-secondary btn-sm"
-              href={api.urlDownload(r.id)}
+              onClick={() => api.baixarBackup(r.id).catch((e) => window.alert(e.message))}
               title="Baixar artefato"
             >
               <IconDownload size={14} />
-            </a>
+            </button>
           )}
           {has("backups.delete") && !r.expired && r.artifact_name && (
             <button

@@ -73,13 +73,18 @@ export default function DispositivosView() {
             <IconAtualizar size={15} /> {carregando ? "Consultando…" : "Consultar"}
           </button>
           {dados && (
-            <a
+            <button
+              type="button"
               className="btn btn-secondary"
-              href={api.urlExportarDispositivos(hostId, periodo)}
+              onClick={() =>
+                api
+                  .baixar(api.urlExportarDispositivos(hostId, periodo), `cameras-${periodo}.csv`)
+                  .catch((e) => setErro(e.message))
+              }
               title="Baixar em CSV"
             >
               <IconDownload size={15} /> Exportar
-            </a>
+            </button>
           )}
         </div>
       </div>

@@ -18,7 +18,9 @@ export default function ProcessosView() {
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState("");
-  const [ordenarPor, setOrdenarPor] = useState("cpu"); // cpu | mem
+  // Ordenação por coluna. Números (pid/cpu/mem) ordenam 0-9; texto
+  // (usuário/tempo/programa) ordena A-Z. Clicar no cabeçalho inverte.
+  const [ordem, setOrdem] = useState({ campo: "cpu", dir: "desc" });
   const [pausado, setPausado] = useState(false);
   const pedido = useRef(0);
 
@@ -71,11 +73,29 @@ export default function ProcessosView() {
   if (erroHosts) return <Erro mensagem={erroHosts} />;
   if (!hosts.length) return <Vazio titulo="Cadastre um servidor primeiro" />;
 
+  const NUM = new Set(["pid", "cpu", "mem"]);
   const processos = dados
-    ? [...dados.processos].sort((a, b) =>
-        ordenarPor === "mem" ? b.mem - a.mem : b.cpu - a.cpu
-      )
+    ? [...dados.processos].sort((a, b) => {
+        const { campo, dir } = ordem;
+        let r;
+        if (NUM.has(campo)) {
+          r = (a[campo] || 0) - (b[campo] || 0);
+        } else {
+          r = String(a[campo] || "").localeCompare(String(b[campo] || ""), "pt-BR", {
+            numeric: true,
+            sensitivity: "base",
+          });
+        }
+        return dir === "asc" ? r : -r;
+      })
     : [];
+
+  const ordenarPor = (campo) =>
+    setOrdem((o) =>
+      o.campo === campo
+        ? { campo, dir: o.dir === "asc" ? "desc" : "asc" }
+        : { campo, dir: NUM.has(campo) ? "desc" : "asc" }
+    );
 
   return (
     <>
@@ -109,24 +129,11 @@ export default function ProcessosView() {
           <Resumo d={dados} />
 
           <div className="card" style={{ marginTop: 16 }}>
-            <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-              <div className="section-title" style={{ marginBottom: 0 }}>
-                Processos que mais consomem
-              </div>
-              <div className="stack-h" style={{ gap: 6 }}>
-                <button
-                  className={`btn btn-sm ${ordenarPor === "cpu" ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setOrdenarPor("cpu")}
-                >
-                  por CPU
-                </button>
-                <button
-                  className={`btn btn-sm ${ordenarPor === "mem" ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setOrdenarPor("mem")}
-                >
-                  por memória
-                </button>
-              </div>
+            <div className="section-title" style={{ marginBottom: 8 }}>
+              Processos que mais consomem
+              <span className="small muted" style={{ fontWeight: 400 }}>
+                {" "}— clique numa coluna para ordenar
+              </span>
             </div>
 
             <div className="small muted" style={{ marginBottom: 10 }}>
@@ -140,12 +147,12 @@ export default function ProcessosView() {
               <table>
                 <thead>
                   <tr>
-                    <th className="right">PID</th>
-                    <th>Usuário</th>
-                    <th style={{ width: 150 }}>CPU</th>
-                    <th style={{ width: 150 }}>Memória</th>
-                    <th className="right">Tempo</th>
-                    <th>Programa</th>
+                    <Th campo="pid" ordem={ordem} onClick={ordenarPor} className="right">PID</Th>
+                    <Th campo="usuario" ordem={ordem} onClick={ordenarPor}>Usuário</Th>
+                    <Th campo="cpu" ordem={ordem} onClick={ordenarPor} style={{ width: 150 }}>CPU</Th>
+                    <Th campo="mem" ordem={ordem} onClick={ordenarPor} style={{ width: 150 }}>Memória</Th>
+                    <Th campo="tempo" ordem={ordem} onClick={ordenarPor} className="right">Tempo</Th>
+                    <Th campo="comando" ordem={ordem} onClick={ordenarPor}>Programa</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -178,6 +185,22 @@ export default function ProcessosView() {
         </>
       )}
     </>
+  );
+}
+
+function Th({ campo, ordem, onClick, children, className, style }) {
+  const ativo = ordem.campo === campo;
+  const seta = ativo ? (ordem.dir === "asc" ? " ▲" : " ▼") : "";
+  return (
+    <th
+      className={className}
+      style={{ ...(style || {}), cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+      onClick={() => onClick(campo)}
+      title="Ordenar por esta coluna"
+    >
+      {children}
+      <span style={{ color: ativo ? "var(--blue)" : "var(--text-3)" }}>{seta || " ↕"}</span>
+    </th>
   );
 }
 

@@ -19,6 +19,7 @@ entra no coletor contínuo.
 import logging
 import re
 
+from app.core.config import settings
 from app.services.ssh_service import SSHError, SSHService
 
 log = logging.getLogger("faceops.dispositivos")
@@ -30,6 +31,15 @@ SEP = "###FACEOPS:"
 PADRAO_CAMERA = re.compile(r"(^|_)cameras?$")
 PADRAO_GRUPO = re.compile(r"camera_?group")
 PADRAO_EVENTO = re.compile(r"(face|body|car)_?events?$")
+
+# Tabelas do banco do PRÓPRIO painel. Se a busca cair nele (acontece
+# quando o painel roda no mesmo servidor), reconhecemos e recusamos com
+# mensagem clara — em vez de listar "amostras, hosts, users..." como se
+# fossem tabelas do FindFace.
+TABELAS_PAINEL = frozenset({
+    "amostras", "audit_logs", "backup_runs", "configuracoes", "destinos",
+    "hosts", "schedules", "terminal_sessions", "users", "visoes_log",
+})
 
 PERIODOS = {
     "hora": ("1 hour", "última hora"),
@@ -176,16 +186,28 @@ echo "{SEP}END"
         s = _split(r.stdout)
 
         usuario = (s.get("USUARIO", "") or "postgres").strip() or "postgres"
+        banco_painel = (settings.POSTGRES_DB or "faceops").strip()
+
         todas: list[tuple[str, str]] = []
         for linha in s.get("TABELAS", "").strip().splitlines():
             if "|" in linha:
                 db, tab = linha.split("|", 1)
-                todas.append((db.strip(), tab.strip()))
+                db, tab = db.strip(), tab.strip()
+                # Nunca trata o banco do próprio painel como fonte de câmeras
+                if db == banco_painel:
+                    continue
+                todas.append((db, tab))
 
         if not todas:
+            # Provavelmente conectamos no Postgres do próprio painel (o
+            # FindFace não roda aqui) ou o banco do FindFace está noutro
+            # servidor.
             raise DispositivosError(
-                "não consegui listar as tabelas do PostgreSQL. Confira se o "
-                "usuário do banco tem permissão de leitura."
+                "não encontrei o banco do FindFace neste servidor. Se o FindFace "
+                "roda em outra máquina, consulte por lá (veja em Topologia onde o "
+                "PostgreSQL está). Ou cadastre a API do FindFace (URL + token) "
+                "deste servidor em Servidores — o painel prefere a API quando ela "
+                "existe."
             )
 
         cameras = [(d, t) for d, t in todas if PADRAO_CAMERA.search(t)]
@@ -193,9 +215,19 @@ echo "{SEP}END"
         eventos = [(d, t) for d, t in todas if PADRAO_EVENTO.search(t)]
 
         if not cameras:
+            tabelas = sorted({t for _, t in todas})
+            # Se o que sobrou é só o esquema do painel, diz isso em vez de
+            # despejar a lista de tabelas internas.
+            if set(tabelas).issubset(TABELAS_PAINEL):
+                raise DispositivosError(
+                    "este é o banco do próprio painel, não o do FindFace. O "
+                    "FindFace não roda neste servidor — consulte no servidor onde "
+                    "ele está (veja em Topologia), ou cadastre a API do FindFace."
+                )
             raise DispositivosError(
-                "nenhuma tabela de câmeras encontrada. Tabelas disponíveis: "
-                + ", ".join(sorted({t for _, t in todas})[:25])
+                "nenhuma tabela de câmeras encontrada. Cadastre a API do FindFace "
+                "(URL + token) em Servidores, ou confira se este é mesmo o servidor "
+                "do FindFace. Tabelas vistas: " + ", ".join(tabelas[:25])
             )
 
         # A base do FindFace costuma ser a que tem a tabela de câmeras

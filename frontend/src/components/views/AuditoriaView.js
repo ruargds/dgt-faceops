@@ -80,13 +80,16 @@ function Acoes() {
         <button className="btn btn-secondary" onClick={carregar}>
           <IconAtualizar size={15} /> Atualizar
         </button>
-        <a
+        <button
+          type="button"
           className="btn btn-secondary"
-          href={api.urlExportarAuditoria(90)}
+          onClick={() =>
+            api.baixar(api.urlExportarAuditoria(90), "auditoria-90d.csv").catch(() => {})
+          }
           title="Baixar 90 dias de auditoria em CSV"
         >
           <IconDownload size={15} /> Exportar 90 dias
-        </a>
+        </button>
       </div>
 
       <Erro mensagem={erro} onTentar={carregar} />
@@ -266,13 +269,16 @@ function Sessoes() {
                       </td>
                       <td className="small muted">{s.end_reason || "—"}</td>
                       <td>
-                        <a
+                        <button
+                          type="button"
                           className="btn btn-secondary btn-sm"
-                          href={api.urlGravacao(s.id)}
+                          onClick={() =>
+                            api.baixar(api.urlGravacao(s.id), `sessao-${s.id}.cast`).catch(() => {})
+                          }
                           title="Baixar gravação (asciicast v2)"
                         >
                           <IconDownload size={13} />
-                        </a>
+                        </button>
                       </td>
                     </tr>
                   );

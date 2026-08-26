@@ -220,13 +220,29 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
     compose_file: inicial.compose_file || "/opt/findface-multi/docker-compose.yaml",
     has_gpu: inicial.has_gpu || false,
     enabled: inicial.enabled !== undefined ? inicial.enabled : true,
+    ff_api_url: inicial.ff_api_url || "",
   });
   const [segredos, setSegredos] = useState({
     ssh_key: "",
     ssh_key_passphrase: "",
     ssh_password: "",
     sudo_password: "",
+    ff_api_token: "",
   });
+  const [testeApi, setTesteApi] = useState(null);
+
+  async function testarApi() {
+    setTesteApi({ carregando: true });
+    try {
+      const r = await api.testarApiHost(inicial.id, {
+        ff_api_url: f.ff_api_url,
+        ff_api_token: segredos.ff_api_token || undefined,
+      });
+      setTesteApi(r);
+    } catch (ex) {
+      setTesteApi({ ok: false, erro: ex.message });
+    }
+  }
   const [chaveHost, setChaveHost] = useState(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -473,6 +489,54 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               <input className="mono" value={f.compose_file} onChange={set("compose_file")} />
             </div>
           </div>
+
+          <div className="section-title" style={{ marginTop: 18 }}>
+            API do FindFace <span className="small muted">— coleta de câmeras por IP (recomendado)</span>
+          </div>
+          <div className="field-help" style={{ marginBottom: 8 }}>
+            Caminho preferido para contar câmeras e eventos: o painel usa a API do
+            FindFace em vez de vasculhar o banco por SSH. Aponte para o IP do
+            FindFace e cole um token de API. Se ficar em branco, o painel cai no
+            SSH+PostgreSQL.
+          </div>
+          <div className="field">
+            <label className="label">URL da API</label>
+            <input
+              className="mono"
+              value={f.ff_api_url}
+              onChange={set("ff_api_url")}
+              placeholder="https://10.50.153.10/api"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Token da API</label>
+            <input
+              type="password"
+              value={segredos.ff_api_token}
+              onChange={setSeg("ff_api_token")}
+              autoComplete="new-password"
+              placeholder={editando && inicial.tem_api ? "Deixe em branco para manter" : "cole o token de API do FindFace"}
+            />
+            <div className="field-help">
+              Gere o token no FindFace (perfil do usuário → API). Guardado cifrado
+              no cofre; nunca é exibido depois de salvo.
+            </div>
+          </div>
+          {editando && (
+            <div className="stack-h" style={{ gap: 10, alignItems: "center" }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={testarApi} disabled={testeApi && testeApi.carregando}>
+                {testeApi && testeApi.carregando ? "Testando…" : "Testar API"}
+              </button>
+              {testeApi && !testeApi.carregando && testeApi.ok && (
+                <span className="small" style={{ color: "var(--green)" }}>
+                  OK — {testeApi.cameras != null ? `${testeApi.cameras} câmera(s)` : "conectou"}
+                </span>
+              )}
+              {testeApi && !testeApi.carregando && testeApi.ok === false && (
+                <span className="small" style={{ color: "var(--red)" }}>{testeApi.erro}</span>
+              )}
+            </div>
+          )}
 
           <label className="check">
             <input type="checkbox" checked={f.has_gpu} onChange={set("has_gpu")} />

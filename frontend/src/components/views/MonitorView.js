@@ -255,13 +255,18 @@ export default function MonitorView() {
                   {j.rotulo}
                 </button>
               ))}
-              <a
+              <button
+                type="button"
                 className="btn btn-secondary btn-sm"
-                href={api.urlExportarMonitor(detalhe, janela)}
+                onClick={() =>
+                  api
+                    .baixar(api.urlExportarMonitor(detalhe, janela), `monitor-${hostDetalhe.host}-${janela}h.csv`)
+                    .catch((e) => setErro(e.message))
+                }
                 title="Baixar o histórico bruto em CSV"
               >
                 <IconDownload size={13} />
-              </a>
+              </button>
             </div>
           </div>
 

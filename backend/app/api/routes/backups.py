@@ -1,5 +1,7 @@
 """Backups sob demanda, histórico, download e agendamentos."""
 import asyncio
+import secrets
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -26,6 +28,51 @@ from app.services.scheduler_service import cron_legivel, validar_cron
 from app.services.storage_service import StorageService
 
 router = APIRouter(prefix="/api", tags=["backups"])
+
+# Tickets de download de uso único. O artefato de backup pode ter dezenas
+# de GB — baixar por fetch+blob bufferaria tudo na memória do navegador.
+# Com ticket, o navegador NAVEGA direto para a rota (streaming pelo nginx)
+# e a autenticação viaja no ticket, não num header que a navegação não
+# manda. Vale 60s, serve uma vez, libera só aquele arquivo.
+_download_tickets: dict[str, dict] = {}
+_TICKET_TTL = 60
+
+
+def _limpar_tickets_download() -> None:
+    agora = time.monotonic()
+    for t in [k for k, v in _download_tickets.items() if v["expira_em"] < agora]:
+        _download_tickets.pop(t, None)
+
+
+async def _resolver_artefato(db: AsyncSession, run_id: int):
+    """(caminho, filename) do artefato no disco do painel, ou HTTPException."""
+    run = await db.get(BackupRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="execução não encontrada")
+    if run.status != "sucesso" or not run.artifact_name:
+        raise HTTPException(status_code=400, detail="esta execução não gerou artefato")
+
+    host = await db.get(Host, run.host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor do backup não existe mais")
+
+    base = None
+    for d in (run.destinations or []):
+        if d.get("type") == "local" and d.get("status") == "ok" and d.get("uri"):
+            base = str(Path(d["uri"]).parent.parent)
+            break
+
+    caminho = StorageService.caminho_artefato(host.name, run.artifact_name, base)
+    if caminho is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "artefato não está no disco do painel. Pode ter expirado pela "
+                "retenção ou ter sido enviado só para a nuvem."
+            ),
+        )
+    return caminho, run.artifact_name, run, host
+
 
 
 async def _host_ou_404(db: AsyncSession, host_id: int) -> Host:
@@ -217,6 +264,58 @@ async def detalhe(
     return saida
 
 
+@router.post("/backups/{run_id}/download-ticket")
+async def emitir_ticket_download(
+    run_id: int,
+    request: Request,
+    autor: User = Depends(require_permission("backups.download")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Emite um ticket de uso único para baixar o artefato.
+
+    O navegador usa este ticket na URL de download e baixa em streaming —
+    sem carregar o arquivo (que pode ter dezenas de GB) na memória, e sem
+    depender de um header que a navegação não envia.
+    """
+    caminho, filename, run, host = await _resolver_artefato(db, run_id)
+
+    _limpar_tickets_download()
+    ticket = secrets.token_urlsafe(32)
+    _download_tickets[ticket] = {
+        "caminho": str(caminho),
+        "filename": filename,
+        "expira_em": time.monotonic() + _TICKET_TTL,
+    }
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="backups.download",
+        target=f"{host.name}/{run.artifact_name}",
+        ip=client_ip(request),
+        detail={"run_id": run_id, "bytes": run.size_bytes},
+    )
+    return {"ticket": ticket, "expira_em_s": _TICKET_TTL, "arquivo": filename}
+
+
+@router.get("/backups/download")
+async def baixar_por_ticket(ticket: str = Query(...)):
+    """Baixa o artefato em streaming. Autenticação pelo ticket, uso único."""
+    _limpar_tickets_download()
+    info = _download_tickets.pop(ticket, None)
+    if info is None or info["expira_em"] < time.monotonic():
+        raise HTTPException(status_code=401, detail="ticket inválido ou expirado")
+    caminho = Path(info["caminho"])
+    if not caminho.is_file():
+        raise HTTPException(status_code=404, detail="artefato não está mais no disco")
+    return FileResponse(
+        path=str(caminho),
+        filename=info["filename"],
+        media_type="application/gzip",
+    )
+
+
 @router.get("/backups/{run_id}/download")
 async def baixar(
     run_id: int,
@@ -224,35 +323,8 @@ async def baixar(
     autor: User = Depends(require_permission("backups.download")),
     db: AsyncSession = Depends(get_db),
 ):
-    run = await db.get(BackupRun, run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="execução não encontrada")
-    if run.status != "sucesso" or not run.artifact_name:
-        raise HTTPException(status_code=400, detail="esta execução não gerou artefato")
-
-    host = await db.get(Host, run.host_id)
-    if host is None:
-        raise HTTPException(status_code=404, detail="servidor do backup não existe mais")
-
-    # O caminho vem do destino local registrado na própria execução —
-    # destinos são configuráveis, então assumir um diretório fixo
-    # quebraria depois de qualquer mudança de configuração.
-    base = None
-    for d in (run.destinations or []):
-        if d.get("type") == "local" and d.get("status") == "ok" and d.get("uri"):
-            base = str(Path(d["uri"]).parent.parent)
-            break
-
-    caminho = StorageService.caminho_artefato(host.name, run.artifact_name, base)
-    if caminho is None:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "artefato não está no disco do painel. Pode ter expirado pela "
-                "retenção ou ter sido enviado só para a nuvem."
-            ),
-        )
-
+    """Download direto por header Authorization — para clientes de API."""
+    caminho, filename, run, host = await _resolver_artefato(db, run_id)
     await audit_service.registrar(
         db,
         usuario=autor.username,
@@ -263,7 +335,7 @@ async def baixar(
     )
     return FileResponse(
         path=str(caminho),
-        filename=run.artifact_name,
+        filename=filename,
         media_type="application/gzip",
     )
 

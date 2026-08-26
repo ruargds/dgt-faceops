@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -343,3 +344,54 @@ async def testar(
             detail={"erro": mensagem[:500]},
         )
         return {"ok": False, "erro": mensagem}
+
+
+class TestarApiIn(BaseModel):
+    ff_api_url: str | None = None
+    ff_api_token: str | None = None
+
+
+@router.post("/{host_id}/testar-api")
+async def testar_api(
+    host_id: int,
+    dados: TestarApiIn,
+    request: Request,
+    autor: User = Depends(require_permission("hosts.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Testa a API do FindFace deste servidor.
+
+    Usa a URL/token enviados (ainda não salvos) quando vierem; senão, os
+    já guardados. Assim dá para validar antes de salvar.
+    """
+    from types import SimpleNamespace
+
+    from app.core.vault import decrypt_secret
+    from app.services.ffapi_service import FFApiError
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    url = (dados.ff_api_url or host.ff_api_url or "").strip()
+    if dados.ff_api_token:
+        token = dados.ff_api_token
+    else:
+        token = decrypt_secret(host.ff_api_token_enc) if host.ff_api_token_enc else ""
+
+    if not url or not token:
+        return {"ok": False, "erro": "informe a URL e o token da API do FindFace"}
+
+    # objeto leve que o FFApiService entende, sem tocar no banco
+    from app.core.vault import encrypt_secret
+    alvo = SimpleNamespace(
+        name=host.name,
+        ff_api_url=url,
+        ff_api_token_enc=encrypt_secret(token),
+    )
+    try:
+        r = await request.app.state.ffapi.testar(alvo)
+        return {"ok": True, "cameras": r.get("cameras"), "url": r.get("url")}
+    except FFApiError as exc:
+        return {"ok": False, "erro": str(exc)}
