@@ -418,6 +418,83 @@ async def manifesto(
     return {"run_id": run_id, "arquivo": run.artifact_name, "manifesto": texto}
 
 
+@router.get("/backups/{run_id}/roteiro")
+async def roteiro(
+    run_id: int,
+    _: User = Depends(require_permission("backups.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Os comandos para restaurar ESTE artefato NESTE servidor.
+
+    O `docs/03_RESTORE.md` explica o procedimento e o manifesto diz o que o
+    artefato tem. Nenhum dos dois responde a pergunta do incidente: *quais
+    comandos eu digito, nesta maquina?*. Aqui sai o passo a passo com o
+    caminho real da instalacao, o nome do projeto compose e so os passos
+    que o artefato realmente exige.
+
+    Nao executa nada. Restore sobrescreve producao: o painel monta o
+    roteiro, quem decide e digita e gente.
+    """
+    import tarfile
+
+    from app.services.roteiro_service import montar
+
+    run = await db.get(BackupRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="execução não encontrada")
+    if not run.artifact_name:
+        raise HTTPException(status_code=400, detail="esta execução não gerou artefato")
+
+    host = await db.get(Host, run.host_id) if run.host_id else None
+    if host is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "esta execução é do próprio painel; a restauração dele está em "
+                "docs/19_BACKUP_DO_PAINEL.md"
+            ),
+        )
+
+    pasta = host.name
+    base = None
+    for d in (run.destinations or []):
+        if d.get("type") == "local" and d.get("uri"):
+            base = str(Path(d["uri"]).parent.parent)
+            break
+    caminho = StorageService.caminho_artefato(pasta, run.artifact_name, base)
+    if caminho is None or not caminho.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "o artefato não está no disco do painel — o roteiro é montado a "
+                "partir do manifesto que vive dentro dele"
+            ),
+        )
+
+    def _ler() -> str:
+        with tarfile.open(caminho, "r:*") as tar:
+            for membro in tar.getmembers():
+                if membro.name.endswith("MANIFESTO.txt"):
+                    arquivo = tar.extractfile(membro)
+                    return arquivo.read().decode("utf-8", "replace") if arquivo else ""
+        return ""
+
+    try:
+        manifesto = await asyncio.to_thread(_ler)
+    except (tarfile.TarError, OSError) as exc:
+        raise HTTPException(
+            status_code=502, detail=f"não consegui abrir o artefato: {exc}"
+        ) from exc
+
+    if not manifesto:
+        raise HTTPException(
+            status_code=404, detail="este artefato não tem MANIFESTO.txt"
+        )
+
+    return montar(manifesto, host, run, str(caminho))
+
+
 @router.post("/backups-importar", response_model=BackupOut, status_code=201)
 async def importar(
     request: Request,

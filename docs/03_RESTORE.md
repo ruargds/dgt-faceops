@@ -1,5 +1,19 @@
 # Restauração
 
+> **O roteiro com os comandos sai do próprio artefato.** Em Backups, o
+> botão de manifesto abre duas abas: **Roteiro de restauração**, com os
+> passos prontos, e **Manifesto**, com o conteúdo cru. O roteiro é montado
+> a partir do manifesto daquele backup e do cadastro daquele servidor —
+> então ele traz o caminho real da instalação (no ambiente levantado,
+> `/media/STORAGE/findface-multi`, e **não** o `/opt/findface-multi` que
+> este documento usa como exemplo), o nome do projeto compose e **só os
+> passos que aquele artefato exige**: backup sem Tarantool não ganha passo
+> de Tarantool.
+>
+> Cada passo tem o comando copiável, o motivo dele existir e o cuidado
+> quando há um. O painel monta; quem digita é gente — restore sobrescreve
+> produção.
+
 > **Antes de começar, veja o que existe.** Em Backups → **Recuperação**, o
 > painel lista, por servidor, o artefato mais recente de cada perfil, de
 > quando ele é, **o que aquele perfil recupera e o que ele deixa de fora**.

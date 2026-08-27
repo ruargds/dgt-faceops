@@ -227,6 +227,10 @@ export const api = {
   // imagens e o roteiro de restauracao do fabricante. Ler sem baixar e
   // extrair e o que permite decidir antes de restaurar.
   manifesto: (runId) => get(`/backups/${runId}/manifesto`),
+  // Os comandos daquele artefato naquele servidor, montados a partir do
+  // manifesto: caminho real da instalacao, projeto compose e so os passos
+  // que o artefato exige.
+  roteiro: (runId) => get(`/backups/${runId}/roteiro`),
   importarBackup: async (arquivo, hostId) => {
     const forma = new FormData();
     forma.append("arquivo", arquivo);

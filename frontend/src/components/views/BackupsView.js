@@ -343,6 +343,118 @@ export default function BackupsView() {
 }
 
 /**
+ * Roteiro de restauração.
+ *
+ * O manual explica o procedimento e o manifesto diz o que o artefato tem.
+ * Nenhum dos dois responde a pergunta do incidente: **quais comandos eu
+ * digito, nesta máquina?**
+ *
+ * Aqui os passos saem prontos, com o caminho real da instalação daquele
+ * servidor (que neste ambiente é `/media/STORAGE/findface-multi`, e não o
+ * `/opt` do manual), o nome do projeto compose e só o que o artefato
+ * realmente traz — sem passo de Tarantool num backup que não tem Tarantool.
+ *
+ * O painel monta; quem digita é gente. Restore sobrescreve produção.
+ */
+function Roteiro({ dados }) {
+  const [copiado, setCopiado] = useState(null);
+
+  async function copiar(texto, n) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(n);
+      setTimeout(() => setCopiado(null), 1500);
+    } catch {
+      /* navegador sem permissão — o texto continua selecionável */
+    }
+  }
+
+  return (
+    <>
+      <div
+        className="card card-tight"
+        style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 12 }}
+      >
+        <span className="small" style={{ color: "var(--amber-fg)" }}>
+          <strong>Antes de tudo:</strong> {dados.aviso_versao} Este artefato foi
+          feito em <span className="mono">{dados.feito_em || "—"}</span>, no
+          servidor <span className="mono">{dados.feito_no_servidor || dados.servidor}</span>.
+        </span>
+      </div>
+
+      <div className="grid-stats" style={{ marginBottom: 12 }}>
+        <div className="card card-tight stat" title="Onde o FindFace está instalado NESTE servidor">
+          <span className="stat-label">Instalação</span>
+          <div className="mono small">{dados.ff_dir}</div>
+        </div>
+        <div className="card card-tight stat">
+          <span className="stat-label">Projeto compose</span>
+          <div className="mono small">{dados.projeto}</div>
+        </div>
+        <div className="card card-tight stat">
+          <span className="stat-label">Servidor de destino</span>
+          <div className="mono small">
+            {dados.servidor} · {dados.endereco}
+          </div>
+        </div>
+        <div className="card card-tight stat">
+          <span className="stat-label">Perfil</span>
+          <div className="stat-value">{dados.perfil}</div>
+        </div>
+      </div>
+
+      <div className="stack-v" style={{ gap: 10 }}>
+        {dados.passos.map((p) => (
+          <div className="card card-tight" key={p.n}>
+            <div className="stack-h" style={{ justifyContent: "space-between" }}>
+              <div style={{ fontWeight: 600 }}>
+                {p.n}. {p.titulo}
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => copiar(p.comando, p.n)}
+              >
+                {copiado === p.n ? "copiado" : "copiar"}
+              </button>
+            </div>
+            <pre
+              className="mono small"
+              style={{
+                whiteSpace: "pre-wrap",
+                background: "var(--term-bg)",
+                color: "#FFFFFF",
+                padding: "8px 10px",
+                borderRadius: "var(--radius)",
+                marginTop: 6,
+                overflowX: "auto",
+              }}
+            >
+              {p.comando}
+            </pre>
+            <div className="small muted" style={{ marginTop: 6 }}>
+              {p.porque}
+            </div>
+            {p.cuidado && (
+              <div className="small" style={{ color: "var(--red-fg)", marginTop: 4 }}>
+                <strong>Cuidado:</strong> {p.cuidado}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="small muted" style={{ marginTop: 10 }}>
+        O painel monta o roteiro; a execução é sua, no servidor. Nada aqui roda
+        sozinho — restore sobrescreve produção. O procedimento completo, com o
+        que fazer quando só existe backup essencial, está em{" "}
+        <span className="mono">docs/03_RESTORE.md</span>.
+      </div>
+    </>
+  );
+}
+
+/**
  * Plano de recuperação.
  *
  * A pergunta que só aparece no pior dia: *"se eu precisar voltar agora,
@@ -482,6 +594,12 @@ function ModalManifesto({ run, onFechar }) {
   const [texto, setTexto] = useState("");
   const [erro, setErro] = useState("");
   const [lendo, setLendo] = useState(true);
+  // Duas leituras da mesma coisa: o manifesto cru e o roteiro montado a
+  // partir dele. Quem já conhece o procedimento quer o cru; quem está no
+  // meio de um incidente quer os comandos prontos.
+  const [aba, setAba] = useState("roteiro");
+  const [roteiro, setRoteiro] = useState(null);
+  const [erroRoteiro, setErroRoteiro] = useState("");
 
   useEffect(() => {
     let vivo = true;
@@ -490,6 +608,10 @@ function ModalManifesto({ run, onFechar }) {
       .then((r) => vivo && setTexto(r.manifesto || ""))
       .catch((ex) => vivo && setErro(ex.message))
       .finally(() => vivo && setLendo(false));
+    api
+      .roteiro(run.id)
+      .then((r) => vivo && setRoteiro(r))
+      .catch((ex) => vivo && setErroRoteiro(ex.message));
     return () => {
       vivo = false;
     };
@@ -507,21 +629,43 @@ function ModalManifesto({ run, onFechar }) {
           </button>
         </div>
         <div className="modal-body">
-          {lendo && <Carregando texto="Abrindo o artefato no disco do painel…" />}
-          <Erro mensagem={erro} />
-          {texto && (
+          <div className="stack-h" style={{ gap: 6, marginBottom: 10 }}>
+            <button
+              type="button"
+              className={`btn btn-sm ${aba === "roteiro" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setAba("roteiro")}
+            >
+              Roteiro de restauração
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${aba === "manifesto" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setAba("manifesto")}
+            >
+              Manifesto
+            </button>
+          </div>
+
+          {aba === "manifesto" && (
             <>
-              <div className="small muted" style={{ marginBottom: 8 }}>
-                Conteúdo, versão das imagens e o procedimento de restauração do
-                fabricante. A execução do restore continua sendo manual — ver
-                <span className="mono"> docs/03_RESTORE.md</span>.
-              </div>
-              <pre
-                className="mono small"
-                style={{ whiteSpace: "pre-wrap", maxHeight: "60vh", overflow: "auto" }}
-              >
-                {texto}
-              </pre>
+              {lendo && <Carregando texto="Abrindo o artefato no disco do painel…" />}
+              <Erro mensagem={erro} />
+              {texto && (
+                <pre
+                  className="mono small"
+                  style={{ whiteSpace: "pre-wrap", maxHeight: "60vh", overflow: "auto" }}
+                >
+                  {texto}
+                </pre>
+              )}
+            </>
+          )}
+
+          {aba === "roteiro" && (
+            <>
+              <Erro mensagem={erroRoteiro} />
+              {!roteiro && !erroRoteiro && <Carregando texto="Montando o roteiro…" />}
+              {roteiro && <Roteiro dados={roteiro} />}
             </>
           )}
         </div>
