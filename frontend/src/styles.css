@@ -147,8 +147,15 @@ input, select, textarea {
   border: 1px solid var(--border-2);
   border-radius: var(--radius);
   background: var(--white);
+  /* `color` explícito porque campo de formulário NÃO herda a cor do
+     documento em todos os navegadores: o padrão é a cor do sistema, e no
+     tema escuro isso dava texto preto em campo escuro. */
+  color: var(--text);
   transition: border-color .12s, box-shadow .12s;
 }
+/* A lista aberta do select é desenhada pelo sistema, fora do nosso
+   contexto — sem isto ela nasce clara com texto claro no tema escuro. */
+select option { background: var(--white); color: var(--text); }
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--blue);
@@ -406,6 +413,15 @@ td.right, th.right { text-align: right; }
   width: 100%; max-width: 380px; padding: 34px 30px;
 }
 .login-logo { display: block; height: 40px; margin: 0 auto 6px; }
+/* O logo do login é a versão escura da marca. No tema escuro ele
+   desaparecia no cartão; a placa clara devolve o contraste sem mexer nas
+   cores da marca — inverter o logo de um cliente não é decisão de tema. */
+:root[data-tema="escuro"] .login-logo {
+  background: rgba(255,255,255,0.93);
+  border-radius: 10px;
+  padding: 8px 14px;
+  box-sizing: content-box;
+}
 .login-sub { text-align: center; color: var(--text-3); font-size: 12.5px; margin-bottom: 26px; }
 .login-err {
   background: var(--red-bg); color: var(--red-fg); border: 1px solid var(--red-bd);

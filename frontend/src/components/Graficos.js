@@ -88,8 +88,61 @@ export function GraficoLinha({
   const mini = altura < 60;
   const topLimite = limite !== null && limite <= maximo ? py(limite) : null;
 
+  // ── Eixo de tempo ──────────────────────────────────────────────────
+  // Sem ele o gráfico mostra a forma e esconde o quando: "esse pico foi às
+  // 3h ou anteontem?" não tinha resposta na tela. O formato acompanha o
+  // intervalo real da série, não a janela pedida — se o coletor só tem
+  // duas horas de histórico, mostrar dia/mês seria falso.
+  const carimbos = serie.map((p) => (p.ts ? new Date(p.ts) : null));
+  const primeiro = carimbos[0];
+  const ultimoTs = carimbos[n - 1];
+  const spanMs =
+    primeiro && ultimoTs && !isNaN(primeiro) && !isNaN(ultimoTs)
+      ? ultimoTs - primeiro
+      : 0;
+
+  const formatar = (d) => {
+    if (!d || isNaN(d)) return "";
+    const hm = { hour: "2-digit", minute: "2-digit" };
+    if (spanMs <= 2 * 3600e3) {
+      return d.toLocaleTimeString("pt-BR", { ...hm, second: "2-digit" });
+    }
+    if (spanMs <= 36 * 3600e3) {
+      return d.toLocaleTimeString("pt-BR", hm);
+    }
+    if (spanMs <= 8 * 24 * 3600e3) {
+      return (
+        d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) +
+        " " +
+        d.toLocaleTimeString("pt-BR", hm)
+      );
+    }
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  };
+
+  // Quatro marcas bastam: mais que isso empilha texto em tela estreita, e
+  // a leitura que importa é "quando começa, quando termina, e onde caiu".
+  const marcas = [];
+  if (!mini && spanMs > 0) {
+    const quantas = Math.min(4, n);
+    for (let k = 0; k < quantas; k++) {
+      const i = Math.round((k / (quantas - 1)) * (n - 1));
+      marcas.push({
+        i,
+        pctX: n === 1 ? 50 : (i / (n - 1)) * 100,
+        texto: formatar(carimbos[i]),
+      });
+    }
+  }
+
   return (
-    <div style={{ position: "relative", width: "100%", height: altura }}>
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: altura + (marcas.length ? 16 : 0),
+      }}
+    >
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
@@ -149,6 +202,29 @@ export function GraficoLinha({
           alerta {limite}{unidade}
         </div>
       )}
+
+      {/* Eixo de tempo — HTML por cima, para não distorcer com o esticão
+          horizontal do SVG. Primeira marca alinhada à esquerda e última à
+          direita: assim o texto não vaza da caixa. */}
+      {marcas.map((m, k) => (
+        <div
+          key={`t${m.i}`}
+          style={{
+            position: "absolute",
+            top: altura + 2,
+            left: k === 0 ? 0 : k === marcas.length - 1 ? undefined : `${m.pctX}%`,
+            right: k === marcas.length - 1 ? 0 : undefined,
+            transform:
+              k === 0 || k === marcas.length - 1 ? undefined : "translateX(-50%)",
+            fontSize: 10,
+            color: "var(--text-3)",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+          }}
+        >
+          {m.texto}
+        </div>
+      ))}
 
       {/* Ponto do valor atual — sempre na borda direita */}
       <div
