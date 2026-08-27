@@ -536,7 +536,14 @@ function LinhaBackup({ r, onDetalhe, onRemover, onManifesto }) {
   const emAndamento = r.status === "executando" || r.status === "pendente";
 
   async function remover() {
-    if (!window.confirm(`Apagar o artefato de ${r.artifact_name || "esta execução"}?`)) return;
+    // Sem artefato (falha, ou linha já expirada) não há arquivo a apagar:
+    // o que sai é o registro. Dizer isso na pergunta evita a dúvida de
+    // "vou perder o backup?" na hora de limpar erro antigo.
+    const so_registro = !r.artifact_name || r.expired;
+    const pergunta = so_registro
+      ? "Remover esta execução do histórico? O arquivo já não está disponível."
+      : `Apagar o artefato ${r.artifact_name} em todos os destinos e remover do histórico?`;
+    if (!window.confirm(pergunta)) return;
     setRemovendo(true);
     try {
       const resposta = await api.removerBackup(r.id);
@@ -664,9 +671,11 @@ function LinhaBackup({ r, onDetalhe, onRemover, onManifesto }) {
               <IconDownload size={14} />
             </button>
           )}
-          {/* Sem artefato (falha) o botão continua valendo: a linha de erro
-              precisa sair do histórico, e não há arquivo a proteger. */}
-          {has("backups.delete") && !r.expired && (
+          {/* Sempre que se pode apagar, o botão aparece — inclusive em
+              linha já marcada como expirada. Esconder o botão ali criava o
+              pior estado possível: um registro que não dá para usar nem
+              para remover, encalhado na tela para sempre. */}
+          {has("backups.delete") && (
             <button
               className="btn btn-danger btn-sm"
               onClick={remover}

@@ -589,9 +589,13 @@ async def limpar_falhas(
     """
     from sqlalchemy import delete as _delete
 
+    # Falha sem artefato e "expirada" sem artefato são a mesma coisa na
+    # prática: linha que não dá para usar nem para baixar. A segunda nascia
+    # das tentativas de exclusão da versão anterior, que marcavam expirado
+    # e deixavam o registro encalhado.
     resultado = await db.execute(
         _delete(BackupRun).where(
-            BackupRun.status == "falha",
+            (BackupRun.status == "falha") | (BackupRun.expired.is_(True)),
             (BackupRun.artifact_name == "") | (BackupRun.artifact_name.is_(None)),
         )
     )
