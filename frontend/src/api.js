@@ -171,6 +171,9 @@ export const api = {
     get(`/dispositivos/${id}/licenca/historico?dias=${dias}`),
   // Componentes internos do FindFace, pelas portas do manual do fabricante.
   internos: (id) => get(`/descoberta/internos/${id}`),
+  // Rastreio: achados com evidencia, impacto e acao. Sob demanda.
+  rastreio: (hostId) =>
+    get(`/descoberta/rastreio${hostId ? `?host_id=${hostId}` : ""}`),
 
   retencao: (id) => get(`/dispositivos/${id}/retencao`),
   // Chaves que so existem no arquivo de configuracao do FindFace.

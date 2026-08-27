@@ -29,6 +29,7 @@ const DICIONARIO = {
   "menu.backup": { pt: "Backup", en: "Backup" },
   "menu.administracao": { pt: "Administração", en: "Administration" },
   "menu.painel": { pt: "Painel", en: "Dashboard" },
+  "menu.rastreio": { pt: "Rastreio", en: "Trace" },
   "menu.monitor": { pt: "Monitor", en: "Monitor" },
   "menu.recursos": { pt: "Recursos", en: "Resources" },
   "menu.processos": { pt: "Processos", en: "Processes" },

@@ -81,6 +81,10 @@
   sobrevive a cada operação, onde cada dado mora, por que não há volume
   fantasma e qual é o único comando que apaga o banco.
 
+- **[24_RASTREIO](24_RASTREIO.md)** — a tela que responde "tem algo
+  quebrado agora?": o que é checado, com que critério, e por que cada
+  achado carrega evidência, impacto e ação.
+
 - **[23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md)** — monitor contínuo
   sem onerar servidor, alertas com ação, câmeras e licenciamento do
   FindFace, e as exportações em CSV.

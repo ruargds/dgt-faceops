@@ -34,6 +34,7 @@ from app.services.licenca_service import LicencaService
 from app.services.internos_service import InternosService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
+from app.services.rastreio_service import RastreioService
 from app.services.processos_service import ProcessosService
 from app.services.logs_service import LogManager
 from app.services.maintenance_service import MaintenanceService
@@ -280,6 +281,11 @@ async def iniciar() -> None:
     # Estado dos componentes internos do FindFace, pelas portas que o
     # manual documenta -- de dentro do servidor, sem agente instalado.
     app.state.internos = InternosService(ssh)
+    # Rastreio: junta licenca, componentes, disco, backup e seguranca num
+    # so lugar e devolve achados com evidencia, impacto e acao.
+    app.state.rastreio = RastreioService(
+        app.state.licenca, app.state.internos, app.state.ffapi, config
+    )
     app.state.dispositivos = DispositivosService(ssh, ffapi=app.state.ffapi)
     app.state.descoberta = DescobertaService(ssh)
     app.state.processos = ProcessosService(ssh)

@@ -14,6 +14,27 @@ from app.services.ssh_service import SSHError
 router = APIRouter(prefix="/api/descoberta", tags=["descoberta"])
 
 
+@router.get("/rastreio")
+async def rastreio(
+    request: Request,
+    host_id: int | None = None,
+    _: User = Depends(require_permission("metrics.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Rastreio de falhas: o que esta comprometendo o funcionamento agora.
+
+    Junta licenca, componentes internos, disco, coleta, backup e seguranca
+    e devolve ACHADOS -- cada um com a evidencia que o servidor deu, o
+    impacto em operacao e a acao. So leitura: nada aqui reinicia, apaga ou
+    conserta sozinho.
+
+    Sob demanda, duas execucoes SSH por servidor. Nao entra em laco de
+    fundo.
+    """
+    return await request.app.state.rastreio.rodar(db, host_id)
+
+
 @router.get("/internos/{host_id}")
 async def internos(
     host_id: int,

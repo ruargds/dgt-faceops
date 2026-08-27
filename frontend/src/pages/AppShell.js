@@ -26,6 +26,7 @@ import DescobertaView from "../components/views/DescobertaView";
 import TopologiaView from "../components/views/TopologiaView";
 import DispositivosView from "../components/views/DispositivosView";
 import ProcessosView from "../components/views/ProcessosView";
+import RastreioView from "../components/views/RastreioView";
 import ManutencaoView from "../components/views/ManutencaoView";
 import AuditoriaView from "../components/views/AuditoriaView";
 import BackupsView from "../components/views/BackupsView";
@@ -47,6 +48,7 @@ import { NOMES_IDIOMA, IDIOMAS, definirIdioma, idiomaAtual, t } from "../i18n";
 const MENU = [
   { grupo: "menu.operacao" },
   { id: "painel", chave: "menu.painel", icone: IconPainel, perm: "hosts.view" },
+  { id: "rastreio", chave: "menu.rastreio", icone: IconAlerta, perm: "metrics.view" },
   { id: "monitor", chave: "menu.monitor", icone: IconRecursos, perm: "metrics.view" },
   { id: "recursos", chave: "menu.recursos", icone: IconRecursos, perm: "metrics.view" },
   { id: "processos", chave: "menu.processos", icone: IconRecursos, perm: "metrics.view" },
@@ -236,6 +238,7 @@ export default function AppShell() {
 
         <div className="content">
           {abaValida === "painel" && <PainelView />}
+          {abaValida === "rastreio" && <RastreioView />}
           {abaValida === "monitor" && <MonitorView />}
           {abaValida === "dispositivos" && <DispositivosView />}
           {abaValida === "descoberta" && <DescobertaView />}
