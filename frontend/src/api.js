@@ -234,6 +234,9 @@ export const api = {
     return request("/backups-importar", { method: "POST", body: forma });
   },
   armazenamentoPainel: () => get("/backups-armazenamento"),
+  // Que perfis fazem sentido naquele servidor. Oferecer os tres em
+  // qualquer maquina produz falha garantida onde nao ha FindFace.
+  perfisDoHost: (id) => get(`/backups/perfis/${id}`),
 
   // Destinos de backup
   destinos: () => get("/destinos"),

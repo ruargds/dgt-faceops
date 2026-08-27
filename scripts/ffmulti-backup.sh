@@ -555,12 +555,22 @@ if [ ! -d "$FF_DIR" ]; then
     fi
 
     if [ -n "$ACHADO" ] && [ -d "$ACHADO" ]; then
-        die "$FF_DIR nao existe neste servidor, mas encontrei a instalacao do FindFace em $ACHADO. Corrija o Diretorio de instalacao em Servidores -> editar."
+        # Achou a instalacao de verdade: USA ela e avisa. Morrer aqui,
+        # sabendo onde o FindFace esta, seria fazer o operador ir corrigir
+        # o cadastro e voltar -- trabalho que o script acabou de fazer.
+        # A linha FACEOPS: leva o caminho ao painel, que corrige o cadastro.
+        log "AVISO: $FF_DIR nao existe; usando a instalacao encontrada em $ACHADO"
+        echo "FACEOPS:ff_dir_detectado=$ACHADO"
+        FF_DIR="$ACHADO"
+        [ -f "$FF_DIR/docker-compose.yaml" ] && COMPOSE_FILE="$FF_DIR/docker-compose.yaml"
+        [ -f "$FF_DIR/docker-compose.yml" ] && COMPOSE_FILE="$FF_DIR/docker-compose.yml"
     fi
+    if [ ! -d "$FF_DIR" ]; then
     if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qi -E 'findface|ffmulti'; then
-        die "$FF_DIR nao existe e nenhum container do FindFace roda neste servidor. Provavelmente a aplicacao esta em outra maquina -- veja em Topologia."
+            die "$FF_DIR nao existe e nenhum container do FindFace roda neste servidor. Provavelmente a aplicacao esta em outra maquina -- veja em Topologia."
+        fi
+        die "$FF_DIR nao existe. Confira o caminho cadastrado para este servidor."
     fi
-    die "$FF_DIR nao existe. Confira o caminho cadastrado para este servidor."
 fi
 
 PROJETO="$(projeto_compose)"

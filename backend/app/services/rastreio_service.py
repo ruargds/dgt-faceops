@@ -91,19 +91,30 @@ class RastreioService:
         # Checagens do painel: banco local, sem tocar em servidor.
         achados += await self._painel(db)
 
-        # Por servidor, em paralelo: cada um é uma máquina diferente e não
-        # há razão para esperar em fila.
-        resultados = await asyncio.gather(
-            *(self._servidor(db, h) for h in hosts), return_exceptions=True
+        # As leituras REMOTAS vão em paralelo — cada host é uma máquina
+        # diferente e não há razão para esperar em fila. As checagens que
+        # tocam o banco ficam de fora do paralelo, de propósito: a sessão
+        # do SQLAlchemy é uma só e não suporta uso concorrente. Rodar as
+        # duas coisas juntas dava erro intermitente de "outra operação em
+        # andamento" — o pior tipo, o que só aparece com mais de um host.
+        leituras = await asyncio.gather(
+            *(
+                asyncio.gather(
+                    self._ler_licenca(h), self._ler_internos(h), return_exceptions=True
+                )
+                for h in hosts
+            ),
+            return_exceptions=True,
         )
-        for host, resultado in zip(hosts, resultados):
-            if isinstance(resultado, Exception):
+
+        for host, par in zip(hosts, leituras):
+            if isinstance(par, Exception):
                 achados.append(
                     _achado(
                         ATENCAO,
                         "painel",
                         "O rastreio não conseguiu concluir neste servidor",
-                        f"{type(resultado).__name__}: {resultado}"[:300],
+                        f"{type(par).__name__}: {par}"[:300],
                         "Sem leitura, não há como afirmar que está saudável — "
                         "o silêncio aqui não é boa notícia.",
                         "Confira a conexão em Servidores → Testar conexão.",
@@ -111,7 +122,13 @@ class RastreioService:
                     )
                 )
                 continue
-            achados += resultado
+
+            licenca, internos = par
+            achados += self._checar_licenca(host, licenca)
+            achados += self._checar_internos(host, internos)
+            achados += self._checar_api(host)
+            # Sequencial: banco.
+            achados += await self._checar_monitor(db, host)
 
         achados.sort(key=lambda a: (ORDEM.get(a["nivel"], 9), a["origem"], a["titulo"]))
 
@@ -241,22 +258,6 @@ class RastreioService:
         return {i: n for i, n in linhas.all()}
 
     # ── Por servidor ───────────────────────────────────────────────────
-
-    async def _servidor(self, db, host) -> list[dict]:
-        achados: list[dict] = []
-
-        # As duas leituras remotas, em paralelo. Uma falha não cancela a
-        # outra: licença indisponível não diz nada sobre os componentes.
-        licenca, internos = await asyncio.gather(
-            self._ler_licenca(host), self._ler_internos(host), return_exceptions=True
-        )
-
-        achados += self._checar_licenca(host, licenca)
-        achados += self._checar_internos(host, internos)
-        achados += await self._checar_monitor(db, host)
-        achados += self._checar_api(host)
-
-        return achados
 
     async def _ler_licenca(self, host):
         return await self.licenca.ler(host)
@@ -389,7 +390,20 @@ class RastreioService:
 
             # O caso que importa: o container está de pé e o serviço não
             # responde. `docker ps` diz "Up" e a operação está parada.
-            if container and "Up" in container and escutando and not vivo:
+            #
+            # `sondavel` é o que separa isso de um falso alarme. Os
+            # componentes do FindFace conversam DENTRO da rede do Docker e
+            # não publicam porta na máquina; onde a sonda não alcança, o
+            # painel não sabe se está vivo — e não saber é diferente de
+            # estar parado. Antes desta condição, a tela acusava
+            # "reconhecimento parado" num servidor com 453 dispositivos
+            # funcionando.
+            if (
+                container
+                and "Up" in container
+                and comp.get("sondavel")
+                and not vivo
+            ):
                 achados.append(
                     _achado(
                         CRITICO,
@@ -432,18 +446,52 @@ class RastreioService:
                     )
                 )
 
+        # Só é falha quando havia como sondar. Componente que o painel não
+        # alcança (rede interna do compose, serviço que não fala HTTP) vira
+        # informação, não crítico: acusar parada sem ter medido é o tipo de
+        # alarme que ensina a ignorar a tela.
         if dados.get("presentes") and not dados.get("vivos"):
-            achados.append(
-                _achado(
-                    CRITICO,
-                    "componente",
-                    "Nenhum componente do FindFace respondeu",
-                    f"{dados['presentes']} componente(s) presentes, zero respondendo",
-                    "Reconhecimento parado neste servidor.",
-                    "Serviços → estado do stack; e Logs ao vivo para achar a causa.",
-                    servidor=host.name,
+            if dados.get("sondaveis"):
+                achados.append(
+                    _achado(
+                        CRITICO,
+                        "componente",
+                        "Nenhum componente do FindFace respondeu",
+                        f"{dados['sondaveis']} componente(s) sondáveis, zero respondendo",
+                        "Reconhecimento parado neste servidor.",
+                        "Serviços → estado do stack; e Logs ao vivo para achar a causa.",
+                        servidor=host.name,
+                    )
                 )
-            )
+            elif not dados.get("tem_curl", True):
+                achados.append(
+                    _achado(
+                        INFO,
+                        "componente",
+                        "Sem `curl` no servidor",
+                        "o painel não consegue sondar os componentes daqui",
+                        "O estado interno dos componentes fica invisível; "
+                        "container parado ainda aparece em Serviços.",
+                        "Instale `curl` no servidor, ou acompanhe por Serviços.",
+                        servidor=host.name,
+                    )
+                )
+            else:
+                achados.append(
+                    _achado(
+                        INFO,
+                        "componente",
+                        "Componentes não sondáveis a partir do host",
+                        f"{dados['presentes']} container(es) do FindFace rodando, "
+                        "nenhum respondendo na rede alcançável",
+                        "Não é sinal de parada: os componentes conversam dentro "
+                        "da rede do Docker e podem não publicar porta. O que o "
+                        "painel afirma aqui é apenas que não conseguiu medir.",
+                        "Serviços mostra o estado dos containers, que continua "
+                        "valendo.",
+                        servidor=host.name,
+                    )
+                )
         return achados
 
     # ── Monitor e coleta ───────────────────────────────────────────────

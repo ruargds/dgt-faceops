@@ -394,7 +394,9 @@ td.right, th.right { text-align: right; }
 /* ── Log / saída de console ─────────────────────────────────────────── */
 
 .log {
-  background: var(--term-bg); color: #C8D3E5; border-radius: var(--radius);
+  /* Branco: o log ao vivo é para ser lido corrido, e o cinza-azulado
+     da barra do terminal cansava em tela cheia de linha. */
+  background: var(--term-bg); color: #FFFFFF; border-radius: var(--radius);
   padding: 12px 14px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
   max-height: 420px; overflow-y: auto; border: 1px solid var(--term-border);

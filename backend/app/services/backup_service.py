@@ -248,6 +248,21 @@ class BackupService:
         run.log = "\n".join(linhas_log[-3000:])
         await db.commit()
 
+        # O script procura a instalacao quando o caminho cadastrado nao
+        # existe, e usa a que encontrou. Persistir aqui evita que o proximo
+        # backup repita a busca -- e faz o cadastro dizer a verdade.
+        detectado = emitidos.get("ff_dir_detectado", "")
+        if detectado and detectado != host.ffmulti_dir:
+            host.ffmulti_dir = detectado
+            for nome in ("docker-compose.yaml", "docker-compose.yml"):
+                host.compose_file = f"{detectado}/{nome}"
+                break
+            run.log += (
+                "\n[deteccao] o caminho cadastrado nao existia; o servidor "
+                f"tem a instalacao em {detectado}, e o cadastro foi corrigido"
+            )
+            await db.commit()
+
         if emitidos.get("status") != "sucesso" or resultado.exit_status != 0:
             erro = emitidos.get("erro") or "\n".join(linhas_log[-25:])
             raise BackupError(f"script de backup falhou: {erro}"[:3000])

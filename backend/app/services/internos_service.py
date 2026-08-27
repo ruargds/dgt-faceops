@@ -148,74 +148,69 @@ class InternosService:
         self.ssh = ssh
 
     async def ler(self, host) -> dict:
-        portas = " ".join(str(c["porta"]) for c in COMPONENTES)
         caminhos = " ".join(CAMINHOS_STATUS)
+        nomes = "|".join(c["nome"] for c in COMPONENTES)
+        portas_por_nome = " ".join(
+            f"{c['nome']}={c['porta']}" for c in COMPONENTES
+        )
 
-        # Uma execução só para todos os componentes: doze serviços vezes
-        # três caminhos daria 36 handshakes SSH se fosse um por consulta.
+        # A sondagem vai pela rede do Docker, não pelo localhost do host.
+        # Os componentes do FindFace conversam entre containers e não
+        # publicam porta na máquina — sondar 127.0.0.1 daria "não
+        # respondeu" num servidor perfeitamente saudável.
         script = f"""
 set +e
+echo "{SEP}CONTAINERS"
+docker ps --format '{{{{.Names}}}}|{{{{.Status}}}}' 2>/dev/null | grep -i -E '{nomes.replace("|", "|")}|findface|tarantool|ntls' | head -40
+
+echo "{SEP}IPS"
+for c in $(docker ps --format '{{{{.Names}}}}' 2>/dev/null | grep -i -E 'findface|tarantool|ntls' | head -40); do
+  ip="$(docker inspect -f '{{{{range .NetworkSettings.Networks}}}}{{{{.IPAddress}}}} {{{{end}}}}' "$c" 2>/dev/null | awk '{{print $1}}')"
+  [ -n "$ip" ] && echo "$c|$ip"
+done
+
 echo "{SEP}ESCUTANDO"
-(ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | awk '{{print $4}}' | sed 's/.*://' | sort -un | tr '\\n' ' '
+(ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | awk '{{print $4}}' | sed 's/.*://' | sort -un | tr '\n' ' '
 echo ""
-echo "{SEP}RESPOSTAS"
-for p in {portas}; do
-  for c in {caminhos}; do
-    if command -v curl >/dev/null 2>&1; then
-      cod="$(curl -s -o /tmp/.faceops_body -w '%{{http_code}}' --max-time 4 "http://127.0.0.1:$p$c" 2>/dev/null)"
+
+echo "{SEP}SONDA"
+for par in {portas_por_nome}; do
+  nome="${{par%%=*}}"; porta="${{par##*=}}"
+  # Container daquele componente e o IP dele na rede do compose.
+  ct="$(docker ps --format '{{{{.Names}}}}' 2>/dev/null | grep -i "${{nome#findface-}}" | head -1)"
+  alvos="127.0.0.1"
+  if [ -n "$ct" ]; then
+    ip="$(docker inspect -f '{{{{range .NetworkSettings.Networks}}}}{{{{.IPAddress}}}} {{{{end}}}}' "$ct" 2>/dev/null | awk '{{print $1}}')"
+    [ -n "$ip" ] && alvos="$ip 127.0.0.1"
+  fi
+  achou=0
+  for alvo in $alvos; do
+    for cam in {caminhos}; do
+      cod="$(curl -s -o /tmp/.faceops_body -w '%{{http_code}}' --max-time 3 "http://$alvo:$porta$cam" 2>/dev/null)"
       if [ -n "$cod" ] && [ "$cod" != "000" ]; then
-        corpo="$(head -c 400 /tmp/.faceops_body 2>/dev/null | tr -d '\\n' | tr -d '\\r')"
-        echo "$p|$c|$cod|$corpo"
+        corpo="$(head -c 300 /tmp/.faceops_body 2>/dev/null | tr -d '\n' | tr -d '\r')"
+        echo "$nome|$alvo|$cam|$cod|$corpo"
+        achou=1
         break
       fi
-    fi
+    done
+    [ "$achou" = "1" ] && break
   done
+  [ "$achou" = "0" ] && echo "$nome|$alvos||000|"
 done
 rm -f /tmp/.faceops_body 2>/dev/null
-echo "{SEP}CONTAINERS"
-docker ps --format '{{{{.Names}}}}|{{{{.Status}}}}' 2>/dev/null | grep -i -E 'findface|ffmulti|tarantool|ntls' | head -40
+echo "{SEP}FERRAMENTAS"
+command -v curl >/dev/null 2>&1 && echo curl
 echo "{SEP}FIM"
 """
 
         try:
-            r = await self.ssh.run(host, script, sudo=True, timeout=120)
+            r = await self.ssh.run(host, script, sudo=True, timeout=180)
         except SSHError as exc:
             raise InternosError(f"não consegui consultar '{host.name}': {exc}") from exc
 
         s = _secoes(r.stdout or "")
-
-        escutando = {
-            int(p) for p in re.findall(r"\d+", s.get("ESCUTANDO", "")) if p.isdigit()
-        }
-
-        respostas: dict[int, dict] = {}
-        for linha in (s.get("RESPOSTAS") or "").splitlines():
-            partes = linha.split("|", 3)
-            if len(partes) < 3 or not partes[0].isdigit():
-                continue
-            porta = int(partes[0])
-            corpo = partes[3] if len(partes) > 3 else ""
-            resumo = ""
-            # Corpo JSON pequeno vira resumo legível; o resto fica cru e
-            # cortado. Melhor mostrar o que veio que interpretar demais.
-            texto = corpo.strip()
-            if texto.startswith("{"):
-                try:
-                    dados = json.loads(texto)
-                    resumo = ", ".join(
-                        f"{k}={v}"
-                        for k, v in list(dados.items())[:4]
-                        if not isinstance(v, (dict, list))
-                    )
-                except json.JSONDecodeError:
-                    resumo = texto[:120]
-            else:
-                resumo = texto[:120]
-            respostas[porta] = {
-                "caminho": partes[1],
-                "codigo": partes[2],
-                "resumo": resumo,
-            }
+        tem_curl = "curl" in (s.get("FERRAMENTAS") or "")
 
         containers: dict[str, str] = {}
         for linha in (s.get("CONTAINERS") or "").splitlines():
@@ -223,38 +218,78 @@ echo "{SEP}FIM"
                 nome, _, estado = linha.partition("|")
                 containers[nome.strip()] = estado.strip()
 
+        escutando = {
+            int(p) for p in re.findall(r"\d+", s.get("ESCUTANDO", "")) if p.isdigit()
+        }
+
+        sondas: dict[str, dict] = {}
+        for linha in (s.get("SONDA") or "").splitlines():
+            partes = linha.split("|", 4)
+            if len(partes) < 4:
+                continue
+            sondas[partes[0]] = {
+                "alvo": partes[1],
+                "caminho": partes[2],
+                "codigo": partes[3],
+                "corpo": partes[4] if len(partes) > 4 else "",
+            }
+
         saida = []
         for comp in COMPONENTES:
-            porta = comp["porta"]
-            resposta = respostas.get(porta)
+            sonda = sondas.get(comp["nome"], {})
+            codigo = sonda.get("codigo", "")
             container = next(
                 (
                     f"{nome} ({estado})"
                     for nome, estado in containers.items()
-                    if comp["nome"].split("findface-")[-1] in nome
+                    if comp["nome"].replace("findface-", "") in nome
                 ),
                 "",
             )
-            codigo = resposta["codigo"] if resposta else ""
-            # 2xx/3xx é vivo. 401/403 também é vivo — o serviço respondeu,
-            # só não deixou entrar sem credencial, e isso é informação boa,
-            # não falha.
+
+            # 2xx/3xx é vivo. 401/403 também: o serviço respondeu, só não
+            # deixou entrar sem credencial — informação boa, não falha.
             vivo = bool(codigo[:1] in ("2", "3") or codigo in ("401", "403"))
+
+            # Sem resposta e sem porta local: pode ser serviço interno que
+            # não fala HTTP (tarantool, por exemplo) ou rede que o host não
+            # alcança. Isso NÃO é "parado" — é "não sondável daqui".
+            sondavel = bool(codigo and codigo != "000") or comp["porta"] in escutando
+
+            resumo = ""
+            corpo = (sonda.get("corpo") or "").strip()
+            if corpo.startswith("{"):
+                try:
+                    dados = json.loads(corpo)
+                    resumo = ", ".join(
+                        f"{k}={v}"
+                        for k, v in list(dados.items())[:4]
+                        if not isinstance(v, (dict, list))
+                    )
+                except json.JSONDecodeError:
+                    resumo = corpo[:120]
+            else:
+                resumo = corpo[:120]
+
             saida.append({
                 **comp,
-                "escutando": porta in escutando,
-                "codigo": codigo,
-                "caminho": resposta["caminho"] if resposta else "",
-                "resumo": resposta["resumo"] if resposta else "",
+                "escutando": comp["porta"] in escutando,
+                "codigo": codigo if codigo != "000" else "",
+                "caminho": sonda.get("caminho", ""),
+                "alvo": sonda.get("alvo", ""),
+                "resumo": resumo,
                 "container": container,
                 "vivo": vivo,
+                "sondavel": sondavel,
             })
 
-        presentes = [c for c in saida if c["escutando"] or c["container"]]
+        presentes = [c for c in saida if c["container"] or c["escutando"]]
         return {
             "host": host.name,
             "componentes": saida,
             "presentes": len(presentes),
             "vivos": sum(1 for c in saida if c["vivo"]),
+            "sondaveis": sum(1 for c in presentes if c["sondavel"]),
+            "tem_curl": tem_curl,
             "duracao_ms": r.duration_ms,
         }

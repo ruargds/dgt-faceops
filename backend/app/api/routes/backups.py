@@ -1,5 +1,6 @@
 """Backups sob demanda, histórico, download e agendamentos."""
 import asyncio
+import json
 import secrets
 import time
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.deps import client_ip, require_permission
 from app.db.database import get_db
-from app.models.backup import BackupRun, Schedule
+from app.models.backup import PROFILES, BackupRun, Schedule
 from app.models.host import Host
 from app.models.user import User
 from app.schemas import (
@@ -543,19 +544,130 @@ async def remover(
                     status_code=500, detail=f"falha ao apagar o arquivo: {exc}"
                 ) from exc
 
-    run.expired = True
+    # Execução sem artefato — falha, quase sempre — sai do histórico de
+    # verdade. O `expired` existe para lembrar que houve um artefato e ele
+    # foi embora; onde nunca houve artefato, marcar expirado só deixa a
+    # linha de erro presa na tela para sempre, sem nada a proteger.
+    apagou_linha = False
+    if not run.artifact_name:
+        await db.delete(run)
+        apagou_linha = True
+    else:
+        run.expired = True
     await db.commit()
 
     await audit_service.registrar(
         db,
         usuario=autor.username,
         action="backups.delete",
-        target=f"{host.name if host else '?'}/{run.artifact_name}",
+        target=f"{host.name if host else '?'}/{run.artifact_name or 'execução falha'}",
         ip=client_ip(request),
         level="critical",
-        detail={"run_id": run_id, "arquivo_removido": removido},
+        detail={
+            "run_id": run_id,
+            "arquivo_removido": removido,
+            "linha_removida": apagou_linha,
+        },
     )
-    return {"ok": True, "arquivo_removido": removido}
+    return {
+        "ok": True,
+        "arquivo_removido": removido,
+        "linha_removida": apagou_linha,
+    }
+
+
+@router.get("/backups/perfis/{host_id}")
+async def perfis_do_host(
+    host_id: int,
+    request: Request,
+    _: User = Depends(require_permission("backups.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Que perfis de backup fazem sentido NESTE servidor.
+
+    Oferecer os três em qualquer máquina produz falha garantida: backup
+    'essencial' num servidor de FTP gasta um SSH, some em 0s e suja o
+    histórico com um erro que nunca foi surpresa para ninguém.
+
+    A resposta sai do que a máquina TEM, descoberto na hora: diretório da
+    instalação, bancos e serviços rodando ali. Cada perfil vem com o motivo
+    de estar disponível ou não — perfil cinza sem explicação gera chamado.
+    """
+    host = await _host_ou_404(db, host_id)
+
+    # Descoberta é leitura só; uma execução SSH.
+    try:
+        inventario = await request.app.state.descoberta.inventariar(host)
+    except Exception as exc:
+        # Sem inventário não dá para afirmar o que a máquina tem. Melhor
+        # liberar tudo com o aviso do que travar o operador com base numa
+        # leitura que falhou.
+        return {
+            "host": host.name,
+            "aviso": f"não consegui inventariar este servidor ({exc}). "
+            "Os perfis estão liberados, mas confira o resultado.",
+            "perfis": [
+                {"id": p, "disponivel": True, "motivo": "não verificado"}
+                for p in PROFILES
+            ],
+        }
+
+    texto = json.dumps(inventario, ensure_ascii=False).lower()
+    tem_findface = bool(
+        inventario.get("ffmulti_dir")
+        or "findface" in texto
+        or "ffmulti" in texto
+    )
+    tem_banco = any(
+        chave in texto for chave in ("postgres", "timescale", "tarantool", "mongo")
+    )
+
+    def motivo(disponivel: bool, quando_sim: str, quando_nao: str) -> str:
+        return quando_sim if disponivel else quando_nao
+
+    perfis = [
+        {
+            "id": "config",
+            "disponivel": tem_findface,
+            "motivo": motivo(
+                tem_findface,
+                "há instalação do FindFace neste servidor",
+                "não encontrei instalação do FindFace aqui — nada a copiar",
+            ),
+        },
+        {
+            "id": "essencial",
+            "disponivel": tem_findface and tem_banco,
+            "motivo": motivo(
+                tem_findface and tem_banco,
+                "há banco de dados do FindFace neste servidor",
+                "sem banco do FindFace aqui: o perfil essencial não teria o "
+                "que despejar",
+            ),
+        },
+        {
+            "id": "completo",
+            "disponivel": tem_findface,
+            "motivo": motivo(
+                tem_findface,
+                "PARA o FindFace durante a cópia — exige janela",
+                "não encontrei instalação do FindFace aqui",
+            ),
+        },
+    ]
+
+    return {
+        "host": host.name,
+        "ffmulti_dir": inventario.get("ffmulti_dir") or host.ffmulti_dir,
+        "tem_findface": tem_findface,
+        "tem_banco": tem_banco,
+        "aviso": ""
+        if tem_findface
+        else f"'{host.name}' não hospeda o FindFace. Só o backup do painel "
+        "faz sentido aqui — veja em Topologia onde a aplicação está.",
+        "perfis": perfis,
+    }
 
 
 @router.get("/backups-armazenamento")

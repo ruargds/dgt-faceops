@@ -435,6 +435,10 @@ function LinhaBackup({ r, onDetalhe, onRemover, onManifesto }) {
 }
 
 function ModalNovoBackup({ hosts, onFechar, onPronto }) {
+  // Perfis vem do servidor escolhido: um FTP server nao tem o que copiar
+  // no perfil essencial, e oferecer assim mesmo garante uma falha em 0s
+  // que ninguem devia ter esperado.
+  const [perfisHost, setPerfisHost] = useState(null);
   const { ativos, padroes, carregando: carregandoDest } = useDestinos();
   const [hostId, setHostId] = useState(hosts[0] ? hosts[0].id : null);
   const [perfil, setPerfil] = useState("essencial");
@@ -445,6 +449,24 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
   const [enviando, setEnviando] = useState(false);
 
   const host = hosts.find((h) => h.id === hostId);
+
+  useEffect(() => {
+    if (!hostId) return;
+    let vivo = true;
+    setPerfisHost(null);
+    api
+      .perfisDoHost(hostId)
+      .then((r) => vivo && setPerfisHost(r))
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [hostId]);
+
+  const infoPerfil = (id) =>
+    perfisHost && perfisHost.perfis
+      ? perfisHost.perfis.find((p) => p.id === id)
+      : null;
 
   // Pre-seleciona os destinos padrao, mas so ate o operador mexer —
   // depois disso a escolha dele manda.
@@ -491,15 +513,33 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
             </select>
           </div>
 
+          {perfisHost && perfisHost.aviso && (
+            <div
+              className="card card-tight"
+              style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 12 }}
+            >
+              <span className="small" style={{ color: "var(--amber-fg)" }}>
+                {perfisHost.aviso}
+              </span>
+            </div>
+          )}
+
           <div className="field">
             <label className="label label-required">{t("Perfil")}</label>
             <div className="stack-v" style={{ gap: 8 }}>
-              {PERFIS.map((p) => (
+              {PERFIS.map((p) => {
+                const info = infoPerfil(p.id);
+                // Enquanto a consulta nao volta, tudo segue habilitado: a
+                // tela nao pode travar por causa de uma leitura pendente.
+                const bloqueado = Boolean(info && info.disponivel === false);
+                return (
                 <label
                   key={p.id}
                   className="card card-tight"
+                  title={info ? info.motivo : ""}
                   style={{
-                    cursor: "pointer",
+                    cursor: bloqueado ? "not-allowed" : "pointer",
+                    opacity: bloqueado ? 0.55 : 1,
                     borderColor: perfil === p.id ? "var(--blue)" : "var(--border)",
                     boxShadow: perfil === p.id ? "0 0 0 3px rgba(26,111,196,.10)" : "none",
                   }}
@@ -508,6 +548,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
                     <input
                       type="radio"
                       checked={perfil === p.id}
+                      disabled={bloqueado}
                       onChange={() => setPerfil(p.id)}
                       style={{ width: "auto", marginTop: 3 }}
                     />
@@ -517,12 +558,18 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
                         <span className="small muted" style={{ fontWeight: 400 }}>
                           — {p.resumo}
                         </span>
+                        {info && info.disponivel === false && (
+                          <div className="small" style={{ color: "var(--amber-fg)", fontWeight: 400 }}>
+                            indisponível aqui: {info.motivo}
+                          </div>
+                        )}
                       </div>
                       <div className="small muted" style={{ marginTop: 3 }}>{p.detalhe}</div>
                     </div>
                   </div>
                 </label>
-              ))}
+                );
+              })}
             </div>
           </div>
 
