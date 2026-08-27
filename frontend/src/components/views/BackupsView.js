@@ -696,10 +696,13 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
+  const todos = hostId === "todos";
   const host = hosts.find((h) => h.id === hostId);
 
   useEffect(() => {
-    if (!hostId) return;
+    // Em "todos" nao ha um host unico para consultar -- e sondar os quatro
+    // so para desenhar o formulario seria SSH de graca em producao.
+    if (!hostId || hostId === "todos") return undefined;
     let vivo = true;
     setPerfisHost(null);
     api
@@ -731,6 +734,11 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
     setErro("");
     setEnviando(true);
     try {
+      if (todos) {
+        await api.backupTodos({ perfil: "auto", destinos });
+        await onPronto();
+        return;
+      }
       await api.dispararBackup(hostId, {
         perfil,
         destinos,
@@ -754,14 +762,50 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
 
           <div className="field">
             <label className="label label-required">{t("Servidor")}</label>
-            <select value={hostId ?? ""} onChange={(e) => setHostId(Number(e.target.value))}>
+            <select
+              value={hostId ?? ""}
+              onChange={(e) =>
+                setHostId(
+                  e.target.value === "todos" ? "todos" : Number(e.target.value)
+                )
+              }
+            >
+              {/* "Todos" mora aqui, e nao num botao separado: o lugar de
+                  escolher em quantos servidores rodar e o mesmo de escolher
+                  em qual. */}
+              <option value="todos">Todos os servidores</option>
               {hosts.map((h) => (
                 <option key={h.id} value={h.id}>{h.name}</option>
               ))}
             </select>
           </div>
 
-          {perfisHost && perfisHost.aviso && (
+          {todos && (
+            <div className="field">
+              <label className="label label-required">{t("Perfil")}</label>
+              <div
+                className="card card-tight"
+                style={{ background: "var(--bg-2)", marginBottom: 8 }}
+              >
+                <div className="small">
+                  <strong>Cada servidor recebe o que a função dele permite</strong>,
+                  decidido na hora: quem tem banco do FindFace leva{" "}
+                  <strong>essencial</strong>; quem só tem a instalação leva{" "}
+                  <strong>config</strong>; quem não hospeda o FindFace é{" "}
+                  <strong>pulado com o motivo</strong>, em vez de falhar em 0s.
+                </div>
+                <div className="small muted" style={{ marginTop: 6 }}>
+                  Cada artefato vai para a pasta do próprio servidor no destino —
+                  o lote não mistura nada. O perfil <strong>completo</strong> não
+                  entra aqui: ele PARA o FindFace, e parar todos os servidores de
+                  uma vez tem de ser decisão sua, servidor a servidor, com o
+                  aceite da janela.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!todos && perfisHost && perfisHost.aviso && (
             <div
               className="card card-tight"
               style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 12 }}
@@ -772,6 +816,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
             </div>
           )}
 
+          {!todos && (
           <div className="field">
             <label className="label label-required">{t("Perfil")}</label>
             <div className="stack-v" style={{ gap: 8 }}>
@@ -820,6 +865,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
               })}
             </div>
           </div>
+          )}
 
           <div className="field">
             <label className="label label-required">{t("Destinos")}</label>
@@ -863,9 +909,13 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
           <button type="button" className="btn btn-secondary" onClick={onFechar}>{t("Cancelar")}</button>
           <button
             className="btn btn-primary"
-            disabled={enviando || (perfil === "completo" && !aceito)}
+            disabled={enviando || (!todos && perfil === "completo" && !aceito)}
           >
-            {enviando ? "Disparando…" : "Disparar backup"}
+            {enviando
+              ? "Disparando…"
+              : todos
+              ? "Disparar em todos"
+              : "Disparar backup"}
           </button>
         </div>
       </form>
