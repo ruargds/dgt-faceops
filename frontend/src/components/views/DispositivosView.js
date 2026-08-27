@@ -36,7 +36,7 @@ const PERIODOS = [
  * 2.400.054 de 2.400.000 na instalação real) sobe para o topo e aparece em
  * vermelho: é o que trava operação sem avisar ninguém.
  */
-function Licenciamento({ dados, erro, lendo, onAtualizar }) {
+function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo }) {
   const [verBruto, setVerBruto] = useState(false);
 
   if (erro) {
@@ -223,6 +223,56 @@ function Licenciamento({ dados, erro, lendo, onAtualizar }) {
         </div>
       )}
 
+      {/* Ritmo de consumo: a pergunta que a licenca sozinha nao responde.
+          Neste ambiente o limite que aperta e o de objetos, nao o de
+          camera -- 453 dispositivos entram como detector externo e o que
+          consome e o Objects TNT API. */}
+      {ritmo && ritmo.recursos && ritmo.recursos.some((r) => r.por_dia !== null) && (
+        <div className="table-wrap" style={{ marginTop: 12 }}>
+          <table className="tabela-densa">
+            <thead>
+              <tr>
+                <th>Consumo observado</th>
+                <th className="right">Por dia</th>
+                <th className="right">Amostras</th>
+                <th className="right">No ritmo atual, acaba em</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ritmo.recursos
+                .filter((r) => r.por_dia !== null)
+                .map((r) => (
+                  <tr key={r.recurso}>
+                    <td className="mono">{r.recurso}</td>
+                    <td className="right mono">
+                      {r.por_dia > 0 ? "+" : ""}
+                      {Number(r.por_dia).toLocaleString("pt-BR")}
+                    </td>
+                    <td className="right mono">{r.amostras}</td>
+                    <td
+                      className="right mono"
+                      style={
+                        r.dias_para_o_fim !== null && r.dias_para_o_fim < 90
+                          ? { color: "var(--amber)", fontWeight: 600 }
+                          : undefined
+                      }
+                    >
+                      {r.dias_para_o_fim === null
+                        ? "—"
+                        : `${r.dias_para_o_fim} dia(s)`}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+          <div className="small muted" style={{ marginTop: 6 }}>
+            Medido ponta a ponta nos últimos {ritmo.dias} dias — e não pela média
+            das variações diárias, que a limpeza de eventos transformaria em
+            ruído ao fazer o uso cair de um dia para o outro.
+          </div>
+        </div>
+      )}
+
       {dados.funcionalidades && dados.funcionalidades.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <div className="section-title" style={{ marginBottom: 6 }}>
@@ -286,6 +336,7 @@ export default function DispositivosView() {
   const [licenca, setLicenca] = useState(null);
   const [erroLicenca, setErroLicenca] = useState("");
   const [lendoLicenca, setLendoLicenca] = useState(false);
+  const [ritmo, setRitmo] = useState(null);
 
   const consultar = useCallback(async () => {
     if (!hostId) return;
@@ -327,6 +378,22 @@ export default function DispositivosView() {
     setLicenca(null);
     lerLicenca();
   }, [lerLicenca]);
+
+  // O ritmo vem do historico, que so existe depois da segunda leitura em
+  // dias diferentes. Sem dados ainda, a secao simplesmente nao aparece --
+  // melhor que uma projecao construida sobre um ponto.
+  useEffect(() => {
+    if (!hostId) return;
+    let vivo = true;
+    setRitmo(null);
+    api
+      .licencaHistorico(hostId, 90)
+      .then((r) => vivo && setRitmo(r))
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [hostId, licenca]);
 
   if (carregandoHosts) return <Carregando />;
   if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
@@ -375,6 +442,7 @@ export default function DispositivosView() {
       <Erro mensagem={erro} onTentar={consultar} />
 
       <Licenciamento
+        ritmo={ritmo}
         dados={licenca}
         erro={erroLicenca}
         lendo={lendoLicenca}

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes } from "../../api";
 import { t } from "../../i18n";
 import { Carregando, Erro, SeletorHost, Vazio, useHosts } from "../Comuns";
-import { IconServidor } from "../Icons";
+import { IconAtualizar, IconOk, IconServidor } from "../Icons";
 
 /**
  * Descoberta — inventário do que roda em cada servidor.
@@ -12,6 +12,138 @@ import { IconServidor } from "../Icons";
  * mesmas perguntas que a topologia foi levantada respondendo na mão.
  * Serve igual para FindFace distribuído e para tudo num servidor só.
  */
+/**
+ * Componentes internos do FindFace.
+ *
+ * Cada serviço do FindFace atende numa porta que o manual do fabricante
+ * documenta — `findface-extraction-api` na 18666, `findface-sf-api` na
+ * 18411, `findface-video-manager` na 18810, `findface-ntls` na 3185, e
+ * assim por diante. O painel bate nessas portas **de dentro do servidor**,
+ * pela sessão SSH que ele já tem.
+ *
+ * É por isso que não há agente instalado em máquina de produção: o SSH dá
+ * exatamente o alcance que um agente daria, e um binário nosso rodando num
+ * servidor de reconhecimento facial seria mais uma peça para instalar,
+ * atualizar, versionar e explicar numa auditoria.
+ *
+ * Leitura pura: nenhuma consulta aqui muda estado.
+ */
+function Internos({ hostId }) {
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState("");
+  const [lendo, setLendo] = useState(false);
+
+  const consultar = useCallback(async () => {
+    if (!hostId) return;
+    setLendo(true);
+    setErro("");
+    try {
+      setDados(await api.internos(hostId));
+    } catch (ex) {
+      setDados(null);
+      setErro(ex.message);
+    } finally {
+      setLendo(false);
+    }
+  }, [hostId]);
+
+  useEffect(() => {
+    setDados(null);
+    setErro("");
+  }, [hostId]);
+
+  return (
+    <div className="card">
+      <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+        <div className="section-title" style={{ marginBottom: 0 }}>
+          Componentes internos do FindFace
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={consultar} disabled={lendo}>
+          <IconAtualizar size={14} /> {lendo ? "Consultando…" : "Consultar"}
+        </button>
+      </div>
+      <div className="small muted" style={{ marginBottom: 12 }}>
+        Pergunta a cada serviço, na porta que o manual do fabricante documenta,
+        de dentro do próprio servidor. Sem agente instalado — o painel usa a
+        sessão SSH que já tem.
+      </div>
+
+      <Erro mensagem={erro} onTentar={consultar} />
+
+      {!dados && !erro && !lendo && (
+        <div className="small muted">
+          Clique em Consultar. São doze componentes numa única execução remota.
+        </div>
+      )}
+
+      {dados && (
+        <>
+          <div className="small muted" style={{ marginBottom: 8 }}>
+            {dados.vivos} de {dados.presentes} componente(s) presentes responderam
+            — leitura em {dados.duracao_ms} ms.
+          </div>
+          <div className="table-wrap">
+            <table className="tabela-densa">
+              <thead>
+                <tr>
+                  <th>Componente</th>
+                  <th>Camada</th>
+                  <th className="right">Porta</th>
+                  <th>Resposta</th>
+                  <th>Container</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.componentes
+                  .filter((c) => c.escutando || c.container)
+                  .map((c) => (
+                    <tr key={c.nome}>
+                      <td>
+                        <div className="mono">{c.nome}</div>
+                        <div className="small muted">{c.papel}</div>
+                      </td>
+                      <td className="small">{c.camada}</td>
+                      <td className="right mono">{c.porta}</td>
+                      <td>
+                        {c.vivo ? (
+                          <span className="pill pill-ok">
+                            <IconOk size={11} /> {c.codigo}
+                            {c.caminho ? ` ${c.caminho}` : ""}
+                          </span>
+                        ) : c.escutando ? (
+                          <span
+                            className="pill pill-warn"
+                            title="A porta está escutando, mas o caminho de status não respondeu — alguns serviços do FindFace não expõem HTTP nessa porta"
+                          >
+                            escutando
+                          </span>
+                        ) : (
+                          <span className="pill pill-idle">sem resposta</span>
+                        )}
+                        {c.resumo && (
+                          <div className="small muted mono" style={{ marginTop: 2 }}>
+                            {c.resumo}
+                          </div>
+                        )}
+                      </td>
+                      <td className="small mono">{c.container || "—"}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+          {dados.componentes.filter((c) => c.escutando || c.container).length === 0 && (
+            <div className="small muted" style={{ marginTop: 8 }}>
+              Nenhum componente do FindFace neste servidor — é uma máquina de
+              outra função na topologia.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function DescobertaView() {
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
   const [dados, setDados] = useState(null);
@@ -90,8 +222,10 @@ export default function DescobertaView() {
       )}
 
       {dados && <Inventario d={dados} />}
+      {hostId && <Internos hostId={hostId} />}
+
     </>
-  );
+    );
 }
 
 const GRID2 = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 };

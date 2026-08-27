@@ -21,7 +21,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
 from app.models import (  # noqa: F401 — registra todos os modelos
-    Amostra, Destino, User, VisaoLog,
+    Amostra, Destino, LicencaAmostra, User, VisaoLog,
 )
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
@@ -31,6 +31,7 @@ from app.services.faxina_service import FaxinaService
 from app.services.ffapi_service import FFApiService
 from app.services.configff_service import ConfigFFService
 from app.services.licenca_service import LicencaService
+from app.services.internos_service import InternosService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
 from app.services.processos_service import ProcessosService
@@ -276,6 +277,9 @@ async def iniciar() -> None:
     # Chaves do FindFace que so existem em arquivo (CLEANUP_SCHEDULE,
     # vms_cleanup). Lista fechada, copia antes, compila depois.
     app.state.configff = ConfigFFService(ssh)
+    # Estado dos componentes internos do FindFace, pelas portas que o
+    # manual documenta -- de dentro do servidor, sem agente instalado.
+    app.state.internos = InternosService(ssh)
     app.state.dispositivos = DispositivosService(ssh, ffapi=app.state.ffapi)
     app.state.descoberta = DescobertaService(ssh)
     app.state.processos = ProcessosService(ssh)

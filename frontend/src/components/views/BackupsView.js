@@ -13,7 +13,7 @@ import {
   useDestinos,
   useHosts,
 } from "../Comuns";
-import { IconAtualizar, IconBackup, IconDownload, IconLixeira, IconLogs } from "../Icons";
+import { IconAtualizar, IconBackup, IconChave, IconDownload, IconLixeira, IconLogs } from "../Icons";
 
 export const PERFIS = [
   {
@@ -48,6 +48,10 @@ export default function BackupsView() {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [novo, setNovo] = useState(false);
+  // Manifesto: o que o artefato contem e o roteiro de restauracao do
+  // fabricante, lido de dentro do .tar.gz sem baixar nada.
+  const [vendoManifesto, setVendoManifesto] = useState(null);
+  const [importando, setImportando] = useState(false);
   const [detalhe, setDetalhe] = useState(null);
   const [espaco, setEspaco] = useState(null);
   const [painelRodando, setPainelRodando] = useState(false);
@@ -125,6 +129,37 @@ export default function BackupsView() {
             <IconAtualizar size={15} /> {t("Atualizar")}</button>
           {has("backups.run") && (
             <>
+              {/* Importar: traz artefato de fora para o painel. Nao
+                  restaura nada -- e guardar e catalogar, para o backup
+                  feito na mao ou vindo de outra instalacao aparecer no
+                  historico como qualquer outro. */}
+              <label
+                className={`btn btn-secondary ${importando ? "disabled" : ""}`}
+                style={{ cursor: importando ? "default" : "pointer" }}
+                title="Enviar um .tar.gz de backup para o disco do painel"
+              >
+                {importando ? "Enviando…" : "Importar artefato"}
+                <input
+                  type="file"
+                  accept=".tar.gz,.tgz,.tar"
+                  style={{ display: "none" }}
+                  disabled={importando}
+                  onChange={async (e) => {
+                    const arquivo = e.target.files && e.target.files[0];
+                    e.target.value = "";
+                    if (!arquivo) return;
+                    setImportando(true);
+                    try {
+                      await api.importarBackup(arquivo, hostId || undefined);
+                      await carregar();
+                    } catch (ex) {
+                      window.alert(ex.message);
+                    } finally {
+                      setImportando(false);
+                    }
+                  }}
+                />
+              </label>
               <button
                 className="btn btn-secondary"
                 onClick={backupPainel}
@@ -180,6 +215,7 @@ export default function BackupsView() {
             <tbody>
               {lista.map((r) => (
                 <LinhaBackup
+                  onManifesto={setVendoManifesto}
                   key={r.id}
                   r={r}
                   onDetalhe={() => setDetalhe(r.id)}
@@ -189,6 +225,13 @@ export default function BackupsView() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {vendoManifesto && (
+        <ModalManifesto
+          run={vendoManifesto}
+          onFechar={() => setVendoManifesto(null)}
+        />
       )}
 
       {novo && (
@@ -207,7 +250,70 @@ export default function BackupsView() {
   );
 }
 
-function LinhaBackup({ r, onDetalhe, onRemover }) {
+/**
+ * O manifesto do artefato.
+ *
+ * Vive dentro do .tar.gz e traz três coisas que decidem uma restauração: o
+ * que o backup contém, **a versão das imagens do FindFace** e o roteiro
+ * oficial do fabricante. A versão importa mais do que parece — a base do
+ * Tarantool não é compatível entre versões maiores, e restaurar num sistema
+ * de outra versão devolve os cadastros e não devolve o reconhecimento.
+ *
+ * Ler aqui evita baixar dezenas de GB só para conferir o que veio dentro.
+ */
+function ModalManifesto({ run, onFechar }) {
+  const [texto, setTexto] = useState("");
+  const [erro, setErro] = useState("");
+  const [lendo, setLendo] = useState(true);
+
+  useEffect(() => {
+    let vivo = true;
+    api
+      .manifesto(run.id)
+      .then((r) => vivo && setTexto(r.manifesto || ""))
+      .catch((ex) => vivo && setErro(ex.message))
+      .finally(() => vivo && setLendo(false));
+    return () => {
+      vivo = false;
+    };
+  }, [run.id]);
+
+  return (
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">
+            Manifesto — {run.artifact_name || `execução #${run.id}`}
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onFechar}>
+            {t("Fechar")}
+          </button>
+        </div>
+        <div className="modal-body">
+          {lendo && <Carregando texto="Abrindo o artefato no disco do painel…" />}
+          <Erro mensagem={erro} />
+          {texto && (
+            <>
+              <div className="small muted" style={{ marginBottom: 8 }}>
+                Conteúdo, versão das imagens e o procedimento de restauração do
+                fabricante. A execução do restore continua sendo manual — ver
+                <span className="mono"> docs/03_RESTORE.md</span>.
+              </div>
+              <pre
+                className="mono small"
+                style={{ whiteSpace: "pre-wrap", maxHeight: "60vh", overflow: "auto" }}
+              >
+                {texto}
+              </pre>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LinhaBackup({ r, onDetalhe, onRemover, onManifesto }) {
   const { has } = usePermissions();
   const [removendo, setRemovendo] = useState(false);
   const emAndamento = r.status === "executando" || r.status === "pendente";

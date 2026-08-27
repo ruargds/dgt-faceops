@@ -14,6 +14,38 @@ from app.services.ssh_service import SSHError
 router = APIRouter(prefix="/api/descoberta", tags=["descoberta"])
 
 
+@router.get("/internos/{host_id}")
+async def internos(
+    host_id: int,
+    request: Request,
+    _: User = Depends(require_permission("services.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Estado dos componentes internos do FindFace naquele servidor.
+
+    Le de DENTRO da maquina, pela porta que o manual do fabricante
+    documenta para cada componente (extraction-api 18666, sf-api 18411,
+    video-manager 18810, ntls 3185...). Sem agente instalado: o painel ja
+    tem SSH, que e o mesmo alcance que um agente teria, e um binario nosso
+    em servidor de reconhecimento facial e peca a mais para auditar,
+    versionar e manter.
+
+    So leitura -- nenhum comando muda estado.
+    """
+    from app.services.internos_service import InternosError
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor nao encontrado")
+
+    try:
+        return await request.app.state.internos.ler(host)
+    except InternosError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+
 @router.get("/{host_id}")
 async def inventariar(
     host_id: int,

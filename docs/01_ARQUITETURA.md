@@ -32,6 +32,29 @@ mais um processo para atualizar, mais uma porta, mais uma coisa que pode
 quebrar. Tudo aqui é `ssh`, que já está lá e já é auditado pelo próprio
 servidor.
 
+A pergunta voltou em campo — *"não seria mais preciso com um agente leve em
+cada máquina?"* — e a resposta continua não, por três razões concretas:
+
+1. **Os componentes do FindFace já falam HTTP.** O manual do fabricante
+   documenta a porta de cada um: `findface-extraction-api` 18666,
+   `findface-sf-api` 18411, `findface-video-manager` 18810/18811,
+   `findface-video-worker` 18999, `findface-ntls` 3133/3185,
+   `findface-upload` 3333, `findface-facerouter` 18820,
+   `findface-deduplicator` 18310, `findface-liveness-api` 18301,
+   `findface-video-storage` 18611, `findface-video-streamer` 9000,
+   `findface-tarantool-server` 32001. Todos atendem em `localhost` da
+   máquina onde rodam.
+2. **O painel já está dentro.** SSH com sudo é exatamente o alcance que um
+   agente teria. O agente não abriria porta nova de informação — abriria
+   porta nova de rede.
+3. **Agente é dívida.** Mais um binário para versionar, atualizar em quatro
+   VMs e explicar numa auditoria de um ambiente de reconhecimento facial.
+
+É isso que a seção **Componentes internos do FindFace**, na aba Descoberta,
+faz: abre uma sessão SSH e, de dentro dela, pergunta a cada componente na
+porta que o fabricante documentou. Precisão de agente, sem agente. Só
+leitura — nenhuma consulta ali muda estado.
+
 Custo: cada leitura abre (ou reaproveita) uma conexão SSH. Mitigado por
 pool com TTL de 120s e por concentrar toda a coleta de métrica numa única
 execução remota — quatro hosts × seis comandos daria 24 handshakes; assim é

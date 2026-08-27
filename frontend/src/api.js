@@ -165,6 +165,13 @@ export const api = {
   // Rotatividade do proprio FindFace: por quanto tempo cada coisa fica.
   // E a resposta de causa para o disco que enche toda semana -- a limpeza
   // de eventos ataca o sintoma.
+  // Ritmo de consumo da licenca: e a resposta de "quando acaba", que a
+  // leitura do instante nao da. Amostra por dia, gravada a cada leitura.
+  licencaHistorico: (id, dias = 90) =>
+    get(`/dispositivos/${id}/licenca/historico?dias=${dias}`),
+  // Componentes internos do FindFace, pelas portas do manual do fabricante.
+  internos: (id) => get(`/descoberta/internos/${id}`),
+
   retencao: (id) => get(`/dispositivos/${id}/retencao`),
   // Chaves que so existem no arquivo de configuracao do FindFace.
   configFF: (id) => get(`/dispositivos/${id}/configff`),

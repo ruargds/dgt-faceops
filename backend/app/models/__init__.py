@@ -9,6 +9,7 @@ from app.models.backup import (
     Schedule,
 )
 from app.models.amostra import Amostra
+from app.models.licenca_amostra import LicencaAmostra
 from app.models.configuracao import Configuracao
 from app.models.destino import TIPOS as TIPOS_DESTINO, Destino
 from app.models.host import Host
@@ -25,6 +26,7 @@ __all__ = [
     "Destino",
     "Configuracao",
     "Amostra",
+    "LicencaAmostra",
     "VisaoLog",
     "TIPOS_DESTINO",
     "PROFILES",

@@ -41,6 +41,22 @@ async def licenca(
     # já tem SSH com sudo neste servidor. A API fica como alternativa para
     # quem preferir não abrir shell — e para o caso de o NTLS rodar em
     # outra máquina que não esta.
+    async def _amostrar(dados: dict) -> None:
+        """
+        Guarda o consumo de hoje sempre que alguém lê a licença.
+
+        Sai de graça — os números já estão em mãos — e é o que permite
+        responder "em que ritmo consumimos e quando acaba". Falhar aqui não
+        pode derrubar a leitura: o histórico é um bônus, a licença é o
+        pedido.
+        """
+        from app.services.licenca_service import guardar_amostra
+
+        try:
+            await guardar_amostra(db, host.id, dados.get("itens") or [])
+        except Exception:
+            pass
+
     erro_ssh = ""
     try:
         dados = await request.app.state.licenca.ler(host)
@@ -56,6 +72,7 @@ async def licenca(
                 dados["cameras_cadastradas"] = dados.get("cameras_total")
             except FFApiError:
                 pass
+        await _amostrar(dados)
         return dados
 
     if not configurado(host):
@@ -69,12 +86,14 @@ async def licenca(
         )
 
     try:
-        return await request.app.state.ffapi.licenca(host)
+        dados = await request.app.state.ffapi.licenca(host)
     except FFApiError as exc:
         raise HTTPException(
             status_code=502,
             detail=f"pelo servidor: {erro_ssh} | pela API: {exc}",
         ) from exc
+    await _amostrar(dados)
+    return dados
 
 
 @router.get("/{host_id}")
@@ -187,6 +206,33 @@ class RetencaoIn(BaseModel):
     dias: dict[str, float] = Field(default_factory=dict)
     chaves: dict[str, bool] = Field(default_factory=dict)
     confirmar_host: str = ""
+
+
+@router.get("/{host_id}/licenca/historico")
+async def licenca_historico(
+    host_id: int,
+    dias: int = Query(default=90, ge=2, le=730),
+    _: User = Depends(require_permission("metrics.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Consumo de licença ao longo do tempo, com ritmo e projeção.
+
+    Existe porque o limite que aperta nesta instalação não é câmera — são
+    objetos. Com 453 dispositivos entrando como detector externo, a
+    pergunta de capacidade é "em que ritmo consumimos e quando acaba", e
+    isso a licença sozinha não responde: só a série responde.
+
+    A amostra é gravada a cada leitura da licença, então o histórico começa
+    a existir no primeiro acesso à tela.
+    """
+    from app.services.licenca_service import serie
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    return await serie(db, host_id, dias)
 
 
 @router.get("/{host_id}/retencao")

@@ -76,6 +76,135 @@ class LicencaError(Exception):
     pass
 
 
+async def guardar_amostra(db, host_id: int, itens: list[dict]) -> int:
+    """
+    Grava o consumo de hoje, uma linha por recurso.
+
+    O cenário real desta instalação: 453 dispositivos, todos detector
+    externo, zero câmera licenciada em uso, e o recurso que consome é o
+    `Objects TNT API`. Logo, a pergunta de capacidade não é "cabem quantas
+    câmeras" — é **"em que ritmo consumimos objetos e quando acaba"**. A
+    licença responde o instante; o ritmo só sai do histórico.
+
+    Uma amostra por dia e por recurso: se já existe a de hoje, ela é
+    atualizada em vez de duplicada. Recurso sem uso medido não vira linha —
+    guardar zero seria inventar um consumo que ninguém observou.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from app.models.licenca_amostra import LicencaAmostra
+
+    if not itens:
+        return 0
+
+    hoje = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    gravadas = 0
+
+    for item in itens:
+        chave = item.get("chave") or item.get("recurso")
+        usado = item.get("usado")
+        limite = item.get("limite")
+        if not chave or usado is None:
+            continue
+
+        existente = (
+            await db.execute(
+                select(LicencaAmostra).where(
+                    LicencaAmostra.host_id == host_id,
+                    LicencaAmostra.recurso == str(chave)[:64],
+                    LicencaAmostra.ts >= hoje,
+                    LicencaAmostra.ts < hoje + timedelta(days=1),
+                )
+            )
+        ).scalars().first()
+
+        if existente is not None:
+            existente.usado = int(usado)
+            existente.limite = int(limite or 0)
+        else:
+            db.add(
+                LicencaAmostra(
+                    host_id=host_id,
+                    recurso=str(chave)[:64],
+                    usado=int(usado),
+                    limite=int(limite or 0),
+                )
+            )
+        gravadas += 1
+
+    await db.commit()
+    return gravadas
+
+
+async def serie(db, host_id: int, dias: int = 90) -> dict:
+    """
+    Consumo por recurso ao longo do tempo, com ritmo e projeção.
+
+    O ritmo sai da diferença entre a primeira e a última amostra, dividida
+    pelos dias entre elas — não da média das diferenças diárias. Motivo:
+    limpeza de eventos faz o uso CAIR de um dia para o outro, e a média de
+    variações diárias transformaria isso em ruído. Ponta a ponta responde a
+    pergunta certa: "no ritmo dos últimos N dias, quando acaba?".
+
+    Projeção só quando o consumo é crescente e há limite. Projetar queda
+    daria data de esgotamento no passado, o que é pior que não projetar.
+    """
+    from sqlalchemy import select
+
+    from app.models.licenca_amostra import LicencaAmostra
+
+    dias = max(2, min(int(dias), 730))
+    from datetime import datetime, timedelta, timezone
+
+    desde = datetime.now(timezone.utc) - timedelta(days=dias)
+
+    linhas = (
+        await db.execute(
+            select(LicencaAmostra)
+            .where(LicencaAmostra.host_id == host_id, LicencaAmostra.ts >= desde)
+            .order_by(LicencaAmostra.recurso, LicencaAmostra.ts)
+        )
+    ).scalars().all()
+
+    por_recurso: dict[str, list] = {}
+    for linha in linhas:
+        por_recurso.setdefault(linha.recurso, []).append(linha)
+
+    saida = []
+    for recurso, amostras in por_recurso.items():
+        pontos = [
+            {"ts": a.ts.isoformat(), "usado": a.usado, "limite": a.limite}
+            for a in amostras
+        ]
+        por_dia = None
+        dias_para_o_fim = None
+        if len(amostras) >= 2:
+            primeiro, ultimo = amostras[0], amostras[-1]
+            intervalo = (ultimo.ts - primeiro.ts).total_seconds() / 86400
+            if intervalo >= 0.5:
+                por_dia = round((ultimo.usado - primeiro.usado) / intervalo, 1)
+                limite = ultimo.limite or 0
+                if por_dia > 0 and limite > 0 and ultimo.usado < limite:
+                    dias_para_o_fim = int((limite - ultimo.usado) / por_dia)
+
+        saida.append({
+            "recurso": recurso,
+            "pontos": pontos,
+            "amostras": len(pontos),
+            "por_dia": por_dia,
+            "dias_para_o_fim": dias_para_o_fim,
+            "usado": amostras[-1].usado if amostras else None,
+            "limite": amostras[-1].limite if amostras else None,
+        })
+
+    saida.sort(key=lambda r: (r["dias_para_o_fim"] is None, r["dias_para_o_fim"] or 0))
+    return {"dias": dias, "recursos": saida}
+
+
 def _secoes(saida: str) -> dict[str, str]:
     secoes: dict[str, str] = {}
     atual = None
