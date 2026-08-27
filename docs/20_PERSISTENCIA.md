@@ -1,5 +1,38 @@
 # Persistência — o que sobrevive a quê
 
+## Regra da casa: nada fica sem prazo
+
+Tudo o que o painel grava tem retenção. Não existe "guardo por garantia":
+dado sem pergunta que o justifique é lixo com backup.
+
+| O que o painel grava | Prazo | Onde se ajusta |
+|---|---|---|
+| Amostras do monitor | 30 dias | Configurações → Monitoramento |
+| Histórico de consumo de licença | 365 dias | Configurações → Faxina |
+| Gravações do InTerminal (`.cast`) | 90 dias | Configurações → Faxina |
+| Registros de auditoria | 365 dias (crítico: o triplo) | Configurações → Faxina |
+| Sessões de terminal (a linha) | junto da auditoria | Configurações → Faxina |
+| Texto do log das execuções | 60 dias — a linha fica, o texto sai | Configurações → Faxina |
+| Sobras de staging | 24 horas | fixo |
+| Artefatos de backup | por perfil, no disco local | no agendamento ou no disparo |
+
+Duas coisas que **não** ficam para sempre por acidente:
+
+- **Execução travada.** Backup que ficou em `executando` quando o painel
+  reiniciou está morto — a tarefa vivia no processo que saiu. A subida
+  marca essas execuções como falha, com o motivo. Sem isso elas contavam
+  como "ocupado" no `/api/saude` e faziam o `atualizar.sh` adiar
+  atualização por causa de um backup que não existe.
+- **Artefato apagado pela metade.** Apagar remove o arquivo em **todos** os
+  destinos onde ele foi parar — local, Azure e rclone — e a linha sai do
+  histórico. Se algum destino recusar, a tela diz onde sobrou. "Apaguei"
+  precisa significar apagado em todo lugar; caso contrário é lixo no lugar
+  mais caro de guardar, e ninguém sabendo.
+
+O rastro de que aquilo existiu fica na **auditoria**, que é onde esse tipo
+de registro pertence — não numa linha fantasma no meio das execuções.
+
+
 Documento de revisão. Cada linha foi verificada no `docker-compose.yml`,
 não deduzida.
 

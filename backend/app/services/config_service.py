@@ -308,6 +308,13 @@ CATALOGO: list[ItemConfig] = [
                "Uma amostra ocupa ~80 bytes. 4 servidores a 60 s por 30 "
                "dias dão alguns MB.",
                minimo=1, maximo=365),
+    ItemConfig("faxina.licenca_dias", "faxina",
+               "Guardar histórico de licença por (dias)", "numero",
+               365,
+               "Uma linha por recurso por dia — alguns milhares de linhas por "
+               "ano. É o que sustenta a projeção de 'quando acaba'; guardar "
+               "para sempre não acrescenta nada.",
+               minimo=30, maximo=1825),
     ItemConfig("monitor.som_alerta", "monitor",
                "Alerta sonoro", "booleano",
                True,

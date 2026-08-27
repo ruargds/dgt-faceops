@@ -342,6 +342,95 @@ class StorageService:
 
     # ── Orquestração ───────────────────────────────────────────────────
 
+    async def apagar(self, destino, host_nome: str, arquivo: str) -> dict:
+        """
+        Apaga um artefato NO destino informado.
+
+        Existe porque apagar pela tela removia só a cópia local: o mesmo
+        arquivo seguia no Azure e no rclone, ocupando o lugar mais caro de
+        guardar, sem ninguém sabendo. "Apaguei" tem de significar apagado
+        em todo lugar onde o painel colocou.
+
+        Nunca levanta: devolve o que aconteceu em cada destino. Falha em um
+        não pode impedir a remoção nos outros, e o operador precisa ver
+        onde sobrou.
+        """
+        nome = Path(arquivo).name
+        tipo = getattr(destino, "tipo", "?")
+
+        try:
+            if tipo == "local":
+                base = Path(destino.caminho or settings.LOCAL_BACKUP_DIR) / host_nome
+                alvo = base / nome
+                if alvo.is_file():
+                    await asyncio.to_thread(alvo.unlink)
+                    return {"destino": destino.nome, "tipo": tipo, "ok": True}
+                return {
+                    "destino": destino.nome,
+                    "tipo": tipo,
+                    "ok": True,
+                    "detalhe": "já não estava lá",
+                }
+
+            if tipo == "azure":
+                def _apagar_azure() -> str:
+                    from azure.storage.blob import BlobServiceClient
+
+                    cliente = BlobServiceClient.from_connection_string(
+                        decrypt_secret(destino.azure_conn_enc)
+                    )
+                    cont = cliente.get_container_client(
+                        destino.azure_container or "faceops-backups"
+                    )
+                    blob = cont.get_blob_client(f"{host_nome}/{nome}")
+                    blob.delete_blob()
+                    return "removido do container"
+
+                detalhe = await asyncio.to_thread(_apagar_azure)
+                return {
+                    "destino": destino.nome,
+                    "tipo": tipo,
+                    "ok": True,
+                    "detalhe": detalhe,
+                }
+
+            if tipo == "rclone":
+                remoto = f"{destino.rclone_remote}:{(destino.caminho or '').strip('/')}"
+                alvo = f"{remoto}/{host_nome}/{nome}".replace("//", "/").replace(
+                    ":/", ":"
+                )
+                proc = await asyncio.create_subprocess_exec(
+                    "rclone",
+                    "deletefile",
+                    alvo,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                _, err = await proc.communicate()
+                if proc.returncode == 0:
+                    return {"destino": destino.nome, "tipo": tipo, "ok": True}
+                return {
+                    "destino": destino.nome,
+                    "tipo": tipo,
+                    "ok": False,
+                    "erro": (err or b"").decode("utf-8", "replace")[-300:],
+                }
+
+        except Exception as exc:
+            return {
+                "destino": getattr(destino, "nome", "?"),
+                "tipo": tipo,
+                "ok": False,
+                "erro": f"{type(exc).__name__}: {exc}"[:300],
+            }
+
+        return {
+            "destino": getattr(destino, "nome", "?"),
+            "tipo": tipo,
+            "ok": False,
+            "erro": f"não sei apagar em destino do tipo {tipo}",
+        }
+
     async def distribuir(
         self, arquivo: Path, host_nome: str, destinos: list
     ) -> list[ResultadoEnvio]:

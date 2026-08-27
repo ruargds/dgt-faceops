@@ -13,7 +13,7 @@ import {
   useDestinos,
   useHosts,
 } from "../Comuns";
-import { IconAtualizar, IconBackup, IconChave, IconDownload, IconLixeira, IconLogs } from "../Icons";
+import { IconAtualizar, IconBackup, IconChave, IconDownload, IconLixeira, IconLogs, IconStop } from "../Icons";
 
 export const PERFIS = [
   {
@@ -128,6 +128,30 @@ export default function BackupsView() {
             onMudar={setFiltroHost}
             incluirTodos
           />
+          {has("backups.delete") && (
+            <button
+              className="btn btn-secondary"
+              title="Remove do histórico as execuções que falharam sem gerar artefato"
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    "Remover do histórico todas as execuções que falharam sem " +
+                      "gerar artefato?"
+                  )
+                )
+                  return;
+                try {
+                  const r = await api.limparFalhas();
+                  await carregar();
+                  window.alert(`${r.removidas} linha(s) removida(s).`);
+                } catch (ex) {
+                  window.alert(ex.message);
+                }
+              }}
+            >
+              Limpar falhas
+            </button>
+          )}
           <button
             className="btn btn-secondary"
             onClick={() => setVerRecuperacao(true)}
@@ -515,8 +539,18 @@ function LinhaBackup({ r, onDetalhe, onRemover, onManifesto }) {
     if (!window.confirm(`Apagar o artefato de ${r.artifact_name || "esta execução"}?`)) return;
     setRemovendo(true);
     try {
-      await api.removerBackup(r.id);
+      const resposta = await api.removerBackup(r.id);
       await onRemover();
+      // Destino que recusou apagar precisa aparecer: "apaguei" que deixou
+      // copia no Azure e nao avisou e a pior forma de nao apagar.
+      if (resposta && resposta.sobrou && resposta.sobrou.length > 0) {
+        window.alert(
+          "A linha saiu do histórico, mas o arquivo continua em: " +
+            resposta.sobrou
+              .map((s) => `${s.destino} (${s.erro || "motivo não informado"})`)
+              .join("; ")
+        );
+      }
     } catch (ex) {
       window.alert(ex.message);
     } finally {
@@ -587,6 +621,27 @@ function LinhaBackup({ r, onDetalhe, onRemover, onManifesto }) {
           <button className="btn btn-secondary btn-sm" onClick={onDetalhe} title={t("Ver log")}>
             <IconLogs size={14} />
           </button>
+          {/* Parar: só faz sentido enquanto roda. Cancelamento não é
+              falha — é decisão de quem opera, e o histórico registra assim. */}
+          {(r.status === "executando" || r.status === "pendente") && (
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              title="Parar esta execução"
+              onClick={async () => {
+                if (!window.confirm("Parar esta execução de backup?")) return;
+                try {
+                  await api.cancelarBackup(r.id);
+                  onRemover && onRemover();
+                } catch (ex) {
+                  window.alert(ex.message);
+                }
+              }}
+            >
+              <IconStop size={14} />
+            </button>
+          )}
+
           {/* Manifesto: existe sempre que o artefato existe, e é o que se
               lê ANTES de decidir restaurar. */}
           {r.artifact_name && !r.expired && (

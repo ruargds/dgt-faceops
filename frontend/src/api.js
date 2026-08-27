@@ -243,6 +243,9 @@ export const api = {
   // O que da para recuperar, por servidor: o mais recente de cada perfil,
   // a idade e o que aquele perfil recupera.
   recuperacao: () => get("/backups/recuperacao"),
+  // Parar execucao em andamento e limpar o historico de falhas.
+  cancelarBackup: (runId) => post(`/backups/${runId}/cancelar`),
+  limparFalhas: () => del("/backups-falhas"),
 
   // Destinos de backup
   destinos: () => get("/destinos"),

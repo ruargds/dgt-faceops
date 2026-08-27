@@ -203,15 +203,21 @@ async def disparar(
 
     # Segue em segundo plano reaproveitando este mesmo registro, para que
     # o id devolvido agora continue válido enquanto a UI acompanha.
-    asyncio.create_task(
-        servico.processar_em_segundo_plano(
-            run.id,
-            host.id,
-            dados.perfil,
-            dados.destinos,
-            autor.username,
-            dados.retencao_dias,
-        )
+    # A tarefa fica registrada no serviço para poder ser parada depois --
+    # sem isso, "cancelar" seria so uma mentira no banco enquanto o SSH
+    # continua copiando dezenas de GB.
+    servico.registrar_tarefa(
+        run.id,
+        asyncio.create_task(
+            servico.processar_em_segundo_plano(
+                run.id,
+                host.id,
+                dados.perfil,
+                dados.destinos,
+                autor.username,
+                dados.retencao_dias,
+            )
+        ),
     )
 
     saida = BackupOut.model_validate(run)
@@ -515,6 +521,94 @@ async def importar(
     return saida
 
 
+@router.post("/backups/{run_id}/cancelar")
+async def cancelar(
+    run_id: int,
+    request: Request,
+    autor: User = Depends(require_permission("backups.run")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Para uma execução em andamento.
+
+    Cancelar fecha o canal SSH: o script morre no servidor no próximo
+    write, e o staging remoto é limpo na execução seguinte. A execução fica
+    marcada como **cancelada**, não como falha — falha é o sistema
+    quebrando, cancelamento é decisão de quem opera, e misturar os dois
+    estraga o histórico.
+    """
+    run = await db.get(BackupRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="execução não encontrada")
+    if run.status not in ("executando", "pendente"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"esta execução já terminou (situação: {run.status})",
+        )
+
+    vivo = request.app.state.backups.cancelar(run_id)
+
+    run.status = "cancelado"
+    run.stage = "Cancelado"
+    run.progress = 100
+    run.finished_at = datetime.now(timezone.utc)
+    run.error = (
+        "cancelado por quem opera"
+        if vivo
+        else "cancelado; a tarefa já não estava viva neste processo"
+    )
+    await db.commit()
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="backups.run",
+        target=f"execução #{run_id}",
+        ip=client_ip(request),
+        detail={"acao": "cancelar", "tarefa_viva": vivo},
+    )
+    return {"ok": True, "tarefa_viva": vivo}
+
+
+@router.delete("/backups-falhas")
+async def limpar_falhas(
+    request: Request,
+    autor: User = Depends(require_permission("backups.delete")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Remove do histórico as execuções que falharam e não deixaram artefato.
+
+    Falha sem artefato não tem nada a proteger: é linha de erro ocupando a
+    tela. Apagar uma a uma, quando são dez, é trabalho que o painel devia
+    fazer sozinho.
+
+    **Não toca em execução com artefato** — essa continua no histórico com
+    o registro do que existiu, mesmo depois de o arquivo sair pela
+    retenção.
+    """
+    from sqlalchemy import delete as _delete
+
+    resultado = await db.execute(
+        _delete(BackupRun).where(
+            BackupRun.status == "falha",
+            (BackupRun.artifact_name == "") | (BackupRun.artifact_name.is_(None)),
+        )
+    )
+    removidas = resultado.rowcount or 0
+    await db.commit()
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="backups.delete",
+        target="histórico de falhas",
+        ip=client_ip(request),
+        detail={"acao": "limpar falhas sem artefato", "removidas": removidas},
+    )
+    return {"ok": True, "removidas": removidas}
+
+
 @router.delete("/backups/{run_id}")
 async def remover(
     run_id: int,
@@ -527,15 +621,44 @@ async def remover(
         raise HTTPException(status_code=404, detail="execução não encontrada")
 
     host = await db.get(Host, run.host_id)
+    pasta = host.name if host is not None else "_painel"
     removido = False
-    if host is not None and run.artifact_name:
+    resultados_destinos: list[dict] = []
+
+    if run.artifact_name:
+        # Apaga em TODOS os destinos onde o artefato foi parar, e não só na
+        # cópia local: o mesmo arquivo seguia no Azure e no rclone depois
+        # de "apagado" — lixo no lugar mais caro de guardar.
+        from app.models.destino import Destino as _Destino
+
+        nomes_destinos = {
+            d.get("name") for d in (run.destinations or []) if d.get("name")
+        }
+        if nomes_destinos:
+            objetos = list(
+                (
+                    await db.execute(
+                        select(_Destino).where(_Destino.nome.in_(nomes_destinos))
+                    )
+                ).scalars().all()
+            )
+            for destino in objetos:
+                resultados_destinos.append(
+                    await request.app.state.storage.apagar(
+                        destino, pasta, run.artifact_name
+                    )
+                )
+            removido = any(r.get("ok") for r in resultados_destinos)
+
+        # Rede de segurança: a cópia no disco do painel some mesmo que o
+        # destino não esteja mais cadastrado.
         base = None
         for d in (run.destinations or []):
             if d.get("type") == "local" and d.get("uri"):
                 base = str(Path(d["uri"]).parent.parent)
                 break
-        caminho = StorageService.caminho_artefato(host.name, run.artifact_name, base)
-        if caminho is not None:
+        caminho = StorageService.caminho_artefato(pasta, run.artifact_name, base)
+        if caminho is not None and caminho.is_file():
             try:
                 caminho.unlink()
                 removido = True
@@ -544,16 +667,17 @@ async def remover(
                     status_code=500, detail=f"falha ao apagar o arquivo: {exc}"
                 ) from exc
 
-    # Execução sem artefato — falha, quase sempre — sai do histórico de
-    # verdade. O `expired` existe para lembrar que houve um artefato e ele
-    # foi embora; onde nunca houve artefato, marcar expirado só deixa a
-    # linha de erro presa na tela para sempre, sem nada a proteger.
-    apagou_linha = False
-    if not run.artifact_name:
-        await db.delete(run)
-        apagou_linha = True
-    else:
-        run.expired = True
+    # Apagar apaga: a linha sai do histórico e o arquivo sai de todos os
+    # destinos. A versão anterior marcava `expired` e deixava a linha na
+    # tela — quem clicou em apagar leu isso como "não funcionou", e estava
+    # certo: para quem opera, um registro que continua listado não foi
+    # apagado.
+    #
+    # O histórico do que existiu não se perde: a auditoria registra a
+    # remoção, com o arquivo, o destino e quem mandou. É lá que esse tipo
+    # de rastro pertence, não numa linha fantasma no meio das execuções.
+    await db.delete(run)
+    apagou_linha = True
     await db.commit()
 
     await audit_service.registrar(
@@ -567,12 +691,15 @@ async def remover(
             "run_id": run_id,
             "arquivo_removido": removido,
             "linha_removida": apagou_linha,
+            "destinos": resultados_destinos,
         },
     )
     return {
         "ok": True,
         "arquivo_removido": removido,
         "linha_removida": apagou_linha,
+        "destinos": resultados_destinos,
+        "sobrou": [r for r in resultados_destinos if not r.get("ok")],
     }
 
 
@@ -684,10 +811,13 @@ async def disparar_todos(
         await db.commit()
         await db.refresh(run)
 
-        asyncio.create_task(
-            _executar_em_fundo(
-                servico, host, perfil, list(dados.destinos), autor.username, run.id
-            )
+        servico.registrar_tarefa(
+            run.id,
+            asyncio.create_task(
+                _executar_em_fundo(
+                    servico, host, perfil, list(dados.destinos), autor.username, run.id
+                )
+            ),
         )
         disparados.append({"host": host.name, "perfil": perfil, "run_id": run.id})
 

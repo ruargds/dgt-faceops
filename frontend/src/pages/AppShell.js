@@ -72,6 +72,10 @@ const MENU = [
   { id: "config", chave: "menu.config", icone: IconServicos, perm: "hosts.view" },
 ];
 
+// Telas com sessão viva do outro lado: WebSocket de terminal e stream de
+// log. Desmontar significa derrubar a sessão no servidor.
+const PERSISTENTES = ["terminal", "logs"];
+
 export default function AppShell() {
   const { usuario, sair, recarregar, marca } = useSessao();
   const m = marca || MARCA_PADRAO;
@@ -79,6 +83,12 @@ export default function AppShell() {
   const [aba, setAba] = useState("painel");
   const [trocandoSenha, setTrocandoSenha] = useState(false);
   const [saude, setSaude] = useState(null);
+  // Telas que seguram sessão viva continuam montadas depois da primeira
+  // visita, apenas escondidas: sair da aba não pode derrubar um PTY nem um
+  // stream de log. As demais seguem desmontando — Processos e Monitor têm
+  // laço de atualização, e laço rodando para tela que ninguém olha é
+  // sondagem em servidor de produção sem motivo.
+  const [visitadas, setVisitadas] = useState(() => new Set());
   const [tema, setTema] = useState(temaAtual);
   const [idioma, setIdioma] = useState(idiomaAtual);
 
@@ -99,6 +109,25 @@ export default function AppShell() {
       vivo = false;
     };
   }, []);
+
+  // Registra a visita para as telas persistentes nascerem só quando forem
+  // usadas de fato — e, ao voltar para elas, avisa o layout para refazer
+  // as medidas: o xterm mede zero enquanto está escondido, e voltaria
+  // minúsculo sem este empurrão.
+  useEffect(() => {
+    if (!abaValida) return;
+    if (PERSISTENTES.includes(abaValida)) {
+      setVisitadas((atual) => {
+        if (atual.has(abaValida)) return atual;
+        const nova = new Set(atual);
+        nova.add(abaValida);
+        return nova;
+      });
+      const t = setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [abaValida]);
 
   // Selo do bundle que ESTE navegador carregou, carimbado no build pelo
   // deploy.sh. Serve a um caso só: index.html em cache apontando para o
@@ -131,6 +160,8 @@ export default function AppShell() {
 
   const primeira = itens.find((i) => i.id);
   const abaValida = itens.some((i) => i.id === aba) ? aba : primeira && primeira.id;
+
+
 
   return (
     <div className="shell">
@@ -246,9 +277,19 @@ export default function AppShell() {
           {abaValida === "recursos" && <RecursosView />}
           {abaValida === "processos" && <ProcessosView />}
           {abaValida === "servicos" && <ServicosView />}
-          {abaValida === "logs" && <LogsView />}
+          {/* Montadas uma vez e escondidas depois: a sessão continua viva
+              enquanto se navega por outras telas. */}
+          {visitadas.has("logs") && (
+            <div style={{ display: abaValida === "logs" ? "block" : "none" }}>
+              <LogsView />
+            </div>
+          )}
           {abaValida === "manutencao" && <ManutencaoView />}
-          {abaValida === "terminal" && <TerminalView />}
+          {visitadas.has("terminal") && (
+            <div style={{ display: abaValida === "terminal" ? "block" : "none" }}>
+              <TerminalView />
+            </div>
+          )}
           {abaValida === "backups" && <BackupsView />}
           {abaValida === "agendamentos" && <AgendamentosView />}
           {abaValida === "destinos" && <DestinosView />}

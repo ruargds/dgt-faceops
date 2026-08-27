@@ -56,6 +56,7 @@ CATEGORIAS_PONTUAIS = {
     "sessoes": "Linhas de sessão de terminal já encerradas",
     "logs_execucao": "Texto do log das execuções de backup",
     "amostras": "Amostras do monitor",
+    "licenca": "Histórico de consumo de licença",
 }
 
 # Piso de idade da limpeza pontual. Existe porque o estrago de um clique
@@ -90,6 +91,7 @@ class FaxinaService:
             "sessoes_removidas": 0,
             "logs_esvaziados": 0,
             "amostras_removidas": 0,
+            "licenca_removidas": 0,
             "erros": [],
         }
 
@@ -98,6 +100,7 @@ class FaxinaService:
             ("staging", self._staging),
             ("banco", self._banco),
             ("amostras", self._amostras),
+            ("licenca", self._licenca),
         ):
             try:
                 await tarefa(resultado)
@@ -223,6 +226,30 @@ class FaxinaService:
 
         async with AsyncSessionLocal() as db:
             r["amostras_removidas"] = await MonitorService.limpar(db, dias)
+            await db.commit()
+
+    async def _licenca(self, r: dict) -> None:
+        """
+        Histórico de consumo de licença, com retenção própria.
+
+        Nasceu sem retenção — e "pouco para sempre" continua sendo para
+        sempre. Um ano sustenta a projeção de "quando acaba" com folga;
+        além disso é linha guardada sem pergunta que a responda.
+        """
+        dias = int(self._cfg("faxina.licenca_dias", 365))
+        if dias <= 0:
+            return
+
+        from datetime import datetime, timedelta, timezone
+
+        from app.models.licenca_amostra import LicencaAmostra
+
+        corte = datetime.now(timezone.utc) - timedelta(days=dias)
+        async with AsyncSessionLocal() as db:
+            res = await db.execute(
+                delete(LicencaAmostra).where(LicencaAmostra.ts < corte)
+            )
+            r["licenca_removidas"] = res.rowcount or 0
             await db.commit()
 
     # ── Limpeza pontual, por categoria e período ───────────────────────

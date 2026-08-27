@@ -80,6 +80,29 @@ class BackupService:
         # Uma execução por host de cada vez: dois backups concorrentes no
         # mesmo servidor competem por disco e podem corromper o staging.
         self._locks: dict[int, asyncio.Lock] = {}
+        # Execuções vivas, para poder parar uma. Só existe enquanto a
+        # tarefa roda; o dicionário some junto com o processo, e por isso a
+        # subida do painel também marca órfã como falha.
+        self._tarefas: dict[int, asyncio.Task] = {}
+
+    def registrar_tarefa(self, run_id: int, tarefa) -> None:
+        self._tarefas[run_id] = tarefa
+        tarefa.add_done_callback(lambda _: self._tarefas.pop(run_id, None))
+
+    def cancelar(self, run_id: int) -> bool:
+        """
+        Cancela a execução. Devolve False quando ela não está mais viva.
+
+        Cancelar fecha o canal SSH, o que derruba o script no servidor no
+        próximo write. O que ficou no staging remoto é limpo pelo próprio
+        script na execução seguinte — e o `_staging` da faxina cobre o
+        resto, sem deixar dezenas de GB parados lá.
+        """
+        tarefa = self._tarefas.get(run_id)
+        if tarefa is None or tarefa.done():
+            return False
+        tarefa.cancel()
+        return True
 
     def _cfg(self, chave: str, padrao):
         if self.config is None:
@@ -354,7 +377,27 @@ class BackupService:
 
         # ── Retenção ───────────────────────────────────────────────────
         dias = retencao_dias if retencao_dias is not None else self._retencao_padrao(perfil)
-        removidos = await self.storage.aplicar_retencao(host.name, dias)
+
+        # A retenção age em cada destino LOCAL — a assinatura pede o destino,
+        # e passar só (host, dias) fazia a execução inteira falhar depois de
+        # 1,6 GB já copiados e conferidos.
+        #
+        # E, mesmo com a chamada certa, ela roda protegida: faxina é
+        # housekeeping, e housekeeping não invalida trabalho feito. Falha
+        # aqui vira ressalva no log, não perda do backup.
+        removidos: list[str] = []
+        for destino in objetos:
+            if getattr(destino, "tipo", "") != "local":
+                continue
+            try:
+                removidos += await self.storage.aplicar_retencao(
+                    destino, host.name, dias
+                )
+            except Exception as exc:
+                run.log += (
+                    f"\n[retencao] falhou em '{destino.nome}': "
+                    f"{type(exc).__name__}: {exc}"
+                )
         if removidos:
             run.log += f"\n[retencao] removidos {len(removidos)} artefatos com mais de {dias} dias"
 

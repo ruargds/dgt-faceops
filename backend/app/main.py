@@ -307,6 +307,36 @@ async def iniciar() -> None:
         stack=app.state.stack,
     )
 
+    # Execução que ficou em "executando" quando o painel reiniciou está
+    # morta: a tarefa vivia no processo que saiu. Deixá-la presa faria o
+    # /api/saude reportar ocupado para sempre — e o atualizar.sh adiaria
+    # atualização por causa de um backup que não existe mais.
+    try:
+        from sqlalchemy import update as _update
+
+        async with AsyncSessionLocal() as db_limpeza:
+            resultado = await db_limpeza.execute(
+                _update(BackupRun)
+                .where(BackupRun.status.in_(("executando", "pendente")))
+                .values(
+                    status="falha",
+                    stage="Interrompido",
+                    progress=100,
+                    error=(
+                        "o painel reiniciou durante esta execução; a tarefa "
+                        "morreu com o processo anterior"
+                    ),
+                )
+            )
+            await db_limpeza.commit()
+            if resultado.rowcount:
+                log.warning(
+                    "%d execucao(oes) de backup orfas marcadas como falha",
+                    resultado.rowcount,
+                )
+    except Exception:
+        log.exception("nao consegui limpar execucoes orfas na subida")
+
     await app.state.scheduler.start()
     await app.state.monitor.iniciar()
     app.state.tarefa_varredura = asyncio.create_task(_varredor_de_ociosas(app))
