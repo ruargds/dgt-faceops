@@ -576,6 +576,286 @@ async def remover(
     }
 
 
+class BackupTodosIn(BaseModel):
+    """
+    Backup de todos os servidores de uma vez.
+
+    `perfil` aceita os perfis normais ou **"auto"**, que escolhe por
+    servidor o mais completo que aquela máquina suporta. Auto é o padrão
+    porque o ambiente é heterogêneo: exigir um perfil único obrigaria a
+    escolher o menor denominador comum, e o menor denominador comum de um
+    ambiente distribuído é quase sempre `config`.
+    """
+
+    perfil: str = "auto"
+    destinos: list[int] = []
+
+
+@router.post("/backups-todos", status_code=202)
+async def disparar_todos(
+    dados: BackupTodosIn,
+    request: Request,
+    autor: User = Depends(require_permission("backups.run")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dispara backup em todos os servidores habilitados, um por servidor.
+
+    Cada execução é independente e o artefato de cada uma vai para a pasta
+    do seu servidor no destino — "todos" não mistura nada, só evita a ida
+    manual em quatro telas.
+
+    O perfil `completo` **não** entra no modo automático em hipótese
+    alguma: ele para o FindFace, e parar quatro servidores porque alguém
+    clicou em "todos" seria o painel decidindo uma janela de manutenção
+    sozinho. Quem quer completo dispara servidor a servidor, com o aceite.
+
+    Servidor onde o perfil não se aplica é **pulado com motivo**, não
+    disparado para falhar em 0s.
+    """
+    if dados.perfil not in ("auto",) and dados.perfil not in PROFILES:
+        raise HTTPException(
+            status_code=400, detail=f"perfil deve ser 'auto' ou um de {PROFILES}"
+        )
+    if dados.perfil == "completo":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "o perfil completo PARA o FindFace e não roda em lote. "
+                "Dispare servidor a servidor, com o aceite da janela."
+            ),
+        )
+
+    hosts = list(
+        (await db.execute(select(Host).where(Host.enabled.is_(True)))).scalars().all()
+    )
+    if not hosts:
+        raise HTTPException(status_code=400, detail="nenhum servidor habilitado")
+
+    servico = request.app.state.backups
+    disparados: list[dict] = []
+    pulados: list[dict] = []
+
+    for host in hosts:
+        # O que esta máquina suporta, descoberto na hora.
+        try:
+            inventario = await request.app.state.descoberta.inventariar(host)
+            texto = json.dumps(inventario, ensure_ascii=False).lower()
+            tem_findface = bool(
+                inventario.get("ffmulti_dir") or "findface" in texto or "ffmulti" in texto
+            )
+            tem_banco = any(
+                c in texto for c in ("postgres", "timescale", "tarantool", "mongo")
+            )
+        except Exception as exc:
+            pulados.append({
+                "host": host.name,
+                "motivo": f"não consegui inventariar: {exc}"[:200],
+            })
+            continue
+
+        if not tem_findface:
+            pulados.append({
+                "host": host.name,
+                "motivo": "não hospeda o FindFace — nada a copiar aqui",
+            })
+            continue
+
+        if dados.perfil == "auto":
+            perfil = "essencial" if tem_banco else "config"
+        else:
+            perfil = dados.perfil
+            if perfil == "essencial" and not tem_banco:
+                pulados.append({
+                    "host": host.name,
+                    "motivo": "sem banco do FindFace: o perfil essencial não teria "
+                    "o que despejar",
+                })
+                continue
+
+        run = BackupRun(
+            host_id=host.id,
+            profile=perfil,
+            status="pendente",
+            stage="Na fila",
+            triggered_by=f"lote:{autor.username}",
+        )
+        db.add(run)
+        await db.commit()
+        await db.refresh(run)
+
+        asyncio.create_task(
+            _executar_em_fundo(
+                servico, host, perfil, list(dados.destinos), autor.username, run.id
+            )
+        )
+        disparados.append({"host": host.name, "perfil": perfil, "run_id": run.id})
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="backups.run",
+        target="todos os servidores",
+        ip=client_ip(request),
+        detail={
+            "acao": "backup em lote",
+            "perfil": dados.perfil,
+            "disparados": disparados,
+            "pulados": pulados,
+        },
+    )
+
+    return {"disparados": disparados, "pulados": pulados}
+
+
+async def _executar_em_fundo(
+    servico, host, perfil: str, destinos: list[int], usuario: str, run_id: int
+) -> None:
+    """
+    Cada execução do lote roda em tarefa própria, com sessão de banco
+    própria — a sessão da requisição fecha quando a resposta sai.
+    """
+    from app.db.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        run = await db.get(BackupRun, run_id)
+        try:
+            await servico.executar(
+                db,
+                host,
+                perfil,
+                destinos,
+                disparado_por=f"lote:{usuario}",
+                run=run,
+            )
+        except Exception:
+            # `executar` já grava a falha no registro; aqui é só rede de
+            # segurança para a tarefa não morrer em silêncio no log.
+            log_erro = f"lote: execução falhou em {host.name}"
+            import logging
+
+            logging.getLogger("faceops.backup").exception(log_erro)
+
+
+@router.get("/backups/recuperacao")
+async def plano_de_recuperacao(
+    _: User = Depends(require_permission("backups.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    O que dá para recuperar, por servidor.
+
+    A pergunta que só aparece no pior dia: *"se eu precisar voltar agora,
+    tenho o quê, de quando, e o que falta?"*. Responder isso lendo o
+    histórico linha a linha, no meio de um incidente, é o pior momento
+    possível.
+
+    Por servidor: o artefato mais recente por perfil, a idade dele, o que
+    aquele perfil recupera e o que ele deixa de fora. Sem executar nada —
+    o restore continua sendo procedimento manual, e o manifesto de cada
+    artefato traz o roteiro do fabricante.
+    """
+    from datetime import datetime, timezone
+
+    RECUPERA = {
+        "config": {
+            "recupera": "configuração da instalação (configs/ e o compose)",
+            "nao_recupera": "banco, vetores faciais e fotos de evento",
+        },
+        "essencial": {
+            "recupera": "configuração, bancos (PostgreSQL/Timescale), vetores do "
+            "Tarantool, MongoDB e etcd",
+            "nao_recupera": "as fotos de evento (findface-upload)",
+        },
+        "completo": {
+            "recupera": "tudo: configuração, bancos e o diretório de dados inteiro",
+            "nao_recupera": "nada, dentro do que o perfil copia",
+        },
+        "painel": {
+            "recupera": "o próprio painel: cadastro, credenciais cifradas, "
+            "agendamentos, histórico e auditoria",
+            "nao_recupera": "a SECRET_KEY, que fica fora do artefato de propósito",
+        },
+    }
+
+    hosts = list((await db.execute(select(Host))).scalars().all())
+    nomes = {h.id: h.name for h in hosts}
+    agora = datetime.now(timezone.utc)
+
+    execucoes = list(
+        (
+            await db.execute(
+                select(BackupRun)
+                .where(BackupRun.status == "sucesso", BackupRun.expired.is_(False))
+                .order_by(BackupRun.started_at.desc())
+                .limit(400)
+            )
+        ).scalars().all()
+    )
+
+    def idade(run) -> dict:
+        quando = run.finished_at or run.started_at
+        if quando is None:
+            return {"dias": None, "texto": "—"}
+        dias = (agora - quando).days
+        return {
+            "dias": dias,
+            "texto": "hoje" if dias == 0 else f"há {dias} dia(s)",
+            "em": quando.isoformat(),
+        }
+
+    por_host: dict = {}
+    for run in execucoes:
+        chave = run.host_id or 0  # 0 = painel
+        alvo = por_host.setdefault(
+            chave,
+            {
+                "host_id": run.host_id,
+                "servidor": nomes.get(run.host_id, "o próprio painel"),
+                "perfis": {},
+            },
+        )
+        # O primeiro de cada perfil é o mais recente: a consulta já veio
+        # ordenada do mais novo para o mais velho.
+        if run.profile in alvo["perfis"]:
+            continue
+        alvo["perfis"][run.profile] = {
+            "run_id": run.id,
+            "artefato": run.artifact_name,
+            "tamanho": run.size_bytes,
+            "checksum": run.checksum_sha256,
+            "destinos": run.destinations or [],
+            "idade": idade(run),
+            **RECUPERA.get(run.profile, {}),
+        }
+
+    # Servidor habilitado sem nenhum backup é o achado que importa aqui.
+    for host in hosts:
+        if host.enabled and host.id not in por_host:
+            por_host[host.id] = {
+                "host_id": host.id,
+                "servidor": host.name,
+                "perfis": {},
+                "aviso": "nenhum backup com sucesso disponível para este servidor",
+            }
+
+    lista = sorted(
+        por_host.values(), key=lambda x: (x["host_id"] is None, x["servidor"])
+    )
+
+    return {
+        "em": agora.isoformat(),
+        "servidores": lista,
+        "sem_backup": [x["servidor"] for x in lista if not x["perfis"]],
+        "observacao": (
+            "O restore é manual e por servidor: cada artefato volta na máquina "
+            "de onde saiu. O manifesto dentro de cada um traz o roteiro do "
+            "fabricante, e a base do Tarantool não é compatível entre versões "
+            "maiores do FindFace."
+        ),
+    }
+
+
 @router.get("/backups/perfis/{host_id}")
 async def perfis_do_host(
     host_id: int,

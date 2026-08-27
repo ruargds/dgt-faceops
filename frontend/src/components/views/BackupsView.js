@@ -52,6 +52,9 @@ export default function BackupsView() {
   // fabricante, lido de dentro do .tar.gz sem baixar nada.
   const [vendoManifesto, setVendoManifesto] = useState(null);
   const [importando, setImportando] = useState(false);
+  const [lote, setLote] = useState(null);
+  const [disparandoLote, setDisparandoLote] = useState(false);
+  const [verRecuperacao, setVerRecuperacao] = useState(false);
   const [detalhe, setDetalhe] = useState(null);
   const [espaco, setEspaco] = useState(null);
   const [painelRodando, setPainelRodando] = useState(false);
@@ -125,6 +128,13 @@ export default function BackupsView() {
             onMudar={setFiltroHost}
             incluirTodos
           />
+          <button
+            className="btn btn-secondary"
+            onClick={() => setVerRecuperacao(true)}
+            title="O que dá para recuperar, por servidor"
+          >
+            Recuperação
+          </button>
           <button className="btn btn-secondary" onClick={carregar}>
             <IconAtualizar size={15} /> {t("Atualizar")}</button>
           {has("backups.run") && (
@@ -168,6 +178,33 @@ export default function BackupsView() {
               >
                 {painelRodando ? "Salvando…" : "Backup do painel"}
               </button>
+              <button
+                className="btn btn-secondary"
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      "Disparar backup em TODOS os servidores habilitados?\n\n" +
+                        "Cada um recebe o perfil mais completo que suporta " +
+                        "(config ou essencial). O perfil completo, que para o " +
+                        "FindFace, nunca entra no lote."
+                    )
+                  )
+                    return;
+                  setDisparandoLote(true);
+                  try {
+                    setLote(await api.backupTodos({ perfil: "auto", destinos: [] }));
+                    await carregar();
+                  } catch (ex) {
+                    window.alert(ex.message);
+                  } finally {
+                    setDisparandoLote(false);
+                  }
+                }}
+                disabled={disparandoLote}
+                title="Um backup por servidor, com o perfil que cada um suporta"
+              >
+                {disparandoLote ? "Disparando…" : "Todos os servidores"}
+              </button>
               <button className="btn btn-primary" onClick={() => setNovo(true)}>
                 <IconBackup size={15} /> {t("Novo backup")}</button>
             </>
@@ -190,6 +227,37 @@ export default function BackupsView() {
           </span>
         </div>
       )}
+
+      {lote && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="stack-h" style={{ justifyContent: "space-between" }}>
+            <div className="section-title" style={{ marginBottom: 0 }}>
+              Backup em lote
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setLote(null)}>
+              {t("Fechar")}
+            </button>
+          </div>
+          {lote.disparados.length > 0 && (
+            <div className="small" style={{ marginTop: 8 }}>
+              <strong>Disparados:</strong>{" "}
+              {lote.disparados.map((d) => `${d.host} (${d.perfil})`).join(" · ")}
+            </div>
+          )}
+          {lote.pulados.length > 0 && (
+            <div className="small" style={{ marginTop: 6, color: "var(--amber-fg)" }}>
+              <strong>Pulados:</strong>{" "}
+              {lote.pulados.map((p) => `${p.host} — ${p.motivo}`).join(" · ")}
+            </div>
+          )}
+          <div className="small muted" style={{ marginTop: 6 }}>
+            Cada artefato vai para a pasta do seu servidor no destino: o lote não
+            mistura nada, só evita a ida manual em cada tela.
+          </div>
+        </div>
+      )}
+
+      {verRecuperacao && <ModalRecuperacao onFechar={() => setVerRecuperacao(false)} />}
 
       {carregando ? (
         <Carregando />
@@ -247,6 +315,131 @@ export default function BackupsView() {
 
       {detalhe && <ModalDetalhe runId={detalhe} onFechar={() => setDetalhe(null)} />}
     </>
+  );
+}
+
+/**
+ * Plano de recuperação.
+ *
+ * A pergunta que só aparece no pior dia: *"se eu precisar voltar agora,
+ * tenho o quê, de quando, e o que falta?"*. Responder isso lendo o
+ * histórico linha a linha, no meio de um incidente, é o pior momento
+ * possível para descobrir que um servidor não tinha backup nenhum.
+ *
+ * Por servidor, porque o ambiente é distribuído: cada máquina guarda um
+ * pedaço diferente, e cada artefato volta na máquina de onde saiu.
+ *
+ * Não executa restore. O procedimento continua manual, com o roteiro do
+ * fabricante dentro do manifesto de cada artefato.
+ */
+function ModalRecuperacao({ onFechar }) {
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    api
+      .recuperacao()
+      .then((r) => vivo && setDados(r))
+      .catch((ex) => vivo && setErro(ex.message));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  return (
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="modal-title">O que dá para recuperar</div>
+          <button className="btn btn-ghost btn-sm" onClick={onFechar}>
+            {t("Fechar")}
+          </button>
+        </div>
+        <div className="modal-body">
+          <Erro mensagem={erro} />
+          {!dados && !erro && <Carregando />}
+
+          {dados && dados.sem_backup.length > 0 && (
+            <div
+              className="card card-tight"
+              style={{
+                background: "var(--red-bg)",
+                borderColor: "var(--red-bd)",
+                marginBottom: 12,
+              }}
+            >
+              <span className="small" style={{ color: "var(--red-fg)" }}>
+                Sem backup disponível: <strong>{dados.sem_backup.join(", ")}</strong>.
+                Se um deles cair agora, não há de onde voltar.
+              </span>
+            </div>
+          )}
+
+          {dados &&
+            dados.servidores.map((s) => (
+              <div
+                className="card card-tight"
+                key={s.servidor}
+                style={{ marginBottom: 10 }}
+              >
+                <div style={{ fontWeight: 600, color: "var(--titulo)" }}>
+                  {s.servidor}
+                </div>
+                {Object.keys(s.perfis).length === 0 ? (
+                  <div
+                    className="small"
+                    style={{ color: "var(--amber-fg)", marginTop: 4 }}
+                  >
+                    {s.aviso || "nenhum backup disponível"}
+                  </div>
+                ) : (
+                  <div className="table-wrap" style={{ marginTop: 8 }}>
+                    <table className="tabela-densa">
+                      <thead>
+                        <tr>
+                          <th>Perfil</th>
+                          <th>De quando</th>
+                          <th>Recupera</th>
+                          <th>Não recupera</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(s.perfis).map(([perfil, info]) => (
+                          <tr key={perfil}>
+                            <td>
+                              <span className="pill pill-idle">{perfil}</span>
+                              <div className="small muted mono">{info.artefato}</div>
+                            </td>
+                            <td
+                              className="small"
+                              style={
+                                info.idade.dias !== null && info.idade.dias > 7
+                                  ? { color: "var(--amber-fg)" }
+                                  : undefined
+                              }
+                            >
+                              {info.idade.texto}
+                            </td>
+                            <td className="small">{info.recupera}</td>
+                            <td className="small muted">{info.nao_recupera}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+
+          {dados && (
+            <div className="small muted" style={{ marginTop: 10 }}>
+              {dados.observacao}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

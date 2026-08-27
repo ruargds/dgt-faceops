@@ -237,6 +237,12 @@ export const api = {
   // Que perfis fazem sentido naquele servidor. Oferecer os tres em
   // qualquer maquina produz falha garantida onde nao ha FindFace.
   perfisDoHost: (id) => get(`/backups/perfis/${id}`),
+  // Todos os servidores de uma vez. Cada um com o perfil que aguenta, e
+  // cada artefato na pasta do seu servidor no destino.
+  backupTodos: (d) => post("/backups-todos", d),
+  // O que da para recuperar, por servidor: o mais recente de cada perfil,
+  // a idade e o que aquele perfil recupera.
+  recuperacao: () => get("/backups/recuperacao"),
 
   // Destinos de backup
   destinos: () => get("/destinos"),

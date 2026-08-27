@@ -1,5 +1,19 @@
 # Restauração
 
+> **Antes de começar, veja o que existe.** Em Backups → **Recuperação**, o
+> painel lista, por servidor, o artefato mais recente de cada perfil, de
+> quando ele é, **o que aquele perfil recupera e o que ele deixa de fora**.
+> Servidor sem backup nenhum aparece em vermelho no topo — é a informação
+> que ninguém quer descobrir lendo o histórico linha a linha no meio de um
+> incidente.
+>
+> Cada artefato volta **na máquina de onde saiu**: o ambiente é
+> distribuído e cada servidor guarda um pedaço diferente. O manifesto
+> dentro do artefato traz o roteiro do fabricante e a versão das imagens —
+> e a base do Tarantool não é compatível entre versões maiores do
+> FindFace.
+
+
 > **Se você está no meio de um incidente**, vá direto para a seção do perfil
 > que você tem. O resto do documento espera.
 
