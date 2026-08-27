@@ -110,24 +110,6 @@ export default function AppShell() {
     };
   }, []);
 
-  // Registra a visita para as telas persistentes nascerem só quando forem
-  // usadas de fato — e, ao voltar para elas, avisa o layout para refazer
-  // as medidas: o xterm mede zero enquanto está escondido, e voltaria
-  // minúsculo sem este empurrão.
-  useEffect(() => {
-    if (!abaValida) return;
-    if (PERSISTENTES.includes(abaValida)) {
-      setVisitadas((atual) => {
-        if (atual.has(abaValida)) return atual;
-        const nova = new Set(atual);
-        nova.add(abaValida);
-        return nova;
-      });
-      const t = setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
-      return () => clearTimeout(t);
-    }
-    return undefined;
-  }, [abaValida]);
 
   // Selo do bundle que ESTE navegador carregou, carimbado no build pelo
   // deploy.sh. Serve a um caso só: index.html em cache apontando para o
@@ -160,6 +142,25 @@ export default function AppShell() {
 
   const primeira = itens.find((i) => i.id);
   const abaValida = itens.some((i) => i.id === aba) ? aba : primeira && primeira.id;
+
+  // Registra a visita para as telas persistentes nascerem só quando forem
+  // usadas de fato — e, ao voltar para elas, avisa o layout para refazer
+  // as medidas: o xterm mede zero enquanto está escondido, e voltaria
+  // minúsculo sem este empurrão.
+  useEffect(() => {
+    if (!abaValida) return;
+    if (PERSISTENTES.includes(abaValida)) {
+      setVisitadas((atual) => {
+        if (atual.has(abaValida)) return atual;
+        const nova = new Set(atual);
+        nova.add(abaValida);
+        return nova;
+      });
+      const t = setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [abaValida]);
 
 
 
