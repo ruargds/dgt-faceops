@@ -1136,21 +1136,42 @@ class FFApiService:
             proxima = dados.get("next") if isinstance(dados, dict) else None
             paginas += 1
 
-        # ── Contagem de eventos, por câmera e tipo ─────────────────────
+        # ── Contagem de eventos ────────────────────────────────────────
+        # Contar por câmera custa UMA requisição por câmera e por tipo. Com
+        # 453 dispositivos isso é mais de mil chamadas na API de produção
+        # para desenhar uma tabela — o peso que o painel existe para não
+        # criar. Então:
+        #
+        # * até LIMITE_POR_CAMERA dispositivos, conta por câmera e a coluna
+        #   de participação faz sentido;
+        # * acima disso, conta o TOTAL por tipo (três chamadas) e a tabela
+        #   diz que a contagem por câmera não foi feita, em vez de mostrar
+        #   zero como se a câmera estivesse muda.
+        LIMITE_POR_CAMERA = 25
+        por_camera = len(cameras) <= LIMITE_POR_CAMERA
+
         total_eventos = 0
         for tipo in TIPOS_EVENTO:
             try:
-                for cid, cam in cameras.items():
+                if por_camera:
+                    for cid, cam in cameras.items():
+                        dados = await self._get(
+                            f"{base}/events/{tipo}/count/",
+                            auth,
+                            {"camera": cid, "created_date_gte": desde},
+                        )
+                        n = int(dados.get("count", dados.get("total", 0)) or 0)
+                        if n:
+                            cam["eventos"] += n
+                            cam["por_tipo"][tipo] = n
+                            total_eventos += n
+                else:
                     dados = await self._get(
                         f"{base}/events/{tipo}/count/",
-                        token,
-                        {"camera": cid, "created_date_gte": desde},
+                        auth,
+                        {"created_date_gte": desde},
                     )
-                    n = int(dados.get("count", dados.get("total", 0)) or 0)
-                    if n:
-                        cam["eventos"] += n
-                        cam["por_tipo"][tipo] = n
-                        total_eventos += n
+                    total_eventos += int(dados.get("count", dados.get("total", 0)) or 0)
             except FFApiError:
                 # Um tipo pode não existir nesta instalação; segue nos outros
                 continue
@@ -1170,6 +1191,7 @@ class FFApiService:
             "cameras_com_evento": sum(1 for c in lista if c["eventos"]),
             "cameras_mudas": sum(1 for c in lista if not c["eventos"]),
             "total_eventos": total_eventos,
+            "contagem_por_camera": por_camera,
             "cameras": lista,
             "tabelas": [],
             "esquema": {"banco": "API HTTP", "tabela_cameras": "cameras",

@@ -288,7 +288,19 @@ function LinhaBackup({ r, onDetalhe, onRemover }) {
           <button className="btn btn-secondary btn-sm" onClick={onDetalhe} title={t("Ver log")}>
             <IconLogs size={14} />
           </button>
-          {has("backups.download") && r.status === "sucesso" && !r.expired && (
+          {/* Manifesto: existe sempre que o artefato existe, e é o que se
+              lê ANTES de decidir restaurar. */}
+          {r.artifact_name && !r.expired && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => onManifesto && onManifesto(r)}
+              title="Ver o conteúdo e o roteiro de restauração"
+            >
+              <IconChave size={14} />
+            </button>
+          )}
+          {has("backups.download") && r.artifact_name && !r.expired && (
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -298,7 +310,9 @@ function LinhaBackup({ r, onDetalhe, onRemover }) {
               <IconDownload size={14} />
             </button>
           )}
-          {has("backups.delete") && !r.expired && r.artifact_name && (
+          {/* Sem artefato (falha) o botão continua valendo: a linha de erro
+              precisa sair do histórico, e não há arquivo a proteger. */}
+          {has("backups.delete") && !r.expired && (
             <button
               className="btn btn-danger btn-sm"
               onClick={remover}

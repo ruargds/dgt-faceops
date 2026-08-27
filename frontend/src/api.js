@@ -213,6 +213,16 @@ export const api = {
   backup: (runId) => get(`/backups/${runId}`),
   removerBackup: (runId) => del(`/backups/${runId}`),
   urlDownload: (runId) => `/api/backups/${runId}/download`,
+  // O manifesto vive DENTRO do .tar.gz: traz o conteudo, a versao das
+  // imagens e o roteiro de restauracao do fabricante. Ler sem baixar e
+  // extrair e o que permite decidir antes de restaurar.
+  manifesto: (runId) => get(`/backups/${runId}/manifesto`),
+  importarBackup: async (arquivo, hostId) => {
+    const forma = new FormData();
+    forma.append("arquivo", arquivo);
+    if (hostId) forma.append("host_id", String(hostId));
+    return request("/backups-importar", { method: "POST", body: forma });
+  },
   armazenamentoPainel: () => get("/backups-armazenamento"),
 
   // Destinos de backup

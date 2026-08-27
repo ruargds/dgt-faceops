@@ -429,6 +429,12 @@ export default function DispositivosView() {
               placeholder={t("filtrar câmera pelo nome…")}
               style={{ maxWidth: 280 }}
             />
+            {dados.contagem_por_camera === false && (
+              <span className="small muted" title="Contar evento por camera custa uma requisicao por camera e por tipo; com centenas de dispositivos isso seria mais de mil chamadas na API de producao">
+                Com {dados.total_cameras} dispositivos, a contagem foi feita no
+                total — não por dispositivo.
+              </span>
+            )}
             {dados.estimativa && (
               <span className="small muted">
                 Volume por câmera é estimativa (rateio pela participação nos eventos).

@@ -136,37 +136,113 @@ class StackService:
         """
         Descobre onde o FindFace REALMENTE está, perguntando ao Docker.
 
-        Assumir `/opt/findface-multi` é errado: em instalação distribuída
-        o caminho muda, e num servidor real encontrado em campo o
-        diretório sequer existia — o backup procuraria `configs/` no
-        lugar errado e falharia com mensagem confusa.
+        Assumir `/opt/findface-multi` é errado: em instalação distribuída o
+        caminho muda, e num servidor encontrado em campo o diretório sequer
+        existia — o backup procuraria `configs/` no lugar errado e falharia
+        com mensagem que não ajuda ninguém.
 
         Os rótulos que o compose grava em cada container têm a verdade:
-        `project.working_dir` e `project.config_files`.
+        `project.working_dir` e `project.config_files`. O que muda aqui, em
+        relação à primeira versão, é ONDE procurar: ela inspecionava o
+        primeiro container da máquina, qualquer que fosse ele. Num servidor
+        com mais de um projeto no Docker isso devolve um container sem o
+        rótulo, e a detecção desistia — dizendo que não achou numa máquina
+        onde o FindFace estava rodando.
+
+        Ordem: containers do FindFace primeiro; depois qualquer container
+        com o rótulo; depois o `compose ls` do v2; por último os caminhos
+        conhecidos, confirmados com `test -f`.
         """
         sudo = await self.ssh.docker_needs_sudo(host)
-        r = await self.ssh.run(
-            host,
-            "docker inspect $(docker ps -q | head -1) --format "
-            "'{{index .Config.Labels \"com.docker.compose.project\"}}|"
-            "{{index .Config.Labels \"com.docker.compose.project.config_files\"}}|"
-            "{{index .Config.Labels \"com.docker.compose.project.working_dir\"}}|"
-            "{{.HostConfig.LogConfig.Type}}' 2>/dev/null",
-            sudo=sudo,
-            timeout=40,
-        )
-        partes = (r.stdout or "").strip().split("|")
-        if not r.ok or len(partes) < 3 or not partes[2] or partes[2] == "<no value>":
-            return {}
 
-        # config_files pode trazer vários caminhos separados por vírgula
-        compose = partes[1].split(",")[0].strip()
-        return {
-            "projeto": partes[0].strip(),
-            "compose_file": compose,
-            "working_dir": partes[2].strip(),
-            "log_driver": partes[3].strip() if len(partes) > 3 else "",
-        }
+        script = r"""
+set +e
+formato='{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{.HostConfig.LogConfig.Type}}'
+
+# 1. Containers com cara de FindFace, um a um, ate achar rotulo util.
+for c in $(docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | head -8); do
+  linha="$(docker inspect "$c" --format "$formato" 2>/dev/null)"
+  case "$linha" in
+    *"|"*"|/"*) echo "ACHADO|$linha"; exit 0 ;;
+  esac
+done
+
+# 2. Qualquer container que tenha o rotulo de working_dir.
+for c in $(docker ps --format '{{.Names}}' 2>/dev/null | head -20); do
+  linha="$(docker inspect "$c" --format "$formato" 2>/dev/null)"
+  case "$linha" in
+    *"|"*"|/"*) echo "TALVEZ|$linha" ;;
+  esac
+done | grep -i -E 'findface|ffmulti' | head -1
+
+# 3. Compose v2 lista projeto e arquivo de configuracao.
+docker compose ls --format json 2>/dev/null | head -c 4000
+
+# 4. Caminhos conhecidos, confirmados.
+for d in /opt/findface-multi /opt/ffmulti /opt/findface /srv/findface-multi; do
+  for f in docker-compose.yaml docker-compose.yml; do
+    [ -f "$d/$f" ] && echo "CAMINHO||$d/$f|$d|"
+  done
+done
+"""
+
+        r = await self.ssh.run(host, script, sudo=sudo, timeout=60)
+        saida = r.stdout or ""
+
+        # Rótulo do compose, que é a resposta autoritativa.
+        for linha in saida.splitlines():
+            if linha.startswith(("ACHADO|", "TALVEZ|")):
+                partes = linha.split("|", 4)[1:]
+                if len(partes) >= 3 and partes[2].startswith("/"):
+                    return {
+                        "projeto": partes[0].strip(),
+                        "compose_file": partes[1].split(",")[0].strip(),
+                        "working_dir": partes[2].strip(),
+                        "log_driver": partes[3].strip() if len(partes) > 3 else "",
+                        "origem": "rótulo do compose",
+                    }
+
+        # `compose ls` do v2: JSON com Name e ConfigFiles.
+        if '"ConfigFiles"' in saida or '"Name"' in saida:
+            import json as _json
+            import re as _re
+
+            bruto = saida[saida.find("[") : saida.rfind("]") + 1]
+            try:
+                projetos = _json.loads(bruto) if bruto else []
+            except _json.JSONDecodeError:
+                projetos = []
+            for p in projetos if isinstance(projetos, list) else []:
+                nome = str(p.get("Name", ""))
+                arquivos = str(p.get("ConfigFiles", ""))
+                if not _re.search(r"findface|ffmulti", nome + arquivos, _re.I):
+                    continue
+                primeiro = arquivos.split(",")[0].strip()
+                if primeiro.startswith("/"):
+                    from pathlib import PurePosixPath
+
+                    return {
+                        "projeto": nome,
+                        "compose_file": primeiro,
+                        "working_dir": str(PurePosixPath(primeiro).parent),
+                        "log_driver": "",
+                        "origem": "docker compose ls",
+                    }
+
+        # Caminho conhecido, já confirmado no servidor pelo `test -f`.
+        for linha in saida.splitlines():
+            if linha.startswith("CAMINHO|"):
+                partes = linha.split("|")
+                if len(partes) >= 4 and partes[3].startswith("/"):
+                    return {
+                        "projeto": "",
+                        "compose_file": partes[2].strip(),
+                        "working_dir": partes[3].strip(),
+                        "log_driver": "",
+                        "origem": "caminho conhecido",
+                    }
+
+        return {}
 
     async def _projeto(self, host) -> str:
         """

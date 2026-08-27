@@ -2,14 +2,16 @@
 import asyncio
 import secrets
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import client_ip, require_permission
 from app.db.database import get_db
 from app.models.backup import BackupRun, Schedule
@@ -338,6 +340,178 @@ async def baixar(
         filename=filename,
         media_type="application/gzip",
     )
+
+
+@router.get("/backups/{run_id}/manifesto")
+async def manifesto(
+    run_id: int,
+    _: User = Depends(require_permission("backups.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    O manifesto de dentro do artefato, sem precisar baixar e extrair.
+
+    Ele traz o que o backup contem, a versao das imagens do FindFace e o
+    roteiro de restauracao do fabricante -- e e o que se deve ler ANTES de
+    restaurar. A versao das imagens importa: a base do Tarantool nao e
+    compativel entre versoes maiores, e restaurar num sistema de outra
+    versao nao devolve o reconhecimento.
+    """
+    import tarfile
+
+    run = await db.get(BackupRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="execução não encontrada")
+    if not run.artifact_name:
+        raise HTTPException(
+            status_code=400, detail="esta execução não gerou artefato"
+        )
+
+    host = await db.get(Host, run.host_id) if run.host_id else None
+    base = None
+    for d in (run.destinations or []):
+        if d.get("type") == "local" and d.get("uri"):
+            base = str(Path(d["uri"]).parent.parent)
+            break
+    caminho = StorageService.caminho_artefato(
+        host.name if host else "_painel", run.artifact_name, base
+    )
+    if caminho is None or not caminho.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "o artefato não está mais no disco do painel (pode ter ido para "
+                "a nuvem ou sido removido pela retenção). O manifesto vive dentro "
+                "dele."
+            ),
+        )
+
+    def _ler() -> str:
+        with tarfile.open(caminho, "r:*") as tar:
+            for membro in tar.getmembers():
+                if membro.name.endswith("MANIFESTO.txt"):
+                    arquivo = tar.extractfile(membro)
+                    if arquivo is None:
+                        return ""
+                    return arquivo.read().decode("utf-8", "replace")[:20000]
+        return ""
+
+    try:
+        texto = await asyncio.to_thread(_ler)
+    except (tarfile.TarError, OSError) as exc:
+        raise HTTPException(
+            status_code=502, detail=f"não consegui abrir o artefato: {exc}"
+        ) from exc
+
+    if not texto:
+        raise HTTPException(
+            status_code=404,
+            detail="este artefato não tem MANIFESTO.txt (backup de versão antiga?)",
+        )
+    return {"run_id": run_id, "arquivo": run.artifact_name, "manifesto": texto}
+
+
+@router.post("/backups-importar", response_model=BackupOut, status_code=201)
+async def importar(
+    request: Request,
+    arquivo: UploadFile = File(...),
+    host_id: int | None = Form(default=None),
+    autor: User = Depends(require_permission("backups.run")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Traz um artefato de fora para o painel.
+
+    Serve ao backup feito na mão no servidor, ao que veio de outra
+    instalação e ao que alguém guardou fora. Depois de importado, ele
+    aparece no histórico como qualquer outro: dá para baixar, ler o
+    manifesto e apagar.
+
+    **Não restaura nada.** Importar é só guardar e catalogar — restaurar é
+    outra decisão, com procedimento próprio.
+    """
+    nome = Path(arquivo.filename or "backup.tar.gz").name
+    if not nome.endswith((".tar.gz", ".tgz", ".tar")):
+        raise HTTPException(
+            status_code=400,
+            detail="o artefato precisa ser .tar.gz (é o formato que o painel gera)",
+        )
+
+    host = await db.get(Host, host_id) if host_id else None
+    pasta = host.name if host is not None else "_importado"
+
+    destino_dir = Path(settings.LOCAL_BACKUP_DIR) / pasta
+    destino = destino_dir / nome
+    if destino.exists():
+        destino = destino_dir / f"{Path(nome).stem}_importado_{int(time.time())}.tar.gz"
+
+    # Grava em pedaços e calcula o checksum no mesmo passe: artefato de
+    # backup tem dezenas de GB, e ler duas vezes seria dobrar o custo.
+    import hashlib
+
+    soma = hashlib.sha256()
+    tamanho = 0
+    try:
+        destino_dir.mkdir(parents=True, exist_ok=True)
+        with destino.open("wb") as saida:
+            while True:
+                pedaco = await arquivo.read(1024 * 1024)
+                if not pedaco:
+                    break
+                tamanho += len(pedaco)
+                soma.update(pedaco)
+                await asyncio.to_thread(saida.write, pedaco)
+    except OSError as exc:
+        try:
+            destino.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise HTTPException(
+            status_code=500, detail=f"falha ao gravar no disco do painel: {exc}"
+        ) from exc
+
+    run = BackupRun(
+        host_id=host.id if host is not None else None,
+        profile="config",
+        status="sucesso",
+        stage="Importado",
+        progress=100,
+        artifact_name=destino.name,
+        size_bytes=tamanho,
+        checksum_sha256=soma.hexdigest(),
+        triggered_by=f"importado:{autor.username}",
+        destinations=[{
+            "type": "local",
+            "name": "disco do painel",
+            "ok": True,
+            "uri": str(destino),
+        }],
+        log=(
+            f"[importado] arquivo enviado pelo painel por {autor.username}\n"
+            f"[importado] {tamanho} bytes, sha256 {soma.hexdigest()}"
+        ),
+        finished_at=datetime.now(timezone.utc),
+    )
+    db.add(run)
+    await db.commit()
+    await db.refresh(run)
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="backups.run",
+        target=f"{pasta}/{destino.name}",
+        ip=client_ip(request),
+        detail={
+            "acao": "importar artefato",
+            "bytes": tamanho,
+            "sha256": soma.hexdigest(),
+        },
+    )
+
+    saida = BackupOut.model_validate(run)
+    saida.host_nome = host.name if host is not None else "importado"
+    return saida
 
 
 @router.delete("/backups/{run_id}")

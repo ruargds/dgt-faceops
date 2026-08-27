@@ -338,7 +338,7 @@ class BackupService:
             raise BackupError(f"nenhum destino aceitou o artefato — {erros}")
 
         # ── Retenção ───────────────────────────────────────────────────
-        dias = retencao_dias if retencao_dias is not None else _retencao_padrao(perfil)
+        dias = retencao_dias if retencao_dias is not None else self._retencao_padrao(perfil)
         removidos = await self.storage.aplicar_retencao(host.name, dias)
         if removidos:
             run.log += f"\n[retencao] removidos {len(removidos)} artefatos com mais de {dias} dias"
