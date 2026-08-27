@@ -151,7 +151,8 @@ class LimpezaService:
             "--format '{{.Names}}' | head -1"
         )
         tentativas.append(
-            "docker ps --format '{{.Names}}' | grep -i -E 'legacy' | head -1"
+            "docker ps --format '{{.Names}}' | grep -i -E 'legacy' "
+            "| grep -v -i faceops | head -1"
         )
 
         for comando in tentativas:

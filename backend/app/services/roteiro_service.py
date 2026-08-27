@@ -18,6 +18,10 @@ Três coisas que ele não faz, de propósito:
   roteiro, quem decide e digita é gente.
 * **Não inventa passo.** Só entra o que existe no artefato: se não há dump
   do Tarantool ali dentro, não há passo de Tarantool.
+* **Assume sessão SSH como root.** Os comandos saem prontos para colar,
+  sem `sudo` na frente de cada linha — que é como quem opera realmente
+  entra nesses servidores. Onde o painel for outra máquina, o único
+  placeholder é o IP dele.
 * **Não esconde a incompatibilidade de versão.** A base do Tarantool não é
   compatível entre versões maiores do FindFace, e o roteiro põe isso na
   frente, com as versões que estavam rodando quando o backup foi feito.
@@ -120,9 +124,11 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     # ── 1. Levar o artefato até o servidor ─────────────────────────────
     passo(
         "Levar o artefato até o servidor",
-        f"# no servidor {host.name} ({host.address}):\n"
-        f"scp SEU_USUARIO@PAINEL:{caminho_no_painel} {trabalho}/\n"
-        f"# ou baixe pelo painel (botão de download) e envie por scp/rsync",
+        f"mkdir -p {trabalho}\n"
+        f"# se o painel for OUTRA maquina (troque IP_DO_PAINEL):\n"
+        f"scp root@IP_DO_PAINEL:{caminho_no_painel} {trabalho}/\n"
+        f"# se o painel roda NESTA maquina:\n"
+        f"cp {caminho_no_painel} {trabalho}/",
         "O artefato está no disco do painel. Ele precisa estar na máquina "
         "onde vai ser restaurado — cada servidor volta com o backup que saiu "
         "dele.",
@@ -147,7 +153,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     # ── 2. Conferir a versão antes de qualquer escrita ─────────────────
     passo(
         "Conferir a versão do FindFace instalada agora",
-        f"cd {ff_dir} && sudo docker compose images | head -20",
+        f"cd {ff_dir} && docker compose images | head -20",
         f"O backup foi feito em {data or 'data não registrada'}, no servidor "
         f"{servidor_backup or host.name}. Compare com as versões listadas no "
         "manifesto.",
@@ -161,14 +167,14 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     if tem["configs"]:
         passo(
             "Guardar a configuração atual antes de sobrescrever",
-            f"sudo tar -czf {trabalho}/configs-ANTES-$(date +%Y%m%d-%H%M).tar.gz "
+            f"tar -czf {trabalho}/configs-ANTES-$(date +%Y%m%d-%H%M).tar.gz "
             f"-C {ff_dir} configs",
             "Se o restore piorar as coisas, esta cópia é o caminho de volta. "
             "Leva segundos e cabe em qualquer disco.",
         )
         passo(
             "Restaurar a configuração",
-            f"sudo tar -xzf {trabalho}/config/configs.tar.gz -C {ff_dir}/",
+            f"tar -xzf {trabalho}/config/configs.tar.gz -C {ff_dir}/",
             f"Devolve `{ff_dir}/configs` ao estado do backup.",
         )
 
@@ -198,7 +204,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
             "Restaurar os bancos PostgreSQL",
             f"ls {trabalho}/postgres/\n"
             f"# para CADA instância e CADA .dump encontrado:\n"
-            f"sudo docker exec -i $(sudo docker ps --filter "
+            f"docker exec -i $(docker ps --filter "
             f"label=com.docker.compose.project={projeto} "
             f"--filter label=com.docker.compose.service=postgresql "
             f"--format '{{{{.Names}}}}' | head -1) \\\n"
@@ -213,11 +219,11 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     if tem["tarantool"]:
         passo(
             "Restaurar os vetores faciais (Tarantool)",
-            f"cd {ff_dir} && sudo docker compose stop $(sudo docker compose ps "
+            f"cd {ff_dir} && docker compose stop $(docker compose ps "
             f"--services | grep tarantool)\n"
             f"# extrair o snapshot sobre o diretório de dados do Tarantool e "
             f"subir de novo:\n"
-            f"cd {ff_dir} && sudo docker compose start $(sudo docker compose ps "
+            f"cd {ff_dir} && docker compose start $(docker compose ps "
             f"--services | grep tarantool)",
             "Os vetores são o que faz o reconhecimento funcionar. Sem eles, "
             "os dossiês voltam mas ninguém é reconhecido.",
@@ -228,7 +234,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     if tem["mongo"]:
         passo(
             "Restaurar o MongoDB",
-            f"sudo docker exec -i $(sudo docker ps --filter "
+            f"docker exec -i $(docker ps --filter "
             f"label=com.docker.compose.project={projeto} --format "
             f"'{{{{.Names}}}}' | grep -i mongo | head -1) \\\n"
             f"  mongorestore --archive --gzip --drop "
@@ -241,7 +247,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
         passo(
             "Restaurar o etcd",
             f"# com o etcd parado:\n"
-            f"sudo docker exec -i $(sudo docker ps --filter "
+            f"docker exec -i $(docker ps --filter "
             f"label=com.docker.compose.project={projeto} --format "
             f"'{{{{.Names}}}}' | grep -i etcd | head -1) \\\n"
             f"  etcdctl snapshot restore /caminho/no/container/snapshot.db",
@@ -255,12 +261,12 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
         passo(
             "Procedimento oficial do perfil completo",
             f"# 1. instalar o FindFace Multi da MESMA versão pelo .run\n"
-            f"cd {ff_dir} && sudo docker compose stop\n"
-            f"sudo rm -r {ff_dir}/configs/* && sudo tar -xzf "
+            f"cd {ff_dir} && docker compose stop\n"
+            f"rm -r {ff_dir}/configs/* && tar -xzf "
             f"{trabalho}/config/configs.tar.gz -C {ff_dir}/\n"
-            f"sudo rm -r {ff_dir}/data/* && sudo tar -xzf "
+            f"rm -r {ff_dir}/data/* && tar -xzf "
             f"{trabalho}/data.tar.gz -C {ff_dir}/\n"
-            f"cd {ff_dir} && sudo docker compose up -d",
+            f"cd {ff_dir} && docker compose up -d",
             "É o procedimento da NtechLab para o perfil completo: instalação "
             "limpa da mesma versão, depois configs e data por cima.",
             "PARA o FindFace inteiro e apaga `configs/` e `data/` atuais. Só "
@@ -270,12 +276,12 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     # ── 6. Subir e conferir ────────────────────────────────────────────
     passo(
         "Subir o stack",
-        f"cd {ff_dir} && sudo docker compose up -d",
+        f"cd {ff_dir} && docker compose up -d",
         "Sobe o que estiver parado. O que já estava rodando não é tocado.",
     )
     passo(
         "Conferir",
-        f"cd {ff_dir} && sudo docker compose ps\n"
+        f"cd {ff_dir} && docker compose ps\n"
         f"# e no painel: Serviços, Rastreio e a tela do FindFace",
         "Container rodando não é o mesmo que serviço atendendo — o Rastreio "
         "do painel pergunta a cada componente na porta dele.",

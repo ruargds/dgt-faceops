@@ -537,10 +537,10 @@ command -v docker >/dev/null 2>&1 || die "docker não encontrado neste servidor"
 if [ ! -d "$FF_DIR" ]; then
     ACHADO=""
     if command -v docker >/dev/null 2>&1; then
-        ACHADO="$(docker ps --filter label=com.docker.compose.project             --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null             | grep -i -E 'findface|ffmulti' | head -1)"
+        ACHADO="$(docker ps --filter label=com.docker.compose.project             --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null             | grep -i -E 'findface|ffmulti' | grep -v -i faceops | head -1)"
         if [ -z "$ACHADO" ]; then
             # Sem o rotulo de working_dir (compose v1), tenta pelo nome.
-            NOME_CT="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | head -1)"
+            NOME_CT="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | grep -v -i faceops | head -1)"
             if [ -n "$NOME_CT" ]; then
                 ACHADO="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$NOME_CT" 2>/dev/null)"
             fi
@@ -566,7 +566,7 @@ if [ ! -d "$FF_DIR" ]; then
         [ -f "$FF_DIR/docker-compose.yml" ] && COMPOSE_FILE="$FF_DIR/docker-compose.yml"
     fi
     if [ ! -d "$FF_DIR" ]; then
-    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qi -E 'findface|ffmulti'; then
+    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | grep -qv -i faceops; then
             die "$FF_DIR nao existe e nenhum container do FindFace roda neste servidor. Provavelmente a aplicacao esta em outra maquina -- veja em Topologia."
         fi
         die "$FF_DIR nao existe. Confira o caminho cadastrado para este servidor."

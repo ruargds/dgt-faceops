@@ -160,7 +160,7 @@ set +e
 formato='{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{.HostConfig.LogConfig.Type}}'
 
 # 1. Containers com cara de FindFace, um a um, ate achar rotulo util.
-for c in $(docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | head -8); do
+for c in $(docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | grep -v -i faceops | head -8); do
   linha="$(docker inspect "$c" --format "$formato" 2>/dev/null)"
   case "$linha" in
     *"|"*"|/"*) echo "ACHADO|$linha"; exit 0 ;;
@@ -173,13 +173,13 @@ for c in $(docker ps --format '{{.Names}}' 2>/dev/null | head -20); do
   case "$linha" in
     *"|"*"|/"*) echo "TALVEZ|$linha" ;;
   esac
-done | grep -i -E 'findface|ffmulti' | head -1
+done | grep -i -E 'findface|ffmulti' | grep -v -i faceops | head -1
 
 # 3. Compose v2 lista projeto e arquivo de configuracao.
 docker compose ls --format json 2>/dev/null | head -c 4000
 
 # 4. Caminhos conhecidos, confirmados.
-for d in /opt/findface-multi /opt/ffmulti /opt/findface /srv/findface-multi; do
+for d in /opt/findface-multi /opt/ffmulti /opt/findface /srv/findface-multi /media/STORAGE/findface-multi; do
   for f in docker-compose.yaml docker-compose.yml; do
     [ -f "$d/$f" ] && echo "CAMINHO||$d/$f|$d|"
   done
@@ -215,7 +215,12 @@ done
             for p in projetos if isinstance(projetos, list) else []:
                 nome = str(p.get("Name", ""))
                 arquivos = str(p.get("ConfigFiles", ""))
-                if not _re.search(r"findface|ffmulti", nome + arquivos, _re.I):
+                juntos = nome + arquivos
+                if not _re.search(r"findface|ffmulti", juntos, _re.I):
+                    continue
+                if _re.search(r"faceops", juntos, _re.I):
+                    # O painel nao e o FindFace: onde os dois rodam na mesma
+                    # maquina, casar por nome achava /opt/.faceops.
                     continue
                 primeiro = arquivos.split(",")[0].strip()
                 if primeiro.startswith("/"):

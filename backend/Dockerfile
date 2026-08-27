@@ -9,11 +9,25 @@ ENV PYTHONUNBUFFERED=1 \
 
 # rclone atende o destino Google Drive; openssh-client/rsync atendem o
 # envio dos artefatos de backup a partir dos hosts remotos.
+#
+# `postgresql-client-16` vem do repositório da PGDG, e não do Debian: o
+# Debian 12 traz o cliente 15, e `pg_dump` 15 recusa falar com servidor 16
+# ("server version mismatch"). O banco do painel é postgres:16-alpine.
+# Sem isso, o backup do painel morria em `FileNotFoundError: 'pg_dump'` —
+# justamente o backup que protege cadastro, credenciais e auditoria.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        openssh-client rsync curl ca-certificates unzip \
+        openssh-client rsync curl ca-certificates unzip gnupg \
     && curl -fsSL https://downloads.rclone.org/rclone-current-linux-amd64.zip -o /tmp/rclone.zip \
     && unzip -q -j /tmp/rclone.zip '*/rclone' -d /usr/local/bin \
     && chmod +x /usr/local/bin/rclone \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+         -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+         > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-16 \
+    && apt-get purge -y --auto-remove gnupg \
     && rm -rf /tmp/rclone.zip /var/lib/apt/lists/*
 
 WORKDIR /app
