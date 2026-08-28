@@ -343,6 +343,113 @@ export default function BackupsView() {
 }
 
 /**
+ * Volume estimado e espaço disponível, antes de disparar.
+ *
+ * A pergunta certa antes de um backup é "cabe?" — e ela vinha sendo
+ * respondida descobrindo. Aqui ela é respondida antes, com duas fontes: a
+ * medição no servidor (`configs/`, bancos, diretório de dados) e o
+ * **tamanho real das execuções anteriores** daquele perfil naquele
+ * servidor. Número observado ganha de fator de compressão estimado.
+ *
+ * Onde a medição não terminou — `du` numa árvore com milhões de fotos de
+ * evento leva minutos —, a tela diz "não medido" em vez de mostrar um
+ * número pequeno que faria alguém disparar achando que cabe.
+ */
+function Estimativa({ dados, perfil }) {
+  const m = dados.medicao || {};
+  const escolhido = (dados.perfis || []).find((p) => p.perfil === perfil);
+  const estimado = escolhido && escolhido.estimado_bytes;
+  const livre = dados.livre_no_painel;
+  const naoCabe = estimado && livre && estimado > livre * 0.9;
+
+  const linha = (rotulo, valor, ajuda) => (
+    <tr key={rotulo}>
+      <td title={ajuda}>{rotulo}</td>
+      <td className="right mono">
+        {valor === null || valor === undefined ? "não medido" : formatBytes(valor)}
+      </td>
+    </tr>
+  );
+
+  return (
+    <>
+      <div className="table-wrap">
+        <table className="tabela-densa">
+          <tbody>
+            {linha("configs/", m.configs_bytes, "Configuração da instalação")}
+            {linha(
+              "Bancos (PostgreSQL/Timescale)",
+              m.bancos_bytes,
+              "Soma do tamanho dos bancos, perguntado ao próprio PostgreSQL"
+            )}
+            {linha("Tarantool (vetores)", m.tarantool_bytes, "Vetores faciais")}
+            {linha(
+              "Diretório de dados",
+              m.data_bytes,
+              "Inclui as fotos de evento — é o que pesa no perfil completo"
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="table-wrap" style={{ marginTop: 8 }}>
+        <table className="tabela-densa">
+          <thead>
+            <tr>
+              <th>Artefato estimado</th>
+              <th className="right">Tamanho</th>
+              <th>De onde vem o número</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(dados.perfis || []).map((p) => (
+              <tr
+                key={p.perfil}
+                style={p.perfil === perfil ? { fontWeight: 600 } : undefined}
+              >
+                <td>{p.perfil}</td>
+                <td className="right mono">
+                  {p.estimado_bytes ? formatBytes(p.estimado_bytes) : "não medido"}
+                </td>
+                <td className="small muted">
+                  {p.estimado_bytes ? p.origem : p.observacao}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="small muted" style={{ marginTop: 8 }}>
+        Livre no disco do painel: <strong>{formatBytes(livre || 0)}</strong>
+        {m.livre_no_staging
+          ? ` · livre no staging do servidor: ${formatBytes(m.livre_no_staging)}`
+          : ""}
+        . O artefato é montado no servidor e copiado para cá — precisa caber
+        nos dois lados.
+      </div>
+
+      {naoCabe && (
+        <div
+          className="card card-tight"
+          style={{
+            background: "var(--red-bg)",
+            borderColor: "var(--red-bd)",
+            marginTop: 8,
+          }}
+        >
+          <span className="small" style={{ color: "var(--red-fg)" }}>
+            O artefato estimado ocupa mais de 90% do que resta no disco do
+            painel. Libere espaço (Manutenção → limpeza pontual, ou a retenção
+            dos artefatos) antes de disparar.
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
  * Roteiro de restauração.
  *
  * O manual explica o procedimento e o manifesto diz o que o artefato tem.
@@ -840,6 +947,11 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
   // no perfil essencial, e oferecer assim mesmo garante uma falha em 0s
   // que ninguem devia ter esperado.
   const [perfisHost, setPerfisHost] = useState(null);
+  // Estimativa de volume: uma leitura no servidor, disparada junto com a
+  // consulta de perfis. Chega depois -- `du` leva alguns segundos -- e a
+  // tela não espera por ela para deixar escolher.
+  const [estimativa, setEstimativa] = useState(null);
+  const [medindo, setMedindo] = useState(false);
   const { ativos, padroes, carregando: carregandoDest } = useDestinos();
   const [hostId, setHostId] = useState(hosts[0] ? hosts[0].id : null);
   const [perfil, setPerfil] = useState("essencial");
@@ -862,6 +974,15 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
       .perfisDoHost(hostId)
       .then((r) => vivo && setPerfisHost(r))
       .catch(() => {});
+
+    setEstimativa(null);
+    setMedindo(true);
+    api
+      .estimativa(hostId)
+      .then((r) => vivo && setEstimativa(r))
+      .catch(() => {})
+      .finally(() => vivo && setMedindo(false));
+
     return () => {
       vivo = false;
     };
@@ -1018,6 +1139,18 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
               })}
             </div>
           </div>
+          )}
+
+          {!todos && (medindo || estimativa) && (
+            <div className="field">
+              <label className="label">Volume e espaço</label>
+              {medindo && !estimativa && (
+                <div className="small muted">
+                  Medindo no servidor… (`configs/`, bancos e diretório de dados)
+                </div>
+              )}
+              {estimativa && <Estimativa dados={estimativa} perfil={perfil} />}
+            </div>
           )}
 
           <div className="field">

@@ -50,6 +50,19 @@ Daí os três perfis:
 | Perfil | Conteúdo | Tamanho | Downtime | Recorrência sugerida |
 |---|---|---|---|---|
 | **Config** | `configs/` + `docker-compose.yaml` + licença | MB | zero | a cada 6h |
+> **Antes de disparar, o painel diz quanto vai ocupar.** Ao escolher o
+> servidor, o modal mede lá dentro — `configs/`, tamanho dos bancos
+> (perguntado ao próprio PostgreSQL), Tarantool e diretório de dados — e
+> mostra o artefato estimado por perfil, o espaço livre no disco do painel
+> e no staging do servidor. O artefato é montado no servidor e copiado
+> para cá: precisa caber nos dois lados.
+>
+> Onde já houve execução daquele perfil naquele servidor, o número exibido
+> é o **tamanho real** dela, não uma conta de compressão. E onde o `du` do
+> diretório de dados não termina no prazo — normal com milhões de fotos de
+> evento — a tela diz **"não medido"**, em vez de mostrar um número pequeno
+> que faria alguém disparar achando que cabe.
+
 | **Essencial** | Config + `pg_dump` de todos os bancos + snapshot do Tarantool | GB | zero | diário, 02:00 |
 | **Completo** | Procedimento oficial: `configs/` + `data/` inteiro | centenas de GB | **sim** | mensal, em janela |
 

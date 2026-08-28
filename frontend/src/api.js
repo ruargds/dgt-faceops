@@ -241,6 +241,9 @@ export const api = {
   // Que perfis fazem sentido naquele servidor. Oferecer os tres em
   // qualquer maquina produz falha garantida onde nao ha FindFace.
   perfisDoHost: (id) => get(`/backups/perfis/${id}`),
+  // Quanto vai ocupar e se cabe -- medido no servidor e cruzado com o
+  // tamanho real das execucoes anteriores.
+  estimativa: (id) => get(`/backups/estimativa/${id}`),
   // Todos os servidores de uma vez. Cada um com o perfil que aguenta, e
   // cada artefato na pasta do seu servidor no destino.
   backupTodos: (d) => post("/backups-todos", d),

@@ -28,6 +28,7 @@ from app.services.config_service import ConfigService
 from app.services.descoberta_service import DescobertaService
 from app.services.dispositivos_service import DispositivosService
 from app.services.faxina_service import FaxinaService
+from app.services.estimativa_service import EstimativaService
 from app.services.ffapi_service import FFApiService
 from app.services.configff_service import ConfigFFService
 from app.services.licenca_service import LicencaService
@@ -281,6 +282,9 @@ async def iniciar() -> None:
     # Estado dos componentes internos do FindFace, pelas portas que o
     # manual documenta -- de dentro do servidor, sem agente instalado.
     app.state.internos = InternosService(ssh)
+    # Quanto vai ocupar, antes de disparar: mede no servidor e cruza
+    # com o tamanho real das execucoes anteriores.
+    app.state.estimativa = EstimativaService(ssh)
     # Rastreio: junta licenca, componentes, disco, backup e seguranca num
     # so lugar e devolve achados com evidencia, impacto e acao.
     app.state.rastreio = RastreioService(

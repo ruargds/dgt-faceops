@@ -1067,6 +1067,77 @@ async def plano_de_recuperacao(
     }
 
 
+@router.get("/backups/estimativa/{host_id}")
+async def estimativa(
+    host_id: int,
+    request: Request,
+    _: User = Depends(require_permission("backups.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Quanto vai ocupar, e se cabe — antes de disparar.
+
+    A pergunta certa antes de um backup é "cabe?", e ela vinha sendo
+    respondida descobrindo. O perfil completo num servidor de
+    reconhecimento facial passa de centenas de GB; descobrir isso no meio
+    da cópia significa disco cheio em produção — o incidente que este
+    painel existe para evitar.
+
+    Duas fontes, e a segunda vale mais: a **medição no servidor**
+    (`configs/`, diretório de dados, tamanho dos bancos) e o **tamanho real
+    das execuções anteriores** daquele perfil naquele servidor. Nenhuma
+    estimativa de compressão ganha de um número observado.
+
+    Uma execução SSH, com `du` limitado por tempo — `du` numa árvore com
+    milhões de fotos de evento é caro, e estourar o prazo vira "não
+    medido", nunca um número inventado.
+    """
+    from app.services.estimativa_service import EstimativaError
+
+    host = await _host_ou_404(db, host_id)
+
+    staging = "/var/tmp/faceops"
+    try:
+        staging = request.app.state.config.get("servidores.staging_remoto")
+    except Exception:
+        pass
+
+    try:
+        medicao = await request.app.state.estimativa.medir(
+            host, request.app.state.stack, staging
+        )
+    except EstimativaError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Tamanho real da última execução de cada perfil neste servidor.
+    historico: dict[str, int] = {}
+    anteriores = (
+        await db.execute(
+            select(BackupRun)
+            .where(
+                BackupRun.host_id == host.id,
+                BackupRun.status == "sucesso",
+                BackupRun.size_bytes > 0,
+            )
+            .order_by(BackupRun.started_at.desc())
+            .limit(30)
+        )
+    ).scalars().all()
+    for run in anteriores:
+        historico.setdefault(run.profile, run.size_bytes)
+
+    perfis = request.app.state.estimativa.estimar(medicao, historico)
+    local = StorageService.espaco_local()
+
+    return {
+        "host": host.name,
+        "medicao": medicao,
+        "perfis": perfis,
+        "livre_no_painel": local.get("livre_bytes"),
+        "staging": staging,
+    }
+
+
 @router.get("/backups/perfis/{host_id}")
 async def perfis_do_host(
     host_id: int,

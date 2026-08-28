@@ -162,7 +162,11 @@ echo "{SEP}FIM"
             incerto = perfil == "completo" and data is None
             saida.append({
                 "perfil": perfil,
-                "estimado_bytes": real or estimado,
+                # Incerto e sem historico = SEM numero. Mostrar 63 KB para o
+                # perfil completo, so porque o `du` do diretorio de dados
+                # nao terminou, seria pior que nao mostrar nada: alguem
+                # dispararia achando que cabe.
+                "estimado_bytes": real or (None if incerto else estimado),
                 "origem": "execução anterior" if real else "medição do servidor",
                 "cru_bytes": bruto or None,
                 "ultima_execucao_bytes": real,
