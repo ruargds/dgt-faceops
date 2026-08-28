@@ -145,9 +145,15 @@ class PainelBackupService:
                 return valor
 
             for tabela in Base.metadata.sorted_tables:
-                linhas = (await db.execute(tabela.select())).mappings().all()
+                # `registros`, e nao `linhas`: `linhas` e o buffer do LOG
+                # desta execucao, e reaproveitar o nome sobrescrevia o log
+                # com objetos do banco -- o erro que apareceu em campo,
+                # "sequence item 0: expected str instance, RowMapping
+                # found", na juncao do log no fim da execucao.
+                registros = (await db.execute(tabela.select())).mappings().all()
                 exportacao[tabela.name] = [
-                    {k: _serializavel(v) for k, v in linha.items()} for linha in linhas
+                    {k: _serializavel(v) for k, v in registro.items()}
+                    for registro in registros
                 ]
             registrar(
                 "exportadas %d tabela(s): %s"
@@ -189,9 +195,9 @@ class PainelBackupService:
 
                     pasta = base / "banco-json"
                     pasta.mkdir(parents=True, exist_ok=True)
-                    for nome, linhas in exportacao.items():
+                    for nome, registros in exportacao.items():
                         (pasta / f"{nome}.json").write_text(
-                            _json.dumps(linhas, ensure_ascii=False, indent=1),
+                            _json.dumps(registros, ensure_ascii=False, indent=1),
                             encoding="utf-8",
                         )
 
