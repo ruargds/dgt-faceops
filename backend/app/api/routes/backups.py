@@ -5,6 +5,7 @@ import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -55,9 +56,19 @@ async def _resolver_artefato(db: AsyncSession, run_id: int):
     if run.status != "sucesso" or not run.artifact_name:
         raise HTTPException(status_code=400, detail="esta execução não gerou artefato")
 
-    host = await db.get(Host, run.host_id)
-    if host is None:
-        raise HTTPException(status_code=404, detail="servidor do backup não existe mais")
+    # O backup do proprio painel nao tem servidor: `host_id` e nulo e o
+    # artefato mora em `_painel/`, o mesmo nome que o servico usa para
+    # gravar. Sem este ramo, procurar o Host devolvia None e o download
+    # respondia "servidor do backup nao existe mais" -- para um artefato
+    # que esta ali, no disco, listado como Sucesso na tela.
+    if run.host_id is None:
+        host = SimpleNamespace(name="_painel")
+    else:
+        host = await db.get(Host, run.host_id)
+        if host is None:
+            raise HTTPException(
+                status_code=404, detail="servidor do backup não existe mais"
+            )
 
     base = None
     for d in (run.destinations or []):
@@ -255,6 +266,151 @@ async def historico(
     return saida
 
 
+# ── Rotas de caminho fixo vêm ANTES de "/backups/{run_id}" ─────────────
+#
+# O FastAPI casa rotas na ORDEM em que foram declaradas. Com
+# "/backups/{run_id}" declarada antes, uma chamada a "/backups/download"
+# entrava por ela com run_id="download" -- e o erro devolvido era o dela
+# ("Autenticação necessária", porque o ticket não é um header), mandando
+# quem lesse investigar o lugar errado. Rota de caminho fixo fica aqui em
+# cima; abaixo desta linha, só rota com parâmetro.
+
+@router.get("/backups/download")
+async def baixar_por_ticket(ticket: str = Query(...)):
+    """Baixa o artefato em streaming. Autenticação pelo ticket, uso único."""
+    _limpar_tickets_download()
+    info = _download_tickets.pop(ticket, None)
+    if info is None or info["expira_em"] < time.monotonic():
+        raise HTTPException(status_code=401, detail="ticket inválido ou expirado")
+    caminho = Path(info["caminho"])
+    if not caminho.is_file():
+        raise HTTPException(status_code=404, detail="artefato não está mais no disco")
+    return FileResponse(
+        path=str(caminho),
+        filename=info["filename"],
+        media_type="application/gzip",
+    )
+
+
+@router.get("/backups/recuperacao")
+async def plano_de_recuperacao(
+    _: User = Depends(require_permission("backups.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    O que dá para recuperar, por servidor.
+
+    A pergunta que só aparece no pior dia: *"se eu precisar voltar agora,
+    tenho o quê, de quando, e o que falta?"*. Responder isso lendo o
+    histórico linha a linha, no meio de um incidente, é o pior momento
+    possível.
+
+    Por servidor: o artefato mais recente por perfil, a idade dele, o que
+    aquele perfil recupera e o que ele deixa de fora. Sem executar nada —
+    o restore continua sendo procedimento manual, e o manifesto de cada
+    artefato traz o roteiro do fabricante.
+    """
+    from datetime import datetime, timezone
+
+    RECUPERA = {
+        "config": {
+            "recupera": "configuração da instalação (configs/ e o compose)",
+            "nao_recupera": "banco, vetores faciais e fotos de evento",
+        },
+        "essencial": {
+            "recupera": "configuração, bancos (PostgreSQL/Timescale), vetores do "
+            "Tarantool, MongoDB e etcd",
+            "nao_recupera": "as fotos de evento (findface-upload)",
+        },
+        "completo": {
+            "recupera": "tudo: configuração, bancos e o diretório de dados inteiro",
+            "nao_recupera": "nada, dentro do que o perfil copia",
+        },
+        "painel": {
+            "recupera": "o próprio painel: cadastro, credenciais cifradas, "
+            "agendamentos, histórico e auditoria",
+            "nao_recupera": "a SECRET_KEY, que fica fora do artefato de propósito",
+        },
+    }
+
+    hosts = list((await db.execute(select(Host))).scalars().all())
+    nomes = {h.id: h.name for h in hosts}
+    agora = datetime.now(timezone.utc)
+
+    execucoes = list(
+        (
+            await db.execute(
+                select(BackupRun)
+                .where(BackupRun.status == "sucesso", BackupRun.expired.is_(False))
+                .order_by(BackupRun.started_at.desc())
+                .limit(400)
+            )
+        ).scalars().all()
+    )
+
+    def idade(run) -> dict:
+        quando = run.finished_at or run.started_at
+        if quando is None:
+            return {"dias": None, "texto": "—"}
+        dias = (agora - quando).days
+        return {
+            "dias": dias,
+            "texto": "hoje" if dias == 0 else f"há {dias} dia(s)",
+            "em": quando.isoformat(),
+        }
+
+    por_host: dict = {}
+    for run in execucoes:
+        chave = run.host_id or 0  # 0 = painel
+        alvo = por_host.setdefault(
+            chave,
+            {
+                "host_id": run.host_id,
+                "servidor": nomes.get(run.host_id, "o próprio painel"),
+                "perfis": {},
+            },
+        )
+        # O primeiro de cada perfil é o mais recente: a consulta já veio
+        # ordenada do mais novo para o mais velho.
+        if run.profile in alvo["perfis"]:
+            continue
+        alvo["perfis"][run.profile] = {
+            "run_id": run.id,
+            "artefato": run.artifact_name,
+            "tamanho": run.size_bytes,
+            "checksum": run.checksum_sha256,
+            "destinos": run.destinations or [],
+            "idade": idade(run),
+            **RECUPERA.get(run.profile, {}),
+        }
+
+    # Servidor habilitado sem nenhum backup é o achado que importa aqui.
+    for host in hosts:
+        if host.enabled and host.id not in por_host:
+            por_host[host.id] = {
+                "host_id": host.id,
+                "servidor": host.name,
+                "perfis": {},
+                "aviso": "nenhum backup com sucesso disponível para este servidor",
+            }
+
+    lista = sorted(
+        por_host.values(), key=lambda x: (x["host_id"] is None, x["servidor"])
+    )
+
+    return {
+        "em": agora.isoformat(),
+        "servidores": lista,
+        "sem_backup": [x["servidor"] for x in lista if not x["perfis"]],
+        "observacao": (
+            "O restore é manual e por servidor: cada artefato volta na máquina "
+            "de onde saiu. O manifesto dentro de cada um traz o roteiro do "
+            "fabricante, e a base do Tarantool não é compatível entre versões "
+            "maiores do FindFace."
+        ),
+    }
+
+
 @router.get("/backups/{run_id}", response_model=BackupDetalheOut)
 async def detalhe(
     run_id: int,
@@ -306,23 +462,6 @@ async def emitir_ticket_download(
         detail={"run_id": run_id, "bytes": run.size_bytes},
     )
     return {"ticket": ticket, "expira_em_s": _TICKET_TTL, "arquivo": filename}
-
-
-@router.get("/backups/download")
-async def baixar_por_ticket(ticket: str = Query(...)):
-    """Baixa o artefato em streaming. Autenticação pelo ticket, uso único."""
-    _limpar_tickets_download()
-    info = _download_tickets.pop(ticket, None)
-    if info is None or info["expira_em"] < time.monotonic():
-        raise HTTPException(status_code=401, detail="ticket inválido ou expirado")
-    caminho = Path(info["caminho"])
-    if not caminho.is_file():
-        raise HTTPException(status_code=404, detail="artefato não está mais no disco")
-    return FileResponse(
-        path=str(caminho),
-        filename=info["filename"],
-        media_type="application/gzip",
-    )
 
 
 @router.get("/backups/{run_id}/download")
@@ -946,125 +1085,6 @@ async def _executar_em_fundo(
             import logging
 
             logging.getLogger("faceops.backup").exception(log_erro)
-
-
-@router.get("/backups/recuperacao")
-async def plano_de_recuperacao(
-    _: User = Depends(require_permission("backups.view")),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    O que dá para recuperar, por servidor.
-
-    A pergunta que só aparece no pior dia: *"se eu precisar voltar agora,
-    tenho o quê, de quando, e o que falta?"*. Responder isso lendo o
-    histórico linha a linha, no meio de um incidente, é o pior momento
-    possível.
-
-    Por servidor: o artefato mais recente por perfil, a idade dele, o que
-    aquele perfil recupera e o que ele deixa de fora. Sem executar nada —
-    o restore continua sendo procedimento manual, e o manifesto de cada
-    artefato traz o roteiro do fabricante.
-    """
-    from datetime import datetime, timezone
-
-    RECUPERA = {
-        "config": {
-            "recupera": "configuração da instalação (configs/ e o compose)",
-            "nao_recupera": "banco, vetores faciais e fotos de evento",
-        },
-        "essencial": {
-            "recupera": "configuração, bancos (PostgreSQL/Timescale), vetores do "
-            "Tarantool, MongoDB e etcd",
-            "nao_recupera": "as fotos de evento (findface-upload)",
-        },
-        "completo": {
-            "recupera": "tudo: configuração, bancos e o diretório de dados inteiro",
-            "nao_recupera": "nada, dentro do que o perfil copia",
-        },
-        "painel": {
-            "recupera": "o próprio painel: cadastro, credenciais cifradas, "
-            "agendamentos, histórico e auditoria",
-            "nao_recupera": "a SECRET_KEY, que fica fora do artefato de propósito",
-        },
-    }
-
-    hosts = list((await db.execute(select(Host))).scalars().all())
-    nomes = {h.id: h.name for h in hosts}
-    agora = datetime.now(timezone.utc)
-
-    execucoes = list(
-        (
-            await db.execute(
-                select(BackupRun)
-                .where(BackupRun.status == "sucesso", BackupRun.expired.is_(False))
-                .order_by(BackupRun.started_at.desc())
-                .limit(400)
-            )
-        ).scalars().all()
-    )
-
-    def idade(run) -> dict:
-        quando = run.finished_at or run.started_at
-        if quando is None:
-            return {"dias": None, "texto": "—"}
-        dias = (agora - quando).days
-        return {
-            "dias": dias,
-            "texto": "hoje" if dias == 0 else f"há {dias} dia(s)",
-            "em": quando.isoformat(),
-        }
-
-    por_host: dict = {}
-    for run in execucoes:
-        chave = run.host_id or 0  # 0 = painel
-        alvo = por_host.setdefault(
-            chave,
-            {
-                "host_id": run.host_id,
-                "servidor": nomes.get(run.host_id, "o próprio painel"),
-                "perfis": {},
-            },
-        )
-        # O primeiro de cada perfil é o mais recente: a consulta já veio
-        # ordenada do mais novo para o mais velho.
-        if run.profile in alvo["perfis"]:
-            continue
-        alvo["perfis"][run.profile] = {
-            "run_id": run.id,
-            "artefato": run.artifact_name,
-            "tamanho": run.size_bytes,
-            "checksum": run.checksum_sha256,
-            "destinos": run.destinations or [],
-            "idade": idade(run),
-            **RECUPERA.get(run.profile, {}),
-        }
-
-    # Servidor habilitado sem nenhum backup é o achado que importa aqui.
-    for host in hosts:
-        if host.enabled and host.id not in por_host:
-            por_host[host.id] = {
-                "host_id": host.id,
-                "servidor": host.name,
-                "perfis": {},
-                "aviso": "nenhum backup com sucesso disponível para este servidor",
-            }
-
-    lista = sorted(
-        por_host.values(), key=lambda x: (x["host_id"] is None, x["servidor"])
-    )
-
-    return {
-        "em": agora.isoformat(),
-        "servidores": lista,
-        "sem_backup": [x["servidor"] for x in lista if not x["perfis"]],
-        "observacao": (
-            "O restore é manual e por servidor: cada artefato volta na máquina "
-            "de onde saiu. O manifesto dentro de cada um traz o roteiro do "
-            "fabricante, e a base do Tarantool não é compatível entre versões "
-            "maiores do FindFace."
-        ),
-    }
 
 
 @router.get("/backups/estimativa/{host_id}")

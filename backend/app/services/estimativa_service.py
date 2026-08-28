@@ -94,7 +94,7 @@ echo "{SEP}FIM"
 """
 
         try:
-            r = await self.ssh.run(host, script, sudo=True, timeout=180)
+            r = await self.ssh.run_script(host, script, sudo=True, timeout=180)
         except SSHError as exc:
             raise EstimativaError(f"não consegui medir em '{host.name}': {exc}") from exc
 

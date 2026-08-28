@@ -13,6 +13,7 @@ Decisões que valem explicação:
   descartada. Nunca vai para log, resposta de API ou disco.
 """
 import asyncio
+import logging
 import shlex
 import time
 from dataclasses import dataclass, field
@@ -20,6 +21,8 @@ from dataclasses import dataclass, field
 import asyncssh
 
 from app.core.vault import decrypt_secret
+
+log = logging.getLogger("faceops.ssh")
 
 # Referência de tamanho para a proteção contra saída gigante. O teto real
 # é aplicado pelos próprios comandos (head, --tail, -d1), não por um kwarg
@@ -256,6 +259,22 @@ class SSHService:
         assim ela nunca aparece na linha de comando, e portanto nunca no
         `ps` de quem estiver logado no servidor.
         """
+        # Script multilinha com sudo NAO pode passar por aqui: o alvo vira
+        # `sudo -S -p '' -- <primeira linha>` e as linhas seguintes viram
+        # comandos soltos, sem privilegio -- calado, sem erro visivel. Foi
+        # assim que a estimativa de tamanho e a sondagem de componentes
+        # internos falharam sem deixar rastro. `run_script` faz certo:
+        # manda o script inteiro pela entrada padrao do `bash -s` remoto.
+        if sudo and "\n" in command.strip():
+            log.debug(
+                "run(sudo=True) com script multilinha em '%s' -- usando run_script",
+                host.name,
+            )
+            resultado = await self.run_script(
+                host, command, sudo=sudo, timeout=timeout
+            )
+            return resultado.raise_for_status() if check else resultado
+
         conn = await self.connect(host)
 
         entrada: str | None = None

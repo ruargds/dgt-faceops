@@ -205,7 +205,7 @@ echo "{SEP}FIM"
 """
 
         try:
-            r = await self.ssh.run(host, script, sudo=True, timeout=180)
+            r = await self.ssh.run_script(host, script, sudo=True, timeout=180)
         except SSHError as exc:
             raise InternosError(f"não consegui consultar '{host.name}': {exc}") from exc
 
