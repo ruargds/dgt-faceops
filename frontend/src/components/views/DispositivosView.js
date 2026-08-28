@@ -3,7 +3,7 @@ import { api, formatBytes, formatData } from "../../api";
 import { t } from "../../i18n";
 import { Carregando, Erro, Medidor, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { BarraMetrica } from "../Graficos";
-import { IconAtualizar, IconDownload, IconAlerta, IconOk } from "../Icons";
+import { IconAtualizar, IconDownload, IconAlerta, IconOk, IconAgenda } from "../Icons";
 
 const PERIODOS = [
   { id: "hora", rotulo: "1 hora" },
@@ -326,6 +326,183 @@ function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo }) {
   );
 }
 
+/**
+ * Quando cada câmera falou pela última vez.
+ *
+ * A tabela de eventos responde "quanto"; esta responde "quando" — que é a
+ * pergunta de quem desconfia que uma câmera parou. Ordena as mudas
+ * primeiro, porque é para vê-las que alguém abre isto.
+ *
+ * Duas datas, e elas não querem dizer a mesma coisa. **Última interação**
+ * é o último evento que a câmera produziu: é ela que diz se o dispositivo
+ * está vivo. **Cadastro** é o carimbo do registro na plataforma, que muda
+ * quando alguém edita a câmera — uma câmera parada há uma semana pode ter
+ * cadastro de hoje. Misturar as duas faria a tela mentir.
+ */
+function UltimaInteracao({ dados, buscando, filtro }) {
+  if (buscando && !dados) {
+    return (
+      <div className="card">
+        <Carregando texto="Lendo o fluxo de eventos do FindFace…" />
+      </div>
+    );
+  }
+  if (!dados) return null;
+
+  const v = dados.varredura || {};
+  const lista = (dados.cameras || []).filter(
+    (c) =>
+      !filtro ||
+      c.nome.toLowerCase().includes(filtro.toLowerCase()) ||
+      String(c.id).includes(filtro)
+  );
+
+  return (
+    <div className="card">
+      <div
+        className="stack-h"
+        style={{ justifyContent: "space-between", marginBottom: 10 }}
+      >
+        <div className="section-title" style={{ marginBottom: 0 }}>
+          Última interação por câmera
+          {dados.sem_interacao > 0 && (
+            <span className="pill pill-warn" style={{ marginLeft: 8 }}>
+              <IconAlerta size={11} /> {dados.sem_interacao} sem evento
+            </span>
+          )}
+        </div>
+        <span className="small muted">
+          consultado em {formatData(dados.gerado_em)}
+        </span>
+      </div>
+
+      <div className="grid-stats" style={{ marginBottom: 12 }}>
+        <div>
+          <span className="stat-label">Cadastradas</span>
+          <div className="stat-value">{dados.total_cameras}</div>
+        </div>
+        <div>
+          <span className="stat-label">Com evento</span>
+          <div className="stat-value">{dados.com_interacao}</div>
+        </div>
+        <div>
+          <span className="stat-label">Sem evento</span>
+          <div
+            className="stat-value"
+            style={{
+              color: dados.sem_interacao ? "var(--amber)" : "var(--text-3)",
+            }}
+          >
+            {dados.sem_interacao}
+          </div>
+        </div>
+        <div>
+          <span className="stat-label">Eventos varridos</span>
+          <div className="stat-value">
+            {(v.eventos_lidos || 0).toLocaleString("pt-BR")}
+          </div>
+        </div>
+      </div>
+
+      <div className="small muted" style={{ marginBottom: 10 }}>
+        {v.requisicoes || 0} requisição(ões) à API
+        {v.ate ? `, varrendo até ${formatData(v.ate)}` : ""}. Esta leitura
+        acontece só neste botão — não recarrega sozinha, não entra em
+        agendamento e nada dela é gravado no banco do painel.
+      </div>
+
+      {!v.completa && (
+        <div
+          className="card card-tight"
+          style={{
+            background: "var(--amber-bg)",
+            borderColor: "var(--amber-bd)",
+            marginBottom: 10,
+          }}
+        >
+          <span className="small" style={{ color: "var(--amber-fg)" }}>
+            A varredura parou no teto de {(v.teto || 0).toLocaleString("pt-BR")}{" "}
+            eventos com câmeras ainda sem data. Quem aparece como{" "}
+            <em>sem evento</em> pode ter falado antes de{" "}
+            {v.ate ? formatData(v.ate) : "o intervalo varrido"} — o que não é o
+            mesmo que nunca ter falado.
+          </span>
+        </div>
+      )}
+
+      {lista.length === 0 ? (
+        <Vazio texto="Nenhuma câmera bate com o filtro." />
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{t("Câmera")}</th>
+                <th>{t("Situação")}</th>
+                <th>Última interação</th>
+                <th>Tipo</th>
+                <th>Cadastro</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lista.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <div style={{ fontWeight: 500 }}>{c.nome}</div>
+                    <div className="small muted mono">
+                      id {c.id}
+                      {c.grupo ? ` · grupo ${c.grupo}` : ""}
+                    </div>
+                  </td>
+                  <td>
+                    {!c.ativo ? (
+                      <span className="pill">desativada</span>
+                    ) : c.ultima_interacao ? (
+                      <span className="pill pill-ok">
+                        <IconOk size={11} /> ativa
+                      </span>
+                    ) : (
+                      <span className="pill pill-warn">
+                        <IconAlerta size={11} /> sem evento
+                      </span>
+                    )}
+                  </td>
+                  <td className="small">
+                    {c.ultima_interacao ? (
+                      <span className="mono">
+                        {formatData(c.ultima_interacao)}
+                      </span>
+                    ) : (
+                      <span className="muted">
+                        {v.ate
+                          ? `sem evento desde ${formatData(v.ate)}`
+                          : "sem evento"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="small muted">{c.tipo || "—"}</td>
+                  <td className="small">
+                    {c.cadastro_em ? (
+                      <span
+                        className="mono muted"
+                        title={`campo '${c.cadastro_campo}' do registro da câmera`}
+                      >
+                        {formatData(c.cadastro_em)}
+                      </span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DispositivosView() {
   const { hosts, hostId, setHostId, carregando: carregandoHosts } = useHosts();
   const [dados, setDados] = useState(null);
@@ -337,6 +514,26 @@ export default function DispositivosView() {
   const [erroLicenca, setErroLicenca] = useState("");
   const [lendoLicenca, setLendoLicenca] = useState(false);
   const [ritmo, setRitmo] = useState(null);
+  // Última interação por câmera. Estado separado de propósito: é a única
+  // coisa desta tela que o operador dispara e lê sem depender da contagem
+  // de eventos, que é cara.
+  const [interacao, setInteracao] = useState(null);
+  const [erroInteracao, setErroInteracao] = useState("");
+  const [buscandoInteracao, setBuscandoInteracao] = useState(false);
+
+  const buscarInteracao = useCallback(async () => {
+    if (!hostId) return;
+    setBuscandoInteracao(true);
+    setErroInteracao("");
+    try {
+      setInteracao(await api.ultimaInteracao(hostId));
+    } catch (ex) {
+      setErroInteracao(ex.message);
+      setInteracao(null);
+    } finally {
+      setBuscandoInteracao(false);
+    }
+  }, [hostId]);
 
   const consultar = useCallback(async () => {
     if (!hostId) return;
@@ -354,6 +551,10 @@ export default function DispositivosView() {
 
   useEffect(() => {
     setDados(null);
+    // Dado de outro servidor na tela é pior que tela vazia: a tabela
+    // continuaria plausível, com os nomes errados.
+    setInteracao(null);
+    setErroInteracao("");
   }, [hostId]);
 
   // Licença é leitura barata (um GET, sem SSH e sem varrer evento), então
@@ -423,6 +624,16 @@ export default function DispositivosView() {
           <button className="btn btn-primary" onClick={consultar} disabled={carregando || !hostId}>
             <IconAtualizar size={15} /> {carregando ? "Consultando…" : "Consultar"}
           </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={buscarInteracao}
+            disabled={buscandoInteracao || !hostId}
+            title="Lê o fluxo de eventos e diz quando cada câmera falou pela última vez. Roda só neste clique."
+          >
+            <IconAgenda size={15} />{" "}
+            {buscandoInteracao ? "Varrendo…" : "Última interação"}
+          </button>
           {dados && (
             <button
               type="button"
@@ -440,6 +651,16 @@ export default function DispositivosView() {
       </div>
 
       <Erro mensagem={erro} onTentar={consultar} />
+
+      <Erro mensagem={erroInteracao} onTentar={buscarInteracao} />
+
+      {(buscandoInteracao || interacao) && (
+        <UltimaInteracao
+          dados={interacao}
+          buscando={buscandoInteracao}
+          filtro={filtro}
+        />
+      )}
 
       <Licenciamento
         ritmo={ritmo}

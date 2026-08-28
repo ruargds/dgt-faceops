@@ -282,6 +282,13 @@ export const api = {
   monitorAlertas: () => get("/monitor/alertas"),
 
   // Dispositivos (câmeras)
+  // Última interação por câmera. Chamada SÓ por clique: a varredura lê o
+  // fluxo de eventos do FindFace e não tem por que rodar sozinha.
+  ultimaInteracao: (id, maxEventos) =>
+    get(
+      `/dispositivos/${id}/ultima-interacao` +
+        (maxEventos ? `?max_eventos=${encodeURIComponent(maxEventos)}` : "")
+    ),
   dispositivos: (id, periodo) => get(`/dispositivos/${id}?periodo=${periodo}`),
   redescobrirDispositivos: (id) => post(`/dispositivos/${id}/redescobrir`),
 

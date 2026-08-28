@@ -129,6 +129,22 @@ NOMES_RECURSO = {
 CHAVES_MAPA = ("limits", "features", "modules", "products", "counts", "quotas")
 
 
+def _id_camera(evento: dict) -> str:
+    """
+    Id da câmera de um evento.
+
+    Dependendo da versão e do serializer, `camera` vem como id cru ou como
+    objeto aninhado com o id dentro. Tratar só um dos casos daria uma
+    tabela inteira de "sem evento" — errada, e convincente.
+    """
+    bruto = evento.get("camera")
+    if isinstance(bruto, dict):
+        bruto = bruto.get("id")
+    if bruto in (None, ""):
+        bruto = evento.get("camera_id")
+    return "" if bruto in (None, "") else str(bruto)
+
+
 def _num(valor):
     """Número inteiro, ou None. `True` não é 1 aqui."""
     if isinstance(valor, bool):
@@ -1198,4 +1214,198 @@ class FFApiService:
                         "tabelas_eventos": list(TIPOS_EVENTO)},
             "estimativa": False,
             "via": "api",
+        }
+
+    # ── Última interação por câmera ────────────────────────────────────
+
+    # Campos de data que aparecem com nomes diferentes conforme a versão
+    # do FindFace. Procuro nesta ordem e digo qual usei — assim a coluna
+    # não fica vazia só porque um nome de campo mudou.
+    CAMPOS_DATA_CAMERA = (
+        "last_seen", "last_frame_time", "last_active", "last_event_date",
+        "modified_date", "updated_date", "created_date",
+    )
+
+    @staticmethod
+    def _quando(valor):
+        """Converte o que a API mandar numa data, ou devolve None."""
+        if not valor:
+            return None
+        if isinstance(valor, bool):
+            return None
+        if isinstance(valor, (int, float)):
+            # epoch em segundos ou em milissegundos
+            seg = valor / 1000 if valor > 1e11 else valor
+            try:
+                return datetime.fromtimestamp(seg, tz=timezone.utc)
+            except (OverflowError, OSError, ValueError):
+                return None
+        if not isinstance(valor, str):
+            return None
+        try:
+            d = datetime.fromisoformat(valor.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+    @classmethod
+    def _data_do_cadastro(cls, camera: dict):
+        """(data, nome do campo) do carimbo mais recente no registro."""
+        melhor, origem = None, ""
+        saude = camera.get("health_status")
+        for campo in cls.CAMPOS_DATA_CAMERA:
+            bruto = camera.get(campo)
+            if bruto is None and isinstance(saude, dict):
+                bruto = saude.get(campo)
+            quando = cls._quando(bruto)
+            if quando and (melhor is None or quando > melhor):
+                melhor, origem = quando, campo
+        return melhor, origem
+
+    async def ultima_interacao(
+        self, host, max_eventos: int = 3000, por_pagina: int = 200
+    ) -> dict:
+        """
+        Quando cada câmera cadastrada deu sinal de vida pela última vez.
+
+        **Por que não uma consulta por câmera.** O caminho óbvio —
+        perguntar à API o último evento de cada câmera — custa uma
+        requisição por câmera e por tipo de evento. Com 453 dispositivos e
+        três tipos, são mais de mil chamadas na API de produção só para
+        desenhar uma tabela. É o peso que este painel existe para não criar.
+
+        **O que faço no lugar.** Leio o fluxo de eventos UMA vez, do mais
+        novo para o mais velho: a primeira vez que uma câmera aparece é o
+        último evento dela. Algumas dezenas de requisições cobrem todas as
+        câmeras que estão falando, em qualquer tamanho de instalação.
+
+        **Onde isso tem limite, e o que digo sobre ele.** A varredura para
+        em `max_eventos`. Câmera que não apareceu até lá não vira "nunca":
+        vira "sem evento desde <data>", com a data junto. A diferença
+        importa — "nunca" manda alguém procurar defeito numa câmera que
+        talvez só esteja quieta desde ontem.
+
+        Roda só quando alguém pede. Nada disto entra em agendamento.
+        """
+        if not configurado(host):
+            raise FFApiError("URL ou token da API não cadastrados")
+
+        auth = await self._credenciais(host)
+        base = await self._base(host)
+
+        # ── Câmeras cadastradas ────────────────────────────────────────
+        cameras: dict[str, dict] = {}
+        proxima = f"{base}/cameras/"
+        paginas = 0
+        while proxima and paginas < 50:
+            dados = await self._get(
+                proxima, auth, {"limit": por_pagina} if paginas == 0 else None
+            )
+            itens = dados.get("results", dados if isinstance(dados, list) else [])
+            for c in itens:
+                cid = str(c.get("id", ""))
+                if not cid:
+                    continue
+                quando, campo = self._data_do_cadastro(c)
+                cameras[cid] = {
+                    "id": cid,
+                    "nome": c.get("name") or c.get("comment") or f"camera {cid}",
+                    "ativo": bool(c.get("active", c.get("enabled", True))),
+                    "grupo": str(c.get("group", c.get("camera_group", ""))),
+                    "cadastro_em": quando.isoformat() if quando else None,
+                    "cadastro_campo": campo,
+                    "ultima_interacao": None,
+                    "tipo": "",
+                    "evento_id": None,
+                }
+            proxima = dados.get("next") if isinstance(dados, dict) else None
+            paginas += 1
+
+        agora = datetime.now(timezone.utc).isoformat()
+        if not cameras:
+            return {
+                "host": host.name, "gerado_em": agora, "total_cameras": 0,
+                "com_interacao": 0, "sem_interacao": 0, "cameras": [],
+                "varredura": {
+                    "eventos_lidos": 0, "requisicoes": paginas, "ate": None,
+                    "completa": True, "por_tipo": {}, "teto": max_eventos,
+                },
+            }
+
+        # ── Fluxo de eventos, do mais novo para o mais velho ───────────
+        faltam = set(cameras)
+        lidos = 0
+        requisicoes = paginas
+        mais_antigo = None
+        por_tipo: dict[str, int] = {}
+
+        for tipo in TIPOS_EVENTO:
+            if not faltam or lidos >= max_eventos:
+                break
+            url = f"{base}/events/{tipo}/"
+            # `ordering` é do Django REST. Sem ele a ordem não é garantida,
+            # e "a primeira vez que a câmera aparece" deixaria de significar
+            # "o evento mais recente dela". Tipo que recusar o parâmetro é
+            # pulado: data errada seria pior que data ausente.
+            params = {"limit": por_pagina, "ordering": "-created_date"}
+            lidos_tipo = 0
+            try:
+                while faltam and lidos < max_eventos:
+                    dados = await self._get(url, auth, params)
+                    requisicoes += 1
+                    itens = dados.get(
+                        "results", dados if isinstance(dados, list) else []
+                    )
+                    if not itens:
+                        break
+                    for ev in itens:
+                        lidos += 1
+                        lidos_tipo += 1
+                        quando = self._quando(
+                            ev.get("created_date") or ev.get("timestamp")
+                        )
+                        if quando and (mais_antigo is None or quando < mais_antigo):
+                            mais_antigo = quando
+                        cam = cameras.get(_id_camera(ev))
+                        if cam is None or cam["ultima_interacao"] or not quando:
+                            continue
+                        cam["ultima_interacao"] = quando.isoformat()
+                        cam["tipo"] = tipo
+                        cam["evento_id"] = ev.get("id")
+                        faltam.discard(cam["id"])
+                    seguinte = dados.get("next") if isinstance(dados, dict) else None
+                    if not seguinte:
+                        break
+                    url, params = seguinte, None
+            except FFApiError:
+                # Tipo que não existe nesta instalação não invalida os outros
+                pass
+            por_tipo[tipo] = lidos_tipo
+
+        # Truncada = ainda faltava câmera quando o teto chegou. Vira texto
+        # na tela: "sem evento desde <data>" não é "nunca", e mandar alguém
+        # procurar defeito na câmera errada custa manhã de trabalho.
+        truncada = bool(faltam) and lidos >= max_eventos
+
+        lista = sorted(
+            cameras.values(),
+            # Sem interação primeiro: é o que a pessoa abriu a tela para ver.
+            key=lambda c: (c["ultima_interacao"] or "", c["nome"]),
+        )
+
+        return {
+            "host": host.name,
+            "gerado_em": agora,
+            "total_cameras": len(lista),
+            "com_interacao": sum(1 for c in lista if c["ultima_interacao"]),
+            "sem_interacao": sum(1 for c in lista if not c["ultima_interacao"]),
+            "cameras": lista,
+            "varredura": {
+                "eventos_lidos": lidos,
+                "requisicoes": requisicoes,
+                "ate": mais_antigo.isoformat() if mais_antigo else None,
+                "completa": not truncada,
+                "por_tipo": por_tipo,
+                "teto": max_eventos,
+            },
         }

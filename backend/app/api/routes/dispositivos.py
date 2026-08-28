@@ -96,6 +96,66 @@ async def licenca(
     return dados
 
 
+@router.get("/{host_id}/ultima-interacao")
+async def ultima_interacao(
+    host_id: int,
+    request: Request,
+    max_eventos: int = Query(default=3000, ge=200, le=20000),
+    autor: User = Depends(require_permission("metrics.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Quando cada câmera cadastrada deu sinal de vida pela última vez.
+
+    Devolve id, nome e a data/hora do último evento de cada câmera, lendo
+    o fluxo de eventos uma vez — do mais novo para o mais velho — em vez
+    de perguntar câmera por câmera. Com 453 dispositivos a diferença é
+    entre algumas dezenas de requisições e mais de mil.
+
+    **Só roda quando alguém pede.** Não entra em agendamento, não é
+    chamada quando a tela abre e nada do resultado é gravado em banco: o
+    painel não guarda uma cópia envelhecida do que a API já sabe.
+
+    `max_eventos` limita a varredura. Câmera que não apareceu dentro do
+    limite volta com `ultima_interacao: null` e a resposta diz até que
+    data foi varrido — "sem evento desde X" não é "nunca".
+    """
+    from app.services.ffapi_service import FFApiError, configurado
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+    if not configurado(host):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"'{host.name}' não tem URL e token da API do FindFace "
+                "cadastrados (Servidores → API do FindFace)."
+            ),
+        )
+
+    try:
+        dados = await request.app.state.ffapi.ultima_interacao(
+            host, max_eventos=max_eventos
+        )
+    except FFApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="dispositivos.consultar",
+        target=host.name,
+        ip=client_ip(request),
+        detail={
+            "consulta": "ultima-interacao",
+            "cameras": dados["total_cameras"],
+            "requisicoes": dados["varredura"]["requisicoes"],
+        },
+    )
+    return dados
+
+
 @router.get("/{host_id}")
 async def listar(
     host_id: int,
