@@ -119,6 +119,37 @@ rodadas de "corrigi / não resolveu".
 Isso existe porque "qual versão está rodando?" respondido por memória é
 a origem de meia hora de confusão em qualquer incidente.
 
+## Quando o servidor não alcança o GitHub
+
+O `atualizar.sh` **para** com saída 4 e explica, em vez de seguir. A razão é
+uma armadilha real: com o remoto inalcançável, comparar `HEAD` com `HEAD` dá
+"já está na versão mais recente", o script reconstrói o mesmo código e o
+operador vê um build que "falhou de novo" — quando a correção nunca chegou
+na máquina.
+
+O git também roda com `GIT_TERMINAL_PROMPT=0`: sem isso ele **abre prompt**
+pedindo usuário e senha e trava o script no meio de uma janela de
+manutenção.
+
+Como resolver, na ordem em que costuma ser o problema:
+
+```bash
+# credencial expirada — token de acesso pessoal:
+git remote set-url origin https://TOKEN@github.com/ruargds/dgt-faceops.git
+
+# ou chave SSH de deploy (não expira):
+git remote set-url origin git@github.com:ruargds/dgt-faceops.git
+
+# sem saída para a internet: leve o pacote gerado por empacotar.sh
+```
+
+Para reconstruir de propósito o código que já está na máquina — depois de
+uma edição local, ou para refazer a imagem — existe a opção explícita:
+
+```bash
+bash atualizar.sh --sem-git
+```
+
 ## Códigos de saída
 
 | Código | Significado |

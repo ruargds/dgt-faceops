@@ -37,6 +37,10 @@ passo() { echo; echo "${C}[$1]${Z} $2"; }
 MODO="atualizar"
 FORCAR=0
 BUILD=1
+# Reconstruir com o codigo que ja esta na maquina, quando o remoto nao
+# responde. Existe para ser uma escolha explicita, e nao o padrao.
+SEM_GIT=0
+REMOTO_OK=1
 for arg in "$@"; do
     case "$arg" in
         --verificar) MODO="verificar" ;;
@@ -44,6 +48,7 @@ for arg in "$@"; do
         # Só para reiniciar os containers com a imagem que já existe
         # (diagnóstico). NÃO aplica versão nova: o código, Python
         # inclusive, é copiado para dentro da imagem no build.
+        --sem-git)   SEM_GIT=1 ;;
         --sem-build) BUILD=0 ;;
         *) erro "opção desconhecida: $arg"; exit 1 ;;
     esac
@@ -68,7 +73,29 @@ if [ ! -d .git ]; then
     aviso "sem repositório git — só posso reconstruir o código local"
     ATUAL="local"; NOVA="local"
 else
-    git fetch --quiet origin 2>/dev/null || aviso "não consegui falar com o remoto"
+    # `GIT_TERMINAL_PROMPT=0`: sem isso o git ABRE PROMPT pedindo usuário e
+    # senha e trava o script -- foi o que aconteceu em campo, e o operador
+    # so descobriu porque estava olhando a tela.
+    if ! GIT_TERMINAL_PROMPT=0 git fetch --quiet origin 2>/dev/null; then
+        REMOTO_OK=0
+        erro "não consegui falar com o remoto ($(git remote get-url origin 2>/dev/null))"
+        echo
+        echo "      Isto NÃO é 'já está atualizado': é o painel sem saber o que"
+        echo "      existe lá fora. Reconstruir agora refaz o MESMO código."
+        echo
+        echo "      Causas comuns e o que fazer:"
+        echo "        • credencial do GitHub expirada — configure um token:"
+        echo "            git remote set-url origin https://TOKEN@github.com/ruargds/dgt-faceops.git"
+        echo "        • ou use chave SSH de deploy:"
+        echo "            git remote set-url origin git@github.com:ruargds/dgt-faceops.git"
+        echo "        • sem saída para a internet: aplique por pacote (empacotar.sh)"
+        echo
+        echo "      Para reconstruir mesmo assim, com o código que já está aqui:"
+        echo "        bash atualizar.sh --sem-git"
+        echo
+        [ "$SEM_GIT" = "1" ] || exit 4
+        aviso "seguindo com o código local, a seu pedido (--sem-git)"
+    fi
     ATUAL="$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
     NOVA="$(git rev-parse --short origin/main 2>/dev/null || echo "$ATUAL")"
     echo "  instalada: $ATUAL"
@@ -179,7 +206,7 @@ if [ -d .git ] && [ "$ATUAL" != "$NOVA" ]; then
     # aborta por "local changes". Nao toca em .env, tls/ nem data/.
     git checkout -- '*.sh' 'scripts/*.sh' 2>/dev/null || true
     ANTES_SELF="$(md5sum "$0" 2>/dev/null | cut -d' ' -f1)"
-    if git pull --ff-only --quiet origin main 2>/dev/null; then
+    if GIT_TERMINAL_PROMPT=0 git pull --ff-only --quiet origin main 2>/dev/null; then
         DEPOIS_SELF="$(md5sum "$0" 2>/dev/null | cut -d' ' -f1)"
         if [ -n "$ANTES_SELF" ] && [ "$ANTES_SELF" != "$DEPOIS_SELF" ]; then
             echo "  atualizador atualizado — reiniciando com a versao nova"
