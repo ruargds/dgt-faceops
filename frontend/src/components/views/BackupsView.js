@@ -952,6 +952,10 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
   // tela não espera por ela para deixar escolher.
   const [estimativa, setEstimativa] = useState(null);
   const [medindo, setMedindo] = useState(false);
+  // Erro da medicao aparece na tela. Engolir a falha aqui repetiria o erro
+  // que ja custou caro nesta tela: a estimativa simplesmente nao apareceria,
+  // e ninguem saberia se e porque nao mediu ou porque a tela nao faz isso.
+  const [erroEstimativa, setErroEstimativa] = useState("");
   const { ativos, padroes, carregando: carregandoDest } = useDestinos();
   const [hostId, setHostId] = useState(hosts[0] ? hosts[0].id : null);
   const [perfil, setPerfil] = useState("essencial");
@@ -976,11 +980,12 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
       .catch(() => {});
 
     setEstimativa(null);
+    setErroEstimativa("");
     setMedindo(true);
     api
       .estimativa(hostId)
       .then((r) => vivo && setEstimativa(r))
-      .catch(() => {})
+      .catch((ex) => vivo && setErroEstimativa(ex.message))
       .finally(() => vivo && setMedindo(false));
 
     return () => {
@@ -1141,12 +1146,19 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
           </div>
           )}
 
-          {!todos && (medindo || estimativa) && (
+          {!todos && (medindo || estimativa || erroEstimativa) && (
             <div className="field">
               <label className="label">Volume e espaço</label>
               {medindo && !estimativa && (
                 <div className="small muted">
-                  Medindo no servidor… (`configs/`, bancos e diretório de dados)
+                  Medindo no servidor: configs/, bancos e diretório de dados. O
+                  diretório de dados pode levar alguns segundos.
+                </div>
+              )}
+              {erroEstimativa && (
+                <div className="small" style={{ color: "var(--amber-fg)" }}>
+                  Não consegui medir: {erroEstimativa}. Dá para disparar assim
+                  mesmo — a estimativa é uma conferência, não um requisito.
                 </div>
               )}
               {estimativa && <Estimativa dados={estimativa} perfil={perfil} />}
