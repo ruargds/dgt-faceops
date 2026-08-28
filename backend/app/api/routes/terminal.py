@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import client_ip, require_permission
 from app.core.permissions import permissions_for
-from app.core.security import decode_access_token
 from app.db.database import AsyncSessionLocal, get_db
 from app.models.audit import TerminalSession
 from app.models.host import Host
@@ -212,7 +211,6 @@ async def terminal_ws(
                 await websocket.send_text(json.dumps({"tipo": "out", "dados": dados}))
 
         async def _do_navegador_para_shell() -> None:
-            nonlocal motivo
             while True:
                 bruto = await websocket.receive_text()
                 try:

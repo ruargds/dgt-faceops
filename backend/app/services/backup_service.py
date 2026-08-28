@@ -353,8 +353,6 @@ class BackupService:
         # Lista vazia significa "usar os destinos padrão", igual ao backup
         # do painel: assim o agendamento continua valendo quando o padrão
         # muda depois.
-        from app.models.destino import Destino
-
         consulta = select(Destino).where(Destino.enabled.is_(True))
         consulta = (
             consulta.where(Destino.id.in_(destinos)) if destinos

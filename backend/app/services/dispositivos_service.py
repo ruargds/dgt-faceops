@@ -325,7 +325,7 @@ echo "{SEP}END"
             (c for c in ("external_detector", "is_external_detector") if c in cols), ""
         )
 
-        sel = [f"c.id", f"c.{col_nome} AS nome"]
+        sel = ["c.id", f"c.{col_nome} AS nome"]
         sel.append(f"c.{col_ativo}::text AS ativo" if col_ativo else "'?' AS ativo")
         sel.append(f"c.{col_grupo}::text AS grupo" if col_grupo else "'' AS grupo")
         sel.append(

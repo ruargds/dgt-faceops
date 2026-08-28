@@ -184,7 +184,10 @@ export default function BackupsView() {
                     if (!arquivo) return;
                     setImportando(true);
                     try {
-                      await api.importarBackup(arquivo, hostId || undefined);
+                      // `filtroHost` e o seletor do cabecalho -- `hostId`
+                      // so existe dentro do modal. Usar o nome errado aqui
+                      // derrubava a tela no clique, com ReferenceError.
+                      await api.importarBackup(arquivo, filtroHost || undefined);
                       await carregar();
                     } catch (ex) {
                       window.alert(ex.message);

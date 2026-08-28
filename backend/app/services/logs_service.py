@@ -15,7 +15,6 @@ formatação acontece no navegador. Três razões: não depende de `jq` estar
 instalado no host, não deixa a expressão do usuário chegar perto de um
 shell, e permite trocar o formato sem reabrir a conexão.
 """
-import asyncio
 import re
 import time
 from dataclasses import dataclass, field

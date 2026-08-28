@@ -24,7 +24,6 @@ from pathlib import Path
 import asyncssh
 
 from app.core.config import settings
-from app.core.vault import decrypt_secret
 from app.services.ssh_service import SSHError
 
 log = logging.getLogger("faceops.terminal")

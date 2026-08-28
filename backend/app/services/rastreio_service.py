@@ -385,7 +385,6 @@ class RastreioService:
         achados: list[dict] = []
         for comp in dados.get("componentes") or []:
             container = comp.get("container") or ""
-            escutando = comp.get("escutando")
             vivo = comp.get("vivo")
 
             # O caso que importa: o container está de pé e o serviço não

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.deps import client_ip, get_current_user, require_permission
+from app.core.deps import client_ip, require_permission
 from app.core.vault import encrypt_secret, fingerprint
 from app.db.database import get_db
 from app.models.host import Host

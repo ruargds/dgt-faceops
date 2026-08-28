@@ -379,6 +379,8 @@ const FRASES = {
   "O que está entre colchetes no bloco abaixo.":
     "What is between brackets in the block below.",
   "Configurações → Faxina automática": "Settings → Automatic housekeeping",
+  "Artefato": "Artifact",
+  "Módulos licenciados": "Licensed modules",
 };
 
 export default FRASES;

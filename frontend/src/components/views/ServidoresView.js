@@ -306,7 +306,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
           <div className="row row-2">
             <div className="field">
               <label className="label label-required">{t("Nome")}</label>
-              <input value={f.name} onChange={set("name")} placeholder={t("vm-appserver")} required />
+              <input value={f.name} onChange={set("name")} placeholder="vm-appserver" required />
             </div>
             <div className="field">
               <label className="label">{t("Papel")}</label>

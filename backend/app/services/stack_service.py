@@ -364,7 +364,6 @@ echo "{SEP}END"
 
         servicos.sort(key=lambda s: (s["e_job"], s["estado"] == "running", s["servico"]))
 
-        rodando = sum(1 for s in servicos if s["estado"] == "running")
 
         # Um job só é problema se terminou com erro; um serviço contínuo é
         # problema se não está de pé, está unhealthy, ou morreu por falta

@@ -157,7 +157,6 @@ echo "{SEP}FIM"
             numero, _, conteudo = linha.partition(":")
             for chave in CHAVES:
                 if re.search(rf"'?{chave}'?\s*[:=]", conteudo):
-                    valor = conteudo.split(":", 1)[-1] if ":" in conteudo else conteudo
                     atuais[chave] = {
                         "linha": numero.strip(),
                         "conteudo": conteudo.strip(),

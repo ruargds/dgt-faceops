@@ -318,10 +318,16 @@ async def iniciar() -> None:
     try:
         from sqlalchemy import update as _update
 
+        # `BackupRun` precisa ser importado AQUI: no topo o modulo so
+        # importa `app.models` para registrar as tabelas, e o nome nao fica
+        # disponivel. Sem este import, o bloco levantava NameError -- que o
+        # `except Exception` engolia, e a varredura de orfas nunca rodou.
+        from app.models.backup import BackupRun as _BackupRun
+
         async with AsyncSessionLocal() as db_limpeza:
             resultado = await db_limpeza.execute(
-                _update(BackupRun)
-                .where(BackupRun.status.in_(("executando", "pendente")))
+                _update(_BackupRun)
+                .where(_BackupRun.status.in_(("executando", "pendente")))
                 .values(
                     status="falha",
                     stage="Interrompido",

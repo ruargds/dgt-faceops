@@ -318,7 +318,6 @@ async def logs_ws(websocket: WebSocket, ticket: str = Query(...)):
                 await websocket.send_text(json.dumps({"tipo": "linha", "dados": linha}))
 
         async def _receber() -> None:
-            nonlocal motivo
             while True:
                 bruto = await websocket.receive_text()
                 try:
