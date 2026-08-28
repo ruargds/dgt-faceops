@@ -20,15 +20,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -fsSL https://downloads.rclone.org/rclone-current-linux-amd64.zip -o /tmp/rclone.zip \
     && unzip -q -j /tmp/rclone.zip '*/rclone' -d /usr/local/bin \
     && chmod +x /usr/local/bin/rclone \
-    && install -d /usr/share/postgresql-common/pgdg \
-    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-         -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
-    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
-         > /etc/apt/sources.list.d/pgdg.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client-16 \
-    && apt-get purge -y --auto-remove gnupg \
     && rm -rf /tmp/rclone.zip /var/lib/apt/lists/*
+
+# Cliente do PostgreSQL 16, quando a rede permitir. Ele NAO e obrigatorio:
+# o backup do painel exporta o banco por conta propria quando `pg_dump` nao
+# existe. A tentativa fica isolada e termina em `|| true` de proposito --
+# num ambiente de rede fechada, que e o normal aqui, o build nao pode
+# depender de alcancar apt.postgresql.org.
+#
+# (O cliente do Debian nao serve: e o 15, e pg_dump 15 recusa falar com
+# servidor 16, que e a versao do banco do painel.)
+RUN set -e; \
+    ( apt-get update \
+      && apt-get install -y --no-install-recommends gnupg \
+      && install -d /usr/share/postgresql-common/pgdg \
+      && curl -fsSL --max-time 20 https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+           -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+      && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+           > /etc/apt/sources.list.d/pgdg.list \
+      && apt-get update \
+      && apt-get install -y --no-install-recommends postgresql-client-16 \
+    ) || echo "AVISO: sem cliente PostgreSQL; o painel exporta o banco por conta propria"; \
+    apt-get purge -y --auto-remove gnupg 2>/dev/null || true; \
+    rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/pgdg.list
 
 WORKDIR /app
 

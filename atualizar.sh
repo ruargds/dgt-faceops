@@ -160,8 +160,17 @@ ok "carga aceitável"
 passo "4/6" "Atualizando o código..."
 
 if [ -f .env ]; then
-    cp -a .env ".env.backup-$(date +%Y%m%d-%H%M%S)"
-    ok "cópia de segurança do .env"
+    # Copia de seguranca COM rotatividade. Antes disto, cada execucao
+    # deixava um arquivo: 21 copias do .env em dois dias, no ambiente real.
+    # Backup que ninguem apaga vira lixo, e lixo no diretorio da aplicacao
+    # e o tipo de coisa que esconde o arquivo que importa.
+    ULTIMA_COPIA="$(ls -1t .env.backup-* 2>/dev/null | head -1)"
+    if [ -z "$ULTIMA_COPIA" ] || ! cmp -s .env "$ULTIMA_COPIA"; then
+        cp -a .env ".env.backup-$(date +%Y%m%d-%H%M%S)"
+    fi
+    # Mantem as 5 mais recentes e apaga o resto.
+    ls -1t .env.backup-* 2>/dev/null | tail -n +6 | xargs -r rm -f
+    ok "cópia de segurança do .env (mantidas as 5 mais recentes)"
 fi
 
 REVERTER_PARA="$ATUAL"

@@ -268,6 +268,9 @@ COPIA={arquivo}.faceops-$(date +%Y%m%d-%H%M%S)
 cp -a {arquivo} "$COPIA"
 echo "{SEP}COPIA"
 echo "$COPIA"
+# Rotatividade: mantem as 5 copias mais recentes. Copia de seguranca que
+# ninguem apaga vira lixo no diretorio de configuracao do fabricante.
+ls -1t {arquivo}.faceops-* 2>/dev/null | tail -n +6 | xargs -r rm -f
 
 python3 - "$COPIA" <<'PY'
 import sys

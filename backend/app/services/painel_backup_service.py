@@ -112,6 +112,48 @@ class PainelBackupService:
         run.progress = 20
         await db.commit()
 
+        # `pg_dump` é o caminho preferido — dump nativo, restaurável por
+        # objeto. Mas ele pode não existir: a imagem só instala o cliente
+        # quando a rede alcança o repositório da PostgreSQL, e num ambiente
+        # fechado (o normal aqui) ela não alcança.
+        #
+        # Sem ele, o painel exporta o próprio banco: uma tabela por arquivo
+        # JSON, com o mesmo conteúdo. É menos elegante que um dump binário
+        # e infinitamente melhor que não ter backup do painel — que era o
+        # que acontecia antes, com FileNotFoundError na cara do operador.
+        import shutil as _shutil
+
+        tem_pg_dump = _shutil.which("pg_dump") is not None
+        exportacao: dict[str, list[dict]] = {}
+
+        if not tem_pg_dump:
+            registrar("pg_dump indisponível — exportando o banco pelo painel")
+            from app.db.database import Base
+
+            def _serializavel(valor):
+                from datetime import date, datetime as _dt
+                from decimal import Decimal
+
+                if isinstance(valor, (_dt, date)):
+                    return valor.isoformat()
+                if isinstance(valor, Decimal):
+                    return float(valor)
+                if isinstance(valor, (bytes, bytearray)):
+                    import base64
+
+                    return {"__bytes_base64__": base64.b64encode(valor).decode()}
+                return valor
+
+            for tabela in Base.metadata.sorted_tables:
+                linhas = (await db.execute(tabela.select())).mappings().all()
+                exportacao[tabela.name] = [
+                    {k: _serializavel(v) for k, v in linha.items()} for linha in linhas
+                ]
+            registrar(
+                "exportadas %d tabela(s): %s"
+                % (len(exportacao), ", ".join(sorted(exportacao)))
+            )
+
         registrar("iniciando dump do banco do painel")
 
         def _empacotar() -> tuple[int, str]:
@@ -120,24 +162,38 @@ class PainelBackupService:
 
                 # -Fc: comprimido, restaurável por objeto — mesmo formato
                 # usado no backup do FindFace, por consistência.
-                dump = base / "faceops.dump"
-                ambiente = {**os.environ, "PGPASSWORD": settings.POSTGRES_PASSWORD}
-                proc = subprocess.run(
-                    [
-                        "pg_dump",
-                        "-h", settings.POSTGRES_HOST,
-                        "-p", str(settings.POSTGRES_PORT),
-                        "-U", settings.POSTGRES_USER,
-                        "-d", settings.POSTGRES_DB,
-                        "-Fc", "--no-password",
-                        "-f", str(dump),
-                    ],
-                    capture_output=True, text=True, timeout=600, env=ambiente,
-                )
-                if proc.returncode != 0:
-                    raise PainelBackupError(
-                        f"pg_dump falhou: {(proc.stderr or proc.stdout)[-600:]}"
+                if tem_pg_dump:
+                    dump = base / "faceops.dump"
+                    ambiente = {
+                        **os.environ,
+                        "PGPASSWORD": settings.POSTGRES_PASSWORD,
+                    }
+                    proc = subprocess.run(
+                        [
+                            "pg_dump",
+                            "-h", settings.POSTGRES_HOST,
+                            "-p", str(settings.POSTGRES_PORT),
+                            "-U", settings.POSTGRES_USER,
+                            "-d", settings.POSTGRES_DB,
+                            "-Fc", "--no-password",
+                            "-f", str(dump),
+                        ],
+                        capture_output=True, text=True, timeout=600, env=ambiente,
                     )
+                    if proc.returncode != 0:
+                        raise PainelBackupError(
+                            f"pg_dump falhou: {(proc.stderr or proc.stdout)[-600:]}"
+                        )
+                else:
+                    import json as _json
+
+                    pasta = base / "banco-json"
+                    pasta.mkdir(parents=True, exist_ok=True)
+                    for nome, linhas in exportacao.items():
+                        (pasta / f"{nome}.json").write_text(
+                            _json.dumps(linhas, ensure_ascii=False, indent=1),
+                            encoding="utf-8",
+                        )
 
                 # Logotipos enviados pela tela
                 marca_origem = Path(settings.LOCAL_BACKUP_DIR).parent / "marca"
@@ -150,8 +206,11 @@ class PainelBackupService:
 Data......: {datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S} UTC
 Banco.....: {settings.POSTGRES_DB}
 
+METODO....: {'pg_dump -Fc' if tem_pg_dump else 'exportacao JSON pelo painel'}
+
 CONTEUDO
-  faceops.dump   banco do painel: servidores e credenciais CIFRADAS,
+  {'faceops.dump   dump binario, restauravel com pg_restore' if tem_pg_dump else 'banco-json/     uma tabela por arquivo JSON'}
+                 banco do painel: servidores e credenciais CIFRADAS,
                  destinos, agendamentos, historico, auditoria, usuarios,
                  configuracao e visoes de log
   marca/         logotipos enviados pela tela
