@@ -15,10 +15,10 @@
 import React, { useEffect, useState } from "react";
 
 export const AUTORIA = {
-  // "DGT FaceOps", sem misturar com a marca do cliente: o `<title>`, o
+  // "FaceOps", sem misturar com a marca do cliente: o `<title>`, o
   // logo e o resto da interface seguem com a identidade de quem usa —
   // ver marca.js. Aqui é sempre a identidade do produto.
-  produto: "DGT FaceOps",
+  produto: "FaceOps",
   desenvolvedora: "FIXR SERVIÇOS DE TECNOLOGIA LTDA",
   cnpj: "54.898.541/0001-08",
   desde: 2026,

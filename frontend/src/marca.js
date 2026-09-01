@@ -8,7 +8,7 @@
 import { api } from "./api";
 
 const PADRAO = {
-  nome: "DGT FaceOps",
+  nome: "FaceOps",
   subtitulo: "Operação do FindFace Multi",
   cliente: "",
   cor_escura: "#0D1F35",

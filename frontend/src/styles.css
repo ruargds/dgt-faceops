@@ -482,35 +482,80 @@ td.right, th.right { text-align: right; }
 }
 .log::-webkit-scrollbar-thumb { background: var(--term-border); }
 
-/* ── Login ──────────────────────────────────────────────────────────── */
+/* ── Login ────────────────────────────────────────────────────────────
+   Estrutura do InfraCore (logo do cliente ACIMA do cartão, nome do produto
+   em tipo leve e espaçado, formulário sozinho no cartão) sobre a superfície
+   escura que veio do Camsync e virou o padrão DGT de tela operacional.
+   A hierarquia é: marca do cliente, produto, ação. */
 
 .login-bg {
-  height: 100%; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(150deg, var(--navy) 0%, var(--navy-2) 55%, #1c3a5c 100%);
-  padding: 20px;
+  min-height: 100%; display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(0,174,239,0.10), transparent 60%),
+    linear-gradient(150deg, var(--navy) 0%, var(--navy-2) 55%, #16324f 100%);
+  padding: 24px;
 }
+.login-wrap { width: 100%; max-width: 400px; }
+
+.login-marca { text-align: center; margin-bottom: 22px; }
+.login-logo {
+  display: block; height: 44px; margin: 0 auto 14px;
+  /* Placa clara sempre: o logo do cliente é a versão escura da marca e
+     sumiria neste fundo. Inverter o logo de um cliente não é decisão de
+     tema — a placa devolve contraste sem tocar nas cores dele. */
+  background: rgba(255,255,255,0.95);
+  border-radius: 10px; padding: 9px 16px; box-sizing: content-box;
+}
+.login-produto {
+  color: #EAF2FA; font-size: 23px; font-weight: 300; letter-spacing: 2.5px;
+}
+.login-sub {
+  color: rgba(234,242,250,0.55); font-size: 12.5px; margin-top: 7px;
+  line-height: 1.6;
+}
+.login-sub strong { color: rgba(234,242,250,0.82); font-weight: 600; }
+
 .login-card {
-  background: var(--white); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.3);
-  width: 100%; max-width: 380px; padding: 34px 30px;
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.34);
+  padding: 28px 26px 24px;
 }
-.login-logo { display: block; height: 40px; margin: 0 auto 6px; }
-/* O logo do login é a versão escura da marca. No tema escuro ele
-   desaparecia no cartão; a placa clara devolve o contraste sem mexer nas
-   cores da marca — inverter o logo de um cliente não é decisão de tema. */
-:root[data-tema="escuro"] .login-logo {
-  background: rgba(255,255,255,0.93);
-  border-radius: 10px;
-  padding: 8px 14px;
-  box-sizing: content-box;
+.login-card .field { margin-bottom: 16px; }
+.login-card input { padding: 11px 12px; }
+
+/* Senha com o olho dentro do campo. */
+.login-senha { position: relative; }
+.login-senha input { padding-right: 44px; }
+.login-olho {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; padding: 7px;
+  color: var(--text-3); display: flex; align-items: center;
+  border-radius: var(--radius);
 }
-.login-sub { text-align: center; color: var(--text-3); font-size: 12.5px; margin-bottom: 26px; }
+.login-olho:hover { color: var(--text-2); background: var(--bg-2); }
+
+.login-entrar {
+  width: 100%; justify-content: center; padding: 12px; margin-top: 2px;
+  font-size: 14px; letter-spacing: .3px;
+}
+
 .login-err {
   background: var(--red-bg); color: var(--red-fg); border: 1px solid var(--red-bd);
-  padding: 9px 12px; border-radius: var(--radius); font-size: 13px; margin-bottom: 14px;
+  padding: 10px 12px; border-radius: var(--radius); font-size: 13px;
+  margin-bottom: 16px; line-height: 1.5;
 }
 .login-hint {
   margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);
-  font-size: 12px; color: var(--text-3); text-align: center;
+  font-size: 12px; color: var(--text-3); text-align: center; line-height: 1.7;
+}
+.login-rodape {
+  font-size: 11px; color: rgba(234,242,250,0.35); letter-spacing: .2px;
+}
+
+@media (max-width: 480px) {
+  .login-bg { padding: 16px; align-items: flex-start; padding-top: 40px; }
+  .login-card { padding: 22px 18px 20px; }
+  .login-produto { font-size: 21px; }
 }
 
 /* ── InTerminal ─────────────────────────────────────────────────────── */

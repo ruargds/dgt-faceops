@@ -32,7 +32,7 @@ JANELA_S = 15
 
 # ── Conteúdo que a contenção escreve ───────────────────────────────────
 
-CONF_RSYSLOG = r"""# DGT FaceOps — reduz log de container no /var/log/syslog.
+CONF_RSYSLOG = r"""# FaceOps — reduz log de container no /var/log/syslog.
 #
 # Descarta APENAS requisicao HTTP bem-sucedida. Erro, aviso e qualquer
 # status fora de 2xx/3xx continuam sendo gravados. O log completo segue
@@ -47,7 +47,7 @@ if re_match($programname, "^[0-9a-f]{12}$") then {
 }
 """
 
-CONF_JOURNALD = """# DGT FaceOps — teto do journal.
+CONF_JOURNALD = """# FaceOps — teto do journal.
 # Sem isto o journald cresce ate 10% do disco; com dezenas de containers
 # logando, passa muito disso antes de alguem perceber.
 [Journal]
@@ -56,7 +56,7 @@ SystemMaxFileSize=200M
 MaxRetentionSec=2week
 """
 
-CONF_LOGROTATE = """# DGT FaceOps — rotaciona o syslog por TAMANHO, nao so por data.
+CONF_LOGROTATE = """# FaceOps — rotaciona o syslog por TAMANHO, nao so por data.
 # A rotacao padrao do Ubuntu e semanal; a 8 GB/dia isso nao segura.
 /var/log/syslog
 {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — empacota o mínimo necessário para rodar
+# FaceOps — empacota o mínimo necessário para rodar
 #
 #     bash empacotar.sh            # gera faceops-<revisao>.tar.gz
 #     bash empacotar.sh --com-docs # inclui a pasta docs/
@@ -36,7 +36,7 @@ SAIDA="/tmp/${NOME}"
 V=$'\033[32m'; A=$'\033[33m'; Z=$'\033[0m'
 
 echo "════════════════════════════════════════════════════"
-echo "  Empacotando DGT FaceOps — revisão ${REV}"
+echo "  Empacotando FaceOps — revisão ${REV}"
 echo "════════════════════════════════════════════════════"
 
 rm -rf "$SAIDA"
@@ -123,7 +123,7 @@ chmod +x "$SAIDA"/*.sh "$SAIDA"/scripts/*.sh 2>/dev/null
 # ── Marca a revisão, para o painel saber o que está no ar ──────────────
 echo "$REV" > "$SAIDA/REVISAO"
 cat > "$SAIDA/LEIA-ME.txt" <<LEIAME
-DGT FaceOps — pacote mínimo
+FaceOps — pacote mínimo
 Revisão: $REV
 Gerado:  $(date '+%Y-%m-%d %H:%M:%S')
 

@@ -210,7 +210,7 @@ class NotificacaoService:
 
         token = decrypt_secret(conta.bot_token_enc)
         texto = (
-            "✅ DGT FaceOps conectado\n"
+            "✅ FaceOps conectado\n"
             f"Teste enviado por {usuario}\n"
             "Este grupo vai receber os avisos configurados."
         )

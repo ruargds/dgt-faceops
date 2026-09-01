@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — inventário de servidor, SOMENTE LEITURA
+# FaceOps — inventário de servidor, SOMENTE LEITURA
 #
 # Levanta tudo que existe na máquina antes de qualquer alteração. Não
 # escreve, não apaga, não reinicia nada — a única coisa criada é a saída,

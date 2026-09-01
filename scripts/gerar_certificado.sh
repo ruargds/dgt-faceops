@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — certificado TLS autoassinado
+# FaceOps — certificado TLS autoassinado
 #
 #     bash scripts/gerar_certificado.sh          # gera se não existir
 #     bash scripts/gerar_certificado.sh --forcar # regera, substituindo

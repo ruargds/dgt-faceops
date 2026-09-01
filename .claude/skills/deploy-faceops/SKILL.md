@@ -1,6 +1,6 @@
 ---
 name: deploy-faceops
-description: Como atualizar o DGT FaceOps no servidor e o que ja quebrou fazendo isso. O caminho da instalacao e /opt/.faceops (nao ~/dgt-faceops), o atualizar.sh reverte sozinho se o painel nao responder em 80s, e 'compila' NAO garante que sobe. Use sempre que for fazer deploy, atualizar o servidor, investigar deploy revertido, mexer em atualizar.sh, deploy.sh, docker-compose.yml, main.py (startup/COLUNAS_NOVAS), ou quando o usuario disser que o painel nao subiu, voltou a versao anterior, ou pedir o comando de atualizacao.
+description: Como atualizar o FaceOps no servidor e o que ja quebrou fazendo isso. O caminho da instalacao e /opt/.faceops (nao ~/dgt-faceops), o atualizar.sh reverte sozinho se o painel nao responder em 80s, e 'compila' NAO garante que sobe. Use sempre que for fazer deploy, atualizar o servidor, investigar deploy revertido, mexer em atualizar.sh, deploy.sh, docker-compose.yml, main.py (startup/COLUNAS_NOVAS), ou quando o usuario disser que o painel nao subiu, voltou a versao anterior, ou pedir o comando de atualizacao.
 ---
 
 # Deploy do FaceOps

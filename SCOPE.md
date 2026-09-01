@@ -1,4 +1,4 @@
-# DGT FaceOps — escopo
+# FaceOps — escopo
 
 ## O problema
 

@@ -167,7 +167,7 @@ CATEGORIAS = {
 CATALOGO: list[ItemConfig] = [
     # Identidade
     ItemConfig("projeto.nome", "projeto", "Nome do painel", "texto",
-               "DGT FaceOps",
+               "FaceOps",
                "Aparece no título da aba e no topo das telas."),
     ItemConfig("projeto.subtitulo", "projeto", "Subtítulo", "texto",
                "Operação do FindFace Multi",

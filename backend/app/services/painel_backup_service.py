@@ -207,7 +207,7 @@ class PainelBackupService:
                     shutil.copytree(marca_origem, base / "marca", dirs_exist_ok=True)
 
                 (base / "MANIFESTO.txt").write_text(
-                    f"""DGT FaceOps — backup do PAINEL
+                    f"""FaceOps — backup do PAINEL
 ==============================
 Data......: {datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S} UTC
 Banco.....: {settings.POSTGRES_DB}

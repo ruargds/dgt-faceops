@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — backup do FindFace Multi 2.4.1
+# FaceOps — backup do FindFace Multi 2.4.1
 #
 # Roda NO SERVIDOR alvo, enviado pelo painel via SSH. Não deixa rastro:
 # grava só no diretório de staging, que o painel busca e limpa depois.
@@ -477,7 +477,7 @@ escrever_manifesto() {
   VERSOES="$(docker ps --filter "label=com.docker.compose.project=$PROJETO"     --format '{{.Image}}' 2>/dev/null | sed 's|.*/||' | sort -u | head -12 | paste -sd', ')"
 
   cat > "$WORK/MANIFESTO.txt" <<MANIFESTO
-DGT FaceOps — manifesto de backup
+FaceOps — manifesto de backup
 =================================
 Perfil.............: $PROFILE
 Rótulo.............: $LABEL

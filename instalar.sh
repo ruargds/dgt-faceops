@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — instalação completa em Ubuntu
+# FaceOps — instalação completa em Ubuntu
 #
 # Um comando, do zero ao painel no ar:
 #
@@ -24,7 +24,7 @@ falha() { echo "  ${R}x${Z}     $*"; echo; exit 1; }
 passo() { echo; echo "${C}[$1]${Z} $2"; }
 
 echo "════════════════════════════════════════════════════"
-echo "  DGT FaceOps — instalação"
+echo "  FaceOps — instalação"
 echo "  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "════════════════════════════════════════════════════"
 
@@ -76,7 +76,7 @@ if systemctl list-unit-files systemd-timesyncd.service >/dev/null 2>&1 &&
 else
     $SUDO apt-get install -y -qq chrony >/dev/null 2>&1
     if ! grep -q "a.ntp.br" /etc/chrony/chrony.conf 2>/dev/null; then
-        printf '\n# DGT FaceOps\nserver a.ntp.br iburst\nserver b.ntp.br iburst\n' \
+        printf '\n# FaceOps\nserver a.ntp.br iburst\nserver b.ntp.br iburst\n' \
             | $SUDO tee -a /etc/chrony/chrony.conf >/dev/null
     fi
     $SUDO systemctl enable --now chrony >/dev/null 2>&1
@@ -227,7 +227,7 @@ ok "painel respondendo"
 # ── 9. Firewall ────────────────────────────────────────────────────────
 passo "9/9" "Firewall..."
 if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
-    $SUDO ufw allow "${PORTA_S}/tcp" comment 'DGT FaceOps' >/dev/null 2>&1
+    $SUDO ufw allow "${PORTA_S}/tcp" comment 'FaceOps' >/dev/null 2>&1
     ok "porta ${PORTA_S} liberada no ufw"
 else
     ok "ufw inativo — nada a fazer"

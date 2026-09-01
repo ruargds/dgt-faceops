@@ -635,7 +635,7 @@ class FFApiService:
                 {
                     "uuid": uuid_dispositivo,
                     "mobile": False,
-                    "device_info": {"name": "DGT FaceOps", "type": "panel"},
+                    "device_info": {"name": "FaceOps", "type": "panel"},
                 },
             ),
             ("json", {}, {"login": usuario, "password": senha, "username": usuario}),

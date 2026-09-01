@@ -1,6 +1,6 @@
 <div align="center">
 
-# DGT FaceOps
+# FaceOps
 
 **Painel de operação para FindFace Multi (NtechLab)**
 

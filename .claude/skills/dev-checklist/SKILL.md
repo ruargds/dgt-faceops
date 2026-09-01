@@ -1,6 +1,6 @@
 ---
 name: dev-checklist
-description: Checklist e regras de ouro antes de commitar no DGT FaceOps, incluindo a regra que mais custou nesta base: a tela nunca pode afirmar sobre ausencia de dado. Use sempre antes de commitar, ao revisar um diff proprio, ao criar rota/model/tela nova, ou quando o usuario pedir revisao, pedir para 'deixar perfeito', reclamar de alarme falso, ou reportar que a tela diz algo que nao confere com a realidade do servidor.
+description: Checklist e regras de ouro antes de commitar no FaceOps, incluindo a regra que mais custou nesta base: a tela nunca pode afirmar sobre ausencia de dado. Use sempre antes de commitar, ao revisar um diff proprio, ao criar rota/model/tela nova, ou quando o usuario pedir revisao, pedir para 'deixar perfeito', reclamar de alarme falso, ou reportar que a tela diz algo que nao confere com a realidade do servidor.
 ---
 
 # Antes de commitar

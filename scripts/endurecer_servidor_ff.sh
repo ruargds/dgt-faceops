@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — endurecimento de servidor do FindFace Multi
+# FaceOps — endurecimento de servidor do FindFace Multi
 #
 # Contém o crescimento de log que enche o disco raiz. Escrito depois de
 # encontrar, num servidor real, 99 GB de /var/log num disco de 123 GB —
@@ -75,7 +75,7 @@ titulo "1. Limite do journald"
 ATUAL="$(sudo journalctl --disk-usage 2>/dev/null)"
 echo "  hoje: $ATUAL"
 escrever /etc/systemd/journald.conf.d/faceops-limite.conf <<'EOF'
-# DGT FaceOps — teto do journal.
+# FaceOps — teto do journal.
 # Sem isto o journald cresce ate 10% do disco; com dezenas de containers
 # logando, passa muito disso antes de alguem perceber.
 [Journal]
@@ -92,7 +92,7 @@ fi
 titulo "2. Rotacao do syslog por TAMANHO"
 aviso "a rotacao padrao do Ubuntu e semanal — a 8 GB/dia isso nao segura"
 escrever /etc/logrotate.d/faceops-syslog <<'EOF'
-# DGT FaceOps — rotaciona o syslog por tamanho, nao so por data.
+# FaceOps — rotaciona o syslog por tamanho, nao so por data.
 # `maxsize` gira assim que passa do limite, independente do dia.
 # `compress` reduz o arquivado; `delaycompress` evita mexer no que
 # o rsyslog ainda pode ter aberto.
@@ -133,7 +133,7 @@ if [ "${AMOSTRA:-0}" -gt 0 ]; then
   echo
 
   escrever /etc/rsyslog.d/30-faceops-docker.conf <<'EOF'
-# DGT FaceOps — reduz o log de container no /var/log/syslog.
+# FaceOps — reduz o log de container no /var/log/syslog.
 #
 # NAO reinicia nada do FindFace: o filtro age na chegada ao rsyslog.
 # O log completo continua acessivel por `docker logs` e `journalctl` —

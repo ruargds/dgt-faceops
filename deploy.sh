@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — deploy
+# FaceOps — deploy
 #
 #   bash deploy.sh            # sobe/reinicia sem rebuild (código Python)
 #   bash deploy.sh --build    # rebuild (requirements, Dockerfile, frontend)
@@ -21,7 +21,7 @@ BUILD=""
 [ "${1:-}" = "--build" ] && BUILD="--build"
 
 echo "════════════════════════════════════════════════════"
-echo "  DGT FaceOps — deploy${BUILD:+ (com rebuild)}"
+echo "  FaceOps — deploy${BUILD:+ (com rebuild)}"
 echo "════════════════════════════════════════════════════"
 
 # ── Pré-condições ──────────────────────────────────────────────────────

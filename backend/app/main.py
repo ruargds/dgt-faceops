@@ -1,5 +1,5 @@
 """
-DGT FaceOps — painel de operação do FindFace Multi.
+FaceOps — painel de operação do FindFace Multi.
 
 Backup com recorrência programada, status e reinício de serviços, leitura
 de RAM/GPU/disco e terminal SSH pelo navegador (InTerminal), para os
@@ -245,7 +245,7 @@ async def _varredor_de_ociosas(app: FastAPI) -> None:
 # API a qualquer um — não é vazamento de segredo, mas é reconhecimento de
 # graça para quem procura o que atacar.
 app = FastAPI(
-    title="DGT FaceOps",
+    title="FaceOps",
     description=(
         "Painel de operação do FindFace Multi 2.4.1 — backup com recorrência, "
         "serviços, recursos e terminal SSH."
@@ -385,7 +385,7 @@ async def iniciar() -> None:
     await app.state.monitor.iniciar()
     app.state.tarefa_varredura = asyncio.create_task(_varredor_de_ociosas(app))
 
-    log.info("DGT FaceOps pronto — fuso %s", settings.TZ)
+    log.info("FaceOps pronto — fuso %s", settings.TZ)
 
 
 @app.on_event("shutdown")
@@ -405,7 +405,7 @@ async def encerrar() -> None:
     if hasattr(app.state, "ssh"):
         await app.state.ssh.close_all()
 
-    log.info("DGT FaceOps encerrado")
+    log.info("FaceOps encerrado")
 
 
 @app.exception_handler(ValueError)

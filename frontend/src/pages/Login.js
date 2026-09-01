@@ -3,11 +3,28 @@ import { api, setToken } from "../api";
 import { MARCA_PADRAO, urlLogo } from "../marca";
 import { t } from "../i18n";
 import { GatilhoDeAutoria } from "../components/SobreOSistema";
+import { IconOlho, IconOlhoCortado } from "../components/Icons";
 
+/**
+ * Tela de entrada.
+ *
+ * Estrutura herdada do InfraCore: o logo do cliente fica **acima** do
+ * cartão, o nome do produto vem logo abaixo em tipo leve e espaçado, e o
+ * formulário ocupa o cartão sozinho. Ganha-se hierarquia — marca, produto,
+ * ação — em vez de empilhar tudo dentro da mesma caixa.
+ *
+ * A superfície escura vem do Camsync, que é o padrão DGT para tela
+ * operacional; aqui ela já era o fundo, e agora o cartão acompanha em vez
+ * de ser uma ilha branca.
+ *
+ * O rodapé pertence à marca de quem USA o painel. Quem o DESENVOLVEU fica
+ * a cinco cliques dali — ver components/SobreOSistema.js.
+ */
 export default function Login({ onEntrar, marca }) {
   const m = marca || MARCA_PADRAO;
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
+  const [verSenha, setVerSenha] = useState(false);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -27,65 +44,87 @@ export default function Login({ onEntrar, marca }) {
 
   return (
     <div className="login-bg">
-      <form className="login-card" onSubmit={enviar}>
-        <img
-          className="login-logo"
-          src={urlLogo(m.logos, "login", "/logos/dgt-login.png")}
-          alt={m.nome}
-        />
-        <div className="login-sub">
-          {m.nome} — {m.subtitulo}
-          {m.cliente && (
-            <>
-              <br />
-              <strong>{m.cliente}</strong>
-            </>
-          )}
-        </div>
-
-        {erro && <div className="login-err">{erro}</div>}
-
-        <div className="field">
-          <label className="label" htmlFor="usuario">{t("login.usuario")}</label>
-          <input
-            id="usuario"
-            value={usuario}
-            onChange={(e) => setUsuario(e.target.value)}
-            autoComplete="username"
-            autoFocus
-            required
+      <div className="login-wrap">
+        {/* Marca do cliente, fora do cartão. */}
+        <div className="login-marca">
+          <img
+            className="login-logo"
+            src={urlLogo(m.logos, "login", "/logos/dgt-login.png")}
+            alt={m.nome}
           />
+          <div className="login-produto">{m.nome}</div>
+          <div className="login-sub">
+            {m.subtitulo}
+            {m.cliente && (
+              <>
+                <br />
+                <strong>{m.cliente}</strong>
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="field">
-          <label className="label" htmlFor="senha">{t("login.senha")}</label>
-          <input
-            id="senha"
-            type="password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            autoComplete="current-password"
-            required
-          />
-        </div>
+        <form className="login-card" onSubmit={enviar}>
+          {erro && <div className="login-err">{erro}</div>}
 
-        <button
-          className="btn btn-primary"
-          style={{ width: "100%", justifyContent: "center", padding: "10px" }}
-          disabled={enviando}
-        >
-          {enviando ? t("login.entrando") : t("login.entrar")}
-        </button>
+          <div className="field">
+            <label className="label" htmlFor="usuario">{t("login.usuario")}</label>
+            <input
+              id="usuario"
+              value={usuario}
+              onChange={(e) => setUsuario(e.target.value)}
+              autoComplete="username"
+              autoFocus
+              required
+            />
+          </div>
 
-        <div className="login-hint">{t("Use as credenciais fornecidas pelo administrador.")}<br /> {t("Troque a senha logo após o primeiro acesso.")}</div>
+          <div className="field">
+            <label className="label" htmlFor="senha">{t("login.senha")}</label>
+            {/* Ver a senha evita o erro mais comum de primeiro acesso:
+                senha temporária longa digitada errada, sem saber onde. */}
+            <div className="login-senha">
+              <input
+                id="senha"
+                type={verSenha ? "text" : "password"}
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="login-olho"
+                onClick={() => setVerSenha((v) => !v)}
+                aria-label={verSenha ? t("Ocultar senha") : t("Mostrar senha")}
+                title={verSenha ? t("Ocultar senha") : t("Mostrar senha")}
+                tabIndex={-1}
+              >
+                {verSenha ? <IconOlhoCortado size={17} /> : <IconOlho size={17} />}
+              </button>
+            </div>
+          </div>
 
-        {/* Rodapé da marca de quem USA o painel. Quem o DESENVOLVEU fica a
-            cinco cliques daqui — mesmo padrão do InfraCore, ver
-            components/SobreOSistema.js. */}
-        <GatilhoDeAutoria style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: "var(--text-3)" }}>
-          {m.cliente ? `${m.nome} — ${m.cliente}` : m.nome}
+          <button
+            className="btn btn-primary login-entrar"
+            disabled={enviando}
+          >
+            {enviando ? t("login.entrando") : t("login.entrar")}
+          </button>
+
+          <div className="login-hint">
+            {t("Use as credenciais fornecidas pelo administrador.")}
+            <br />
+            {t("Troque a senha logo após o primeiro acesso.")}
+          </div>
+        </form>
+
+        <GatilhoDeAutoria style={{ textAlign: "center", marginTop: 20 }}>
+          <span className="login-rodape">
+            {m.cliente ? `${m.nome} — ${m.cliente}` : m.nome}
+          </span>
         </GatilhoDeAutoria>
-      </form>
+      </div>
     </div>
   );
 }

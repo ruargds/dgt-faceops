@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — provisionamento da VM do painel, do zero
+# FaceOps — provisionamento da VM do painel, do zero
 #
 # Roda na VM Linux (Ubuntu 22.04/24.04) hospedada no Windows Server, FORA
 # do ambiente facial. Configura tudo que fica fora do Docker.
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 echo "════════════════════════════════════════════════════"
-echo "  DGT FaceOps — provisionamento da VM do painel"
+echo "  FaceOps — provisionamento da VM do painel"
 echo "════════════════════════════════════════════════════"
 echo ""
 
@@ -44,7 +44,7 @@ else
     sudo apt install -y -qq chrony
     if ! grep -q "a.ntp.br" /etc/chrony/chrony.conf 2>/dev/null; then
         cat << 'CHRONYEOF' | sudo tee -a /etc/chrony/chrony.conf > /dev/null
-# DGT FaceOps — NTP brasileiro
+# FaceOps — NTP brasileiro
 server a.ntp.br iburst
 server b.ntp.br iburst
 server c.ntp.br iburst

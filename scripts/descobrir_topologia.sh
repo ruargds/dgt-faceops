@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — descoberta de topologia
+# FaceOps — descoberta de topologia
 #
 # Roda em CADA servidor do FindFace e responde: o que está instalado aqui?
 # A saída determina qual perfil de backup faz sentido em qual servidor.

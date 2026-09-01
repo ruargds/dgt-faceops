@@ -1,4 +1,4 @@
-# DGT FaceOps — painel de operação do FindFace Multi
+# FaceOps — painel de operação do FindFace Multi
 #
 # Roda numa VM Linux hospedada no Windows Server (Hyper-V), FORA do
 # ambiente facial. Requisito de rede: esta VM precisa alcançar as VMs do

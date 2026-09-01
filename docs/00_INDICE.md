@@ -1,4 +1,4 @@
-# DGT FaceOps — índice da documentação
+# FaceOps — índice da documentação
 
 ## Por onde começar
 

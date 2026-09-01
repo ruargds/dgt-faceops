@@ -69,7 +69,7 @@ aparece no `ps` do servidor.
 
 ```bash
 sudo tee /etc/sudoers.d/faceops > /dev/null <<'EOF'
-# DGT FaceOps — operação do FindFace Multi
+# FaceOps — operação do FindFace Multi
 azureuser ALL=(root) NOPASSWD: /usr/bin/docker, /usr/bin/docker-compose, /usr/bin/tar, /bin/bash
 EOF
 sudo chmod 0440 /etc/sudoers.d/faceops

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# DGT FaceOps — atualização segura
+# FaceOps — atualização segura
 #
 #     bash atualizar.sh              # verifica, confirma e atualiza
 #     bash atualizar.sh --verificar  # só diz se há versão nova, não altera
@@ -62,7 +62,7 @@ PORTA_S="${PORTA_S:-30333}"
 BASE="https://localhost:${PORTA_S}"
 
 echo "════════════════════════════════════════════════════"
-echo "  DGT FaceOps — atualização"
+echo "  FaceOps — atualização"
 echo "  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "════════════════════════════════════════════════════"
 

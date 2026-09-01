@@ -117,6 +117,44 @@ CSS em `styles.css`, seção "Menu em gaveta". Os grids de cartão
 (`.grid-cards`, `.grid-stats`) já eram fluidos (`auto-fill`/`auto-fit`) —
 não precisaram de breakpoint próprio.
 
+## O nome do produto: FaceOps, não "DGT FaceOps"
+
+A **plataforma** é o produto da desenvolvedora; **DGT** é a marca de quem
+usa. Misturar os dois num painel que trata de autoria seria dizer que o
+produto pertence ao cliente — mesmo raciocínio já escrito no InfraCore.
+
+Na prática:
+
+- O produto se chama **FaceOps** em toda parte que fala do produto: painel
+  de autoria, título da API, banners dos scripts, documentação.
+- A marca do cliente entra **em tempo de execução**, pelo whitelabel
+  (`marca.js` + Configurações → `projeto.nome` e `projeto.cliente`). Uma
+  instalação da DGT mostra "DGT" na tela de login porque foi configurada
+  assim, não porque está no código.
+- **Identificadores de infraestrutura não mudaram** e não devem mudar:
+  `faceops_backend`, `faceops_frontend`, `faceops_postgres`,
+  `/opt/.faceops`, o nome do repositório e o do banco. Renomear qualquer
+  um deles quebra deploy, volume e backup existentes — e não traz nada.
+
+## Tela de login
+
+Estrutura herdada do InfraCore: logo do cliente **acima** do cartão, nome
+do produto logo abaixo em tipo leve e espaçado, e o formulário sozinho no
+cartão. A hierarquia fica marca → produto → ação, em vez de tudo empilhado
+na mesma caixa.
+
+A superfície escura vem do Camsync, que já era o padrão DGT para tela
+operacional (registrado no cabeçalho do `styles.css`).
+
+Detalhes que resolvem problema real:
+
+- **Olho na senha.** O erro mais comum de primeiro acesso é senha
+  temporária longa digitada errada, sem saber onde.
+- **Placa clara atrás do logo.** O logo do cliente é a versão escura da
+  marca e sumiria neste fundo. Inverter o logo de um cliente não é decisão
+  de tema; a placa devolve contraste sem tocar nas cores dele.
+- **Rodapé é a marca de quem usa** — e o gatilho de autoria mora nele.
+
 ## Autoria oculta (cinco cliques)
 
 Mesmo padrão do InfraCore (`components/SobreOSistema.js` de lá,
