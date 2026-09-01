@@ -15,8 +15,8 @@ from sqlalchemy import select
 
 from app.api.routes import (
     audit, auth, backups, configuracoes, descoberta, dispositivos, destinos,
-    exportar, hosts, incidentes, limiares, logs, maintenance, marca, monitor,
-    ops, processos, terminal,
+    diagnostico, exportar, hosts, incidentes, limiares, logs, maintenance, marca,
+    monitor, ops, processos, terminal,
 )
 from app.core.config import settings
 from app.core.security import hash_password
@@ -35,6 +35,7 @@ from app.services.configff_service import ConfigFFService
 from app.services.incidente_service import IncidenteService
 from app.services.licenca_service import LicencaService
 from app.services.limiar_service import LimiarService
+from app.services.log_analise_service import LogAnaliseService
 from app.services.internos_service import InternosService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
@@ -314,11 +315,15 @@ async def iniciar() -> None:
     # Incidentes: abre/fecha sozinho a partir do ciclo do monitor (ver
     # IncidenteService). Limiares: exceção de limite por host/serviço por
     # cima do catálogo global (ver LimiarService).
-    app.state.incidentes = IncidenteService()
     app.state.limiares = LimiarService(config)
+    app.state.incidentes = IncidenteService(config, limiares=app.state.limiares)
+    # Análise de log: agrupa erro por molde e casa com o catálogo de erros
+    # conhecidos. Lê SÓ de serviço com incidente aberto — ver o serviço.
+    app.state.analise = LogAnaliseService(app.state.stack, config)
     app.state.monitor = MonitorService(
         app.state.metrics, app.state.stack, config,
         incidentes=app.state.incidentes, limiares=app.state.limiares,
+        analise=app.state.analise,
     )
     app.state.scheduler = SchedulerService(
         app.state.backups,
@@ -456,6 +461,7 @@ app.include_router(marca.router)
 app.include_router(monitor.router)
 app.include_router(incidentes.router)
 app.include_router(limiares.router)
+app.include_router(diagnostico.router)
 app.include_router(dispositivos.router)
 app.include_router(descoberta.router)
 app.include_router(processos.router)

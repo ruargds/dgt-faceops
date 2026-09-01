@@ -15,6 +15,7 @@ from app.models.destino import TIPOS as TIPOS_DESTINO, Destino
 from app.models.host import Host
 from app.models.incidente import Incidente
 from app.models.limiar_override import LimiarOverride
+from app.models.log_padrao import LogPadrao
 from app.models.user import User
 from app.models.visao_log import VisaoLog
 
@@ -31,6 +32,7 @@ __all__ = [
     "LicencaAmostra",
     "Incidente",
     "LimiarOverride",
+    "LogPadrao",
     "VisaoLog",
     "TIPOS_DESTINO",
     "PROFILES",

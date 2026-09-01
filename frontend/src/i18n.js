@@ -34,6 +34,7 @@ const DICIONARIO = {
   "menu.painel": { pt: "Painel", en: "Dashboard" },
   "menu.rastreio": { pt: "Rastreio", en: "Trace" },
   "menu.monitor": { pt: "Monitor", en: "Monitor" },
+  "menu.diagnostico": { pt: "Diagnóstico", en: "Diagnostics" },
   "menu.recursos": { pt: "Recursos", en: "Resources" },
   "menu.processos": { pt: "Processos", en: "Processes" },
   "menu.servicos": { pt: "Serviços", en: "Services" },

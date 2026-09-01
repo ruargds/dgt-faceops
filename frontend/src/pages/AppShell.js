@@ -25,6 +25,7 @@ import DestinosView from "../components/views/DestinosView";
 import LogsView from "../components/views/LogsView";
 import MonitorView from "../components/views/MonitorView";
 import DescobertaView from "../components/views/DescobertaView";
+import DiagnosticoView from "../components/views/DiagnosticoView";
 import TopologiaView from "../components/views/TopologiaView";
 import DispositivosView from "../components/views/DispositivosView";
 import ProcessosView from "../components/views/ProcessosView";
@@ -71,6 +72,7 @@ const MENU = [
   {
     grupo: "menu.monitoramento",
     itens: [
+      { id: "diagnostico", chave: "menu.diagnostico", icone: IconAlerta, perm: "metrics.view" },
       { id: "recursos", chave: "menu.recursos", icone: IconRecursos, perm: "metrics.view" },
       { id: "processos", chave: "menu.processos", icone: IconRecursos, perm: "metrics.view" },
       { id: "servicos", chave: "menu.servicos", icone: IconServicos, perm: "services.view" },
@@ -424,6 +426,7 @@ export default function AppShell() {
           {abaValida === "painel" && <PainelView />}
           {abaValida === "rastreio" && <RastreioView />}
           {abaValida === "monitor" && <MonitorView alvo={alvo} nav={nav} />}
+          {abaValida === "diagnostico" && <DiagnosticoView nav={nav} />}
           {abaValida === "dispositivos" && <DispositivosView />}
           {abaValida === "descoberta" && <DescobertaView />}
           {abaValida === "topologia" && <TopologiaView />}

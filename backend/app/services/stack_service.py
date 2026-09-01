@@ -555,6 +555,7 @@ echo "{SEP}END"
                 "discos_criticos": [],
                 "servicos_doentes": [],
                 "reinicios": {},
+                "containers": {},
             }
         criticos = dados.get("discos_criticos", [])
         return {
@@ -586,6 +587,12 @@ echo "{SEP}END"
                 for s in dados.get("doentes", [])
             ],
             "reinicios": dados.get("reinicios", {}),
+            # Serviço do compose -> nome real do container. São coisas
+            # diferentes ("findface-video-worker" vs
+            # "findface-multi-findface-video-worker-1"), e `docker logs`
+            # só aceita o segundo — sem este mapa, ler log a partir de um
+            # incidente falharia em silêncio.
+            "containers": {s["servico"]: s["nome"] for s in dados.get("servicos", [])},
         }
 
 

@@ -201,6 +201,15 @@ Ver [23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md) e
 | GET | `/limiares` | `hosts.view` |
 | PUT | `/limiares` | `users.manage` |
 | DELETE | `/limiares/{override_id}` | `users.manage` |
+| GET | `/diagnostico/reincidencia` | `metrics.view` |
+| GET | `/diagnostico/padroes` | `services.view` |
+| POST | `/diagnostico/analisar/{host_id}` | `services.view` |
+| GET | `/diagnostico/catalogo` | `services.view` |
+
+As rotas de `/diagnostico` são leitura barata (banco do painel), com uma
+exceção: `POST /diagnostico/analisar/{host_id}?servico=` **lê o log no
+servidor** — por isso é POST e só roda no clique. Ver
+[27_DIAGNOSTICO](27_DIAGNOSTICO.md).
 
 ```http
 GET /api/monitor/resumo

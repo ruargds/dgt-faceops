@@ -290,6 +290,16 @@ export const api = {
   incidentesRecentes: (dias = 3, hostId) =>
     get(`/incidentes/recentes?dias=${dias}${hostId ? `&host_id=${hostId}` : ""}`),
 
+  // Diagnóstico — reincidência, padrões de log e base de erros conhecidos.
+  // Tudo leitura barata, menos `analisarLog`, que lê no servidor (por isso
+  // é POST e só roda no clique).
+  reincidencia: (dias = 14) => get(`/diagnostico/reincidencia?dias=${dias}`),
+  padroesLog: (dias = 7, hostId) =>
+    get(`/diagnostico/padroes?dias=${dias}${hostId ? `&host_id=${hostId}` : ""}`),
+  analisarLog: (hostId, servico) =>
+    post(`/diagnostico/analisar/${hostId}?servico=${encodeURIComponent(servico)}`),
+  catalogoErros: () => get("/diagnostico/catalogo"),
+
   // Limiares — exceção de limite por host/serviço, por cima do padrão
   // global em Configurações.
   limiares: () => get("/limiares"),

@@ -92,6 +92,7 @@ class FaxinaService:
             "logs_esvaziados": 0,
             "amostras_removidas": 0,
             "incidentes_removidos": 0,
+            "padroes_removidos": 0,
             "licenca_removidas": 0,
             "erros": [],
         }
@@ -102,6 +103,7 @@ class FaxinaService:
             ("banco", self._banco),
             ("amostras", self._amostras),
             ("incidentes", self._incidentes),
+            ("padroes de log", self._padroes_log),
             ("licenca", self._licenca),
         ):
             try:
@@ -239,6 +241,17 @@ class FaxinaService:
 
         async with AsyncSessionLocal() as db:
             r["incidentes_removidos"] = await IncidenteService.limpar(db, dias)
+            await db.commit()
+
+    async def _padroes_log(self, r: dict) -> None:
+        """Moldes de log analisados, com retenção própria (padrão 30 dias)."""
+        dias = int(self._cfg("analise.retencao_dias", 30))
+        if dias <= 0:
+            return
+        from app.services.log_analise_service import LogAnaliseService
+
+        async with AsyncSessionLocal() as db:
+            r["padroes_removidos"] = await LogAnaliseService.limpar(db, dias)
             await db.commit()
 
     async def _licenca(self, r: dict) -> None:

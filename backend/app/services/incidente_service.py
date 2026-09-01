@@ -237,6 +237,101 @@ class IncidenteService:
             saida.append(_serializar(i, aberto_ha_s=aberto_ha_s))
         return saida
 
+    # ── Reincidência ───────────────────────────────────────────────────
+
+    async def reincidencia(self, db, dias: int = 14, minimo: int | None = None) -> list[dict]:
+        """
+        O que repete, com que frequência e em que horário.
+
+        Um serviço que cai uma vez é um incidente; um que cai sete vezes
+        em cinco dias, sempre de madrugada, é outra conversa — e era
+        justamente essa que o painel não sabia ter. Nenhum modelo aqui:
+        é contagem sobre a tabela de incidentes.
+        """
+        if minimo is None:
+            minimo = int(self._cfg("alerta.reincidencia_min", 3))
+
+        desde = datetime.now(timezone.utc) - timedelta(days=max(1, dias))
+        r = await db.execute(
+            select(Incidente)
+            .where(Incidente.inicio >= desde)
+            .order_by(Incidente.inicio)
+        )
+        linhas = list(r.scalars().all())
+
+        agora = datetime.now(timezone.utc)
+        meio = agora - timedelta(days=max(1, dias) / 2)
+
+        grupos: dict[tuple[int, str, str], dict] = {}
+        for i in linhas:
+            inicio = i.inicio if i.inicio.tzinfo else i.inicio.replace(tzinfo=timezone.utc)
+            chave = (i.host_id, i.tipo, i.servico)
+            g = grupos.setdefault(chave, {
+                "host_id": i.host_id,
+                "tipo": i.tipo,
+                "servico": i.servico,
+                "ocorrencias": 0,
+                "tempo_fora_s": 0.0,
+                "aberto_agora": False,
+                "primeira": inicio,
+                "ultima": inicio,
+                "horas": {},
+                "recentes": 0,
+                "anteriores": 0,
+            })
+            g["ocorrencias"] += 1
+            g["tempo_fora_s"] += float(i.duracao_s or 0)
+            g["aberto_agora"] = g["aberto_agora"] or i.fim is None
+            g["primeira"] = min(g["primeira"], inicio)
+            g["ultima"] = max(g["ultima"], inicio)
+            g["horas"][inicio.hour] = g["horas"].get(inicio.hour, 0) + 1
+            if inicio >= meio:
+                g["recentes"] += 1
+            else:
+                g["anteriores"] += 1
+
+        saida = []
+        for g in grupos.values():
+            if g["ocorrencias"] < minimo:
+                continue
+
+            # Faixa de horário só é informação quando concentra de verdade.
+            # "cai a qualquer hora" é uma resposta legítima, e dizer um
+            # horário falso seria pior que não dizer nada.
+            horas_ordenadas = sorted(g["horas"].items(), key=lambda x: x[1], reverse=True)
+            topo = horas_ordenadas[0]
+            concentrada = topo[1] >= max(2, g["ocorrencias"] * 0.5)
+
+            intervalo_h = None
+            if g["ocorrencias"] > 1:
+                janela = (g["ultima"] - g["primeira"]).total_seconds() / 3600
+                intervalo_h = round(janela / (g["ocorrencias"] - 1), 1)
+
+            if g["recentes"] > g["anteriores"]:
+                tendencia = "piorando"
+            elif g["recentes"] < g["anteriores"]:
+                tendencia = "melhorando"
+            else:
+                tendencia = "estavel"
+
+            saida.append({
+                "host_id": g["host_id"],
+                "tipo": g["tipo"],
+                "servico": g["servico"],
+                "ocorrencias": g["ocorrencias"],
+                "tempo_fora_s": round(g["tempo_fora_s"], 1),
+                "aberto_agora": g["aberto_agora"],
+                "primeira": g["primeira"].isoformat(),
+                "ultima": g["ultima"].isoformat(),
+                "hora_tipica": topo[0] if concentrada else None,
+                "intervalo_medio_h": intervalo_h,
+                "tendencia": tendencia,
+                "dias": dias,
+            })
+
+        saida.sort(key=lambda x: (x["ocorrencias"], x["tempo_fora_s"]), reverse=True)
+        return saida
+
     # ── Faxina ─────────────────────────────────────────────────────────
 
     @staticmethod

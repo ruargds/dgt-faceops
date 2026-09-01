@@ -52,6 +52,7 @@ export default function MonitorView({ alvo, nav }) {
   const [pico, setPico] = useState(null);
   const [verRecentes, setVerRecentes] = useState(false);
   const [recentes, setRecentes] = useState(null);
+  const [recorrentes, setRecorrentes] = useState(null);
 
   // Chegou aqui a partir de um alerta em outra tela ("ir para Monitor"):
   // abre direto no host certo, sem a pessoa precisar procurar de novo o
@@ -161,6 +162,13 @@ export default function MonitorView({ alvo, nav }) {
     if (!verRecentes) return;
     api.incidentesRecentes(3).then((r) => setRecentes(r.incidentes)).catch(() => setRecentes([]));
   }, [verRecentes]);
+
+  // Reincidência: leitura barata (contagem no banco do painel), uma vez
+  // ao abrir. Não entra no laço de 10s — o que repete em 14 dias não muda
+  // de dez em dez segundos.
+  useEffect(() => {
+    api.reincidencia(14).then((r) => setRecorrentes(r.itens)).catch(() => setRecorrentes([]));
+  }, []);
 
   if (carregando && !resumo) return <Carregando texto={t("Lendo o histórico…")} />;
 
@@ -350,6 +358,52 @@ export default function MonitorView({ alvo, nav }) {
           ))}
         </div>
         </>
+      )}
+
+      {/* ── Reincidência ─────────────────────────────────────────────
+          Faixa curta, só quando há o que dizer: "isto não é a primeira
+          vez" é a informação que muda a conduta de quem está de plantão. */}
+      {recorrentes && recorrentes.length > 0 && (
+        <div
+          className="card card-tight"
+          style={{
+            marginTop: 16,
+            background: "var(--amber-bg)",
+            borderColor: "var(--amber-bd)",
+            borderLeftWidth: 4,
+            borderLeftColor: "var(--amber)",
+          }}
+        >
+          <div className="stack-h" style={{ gap: 10, alignItems: "flex-start", color: "var(--amber-fg)" }}>
+            <IconAlerta size={17} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>
+                {recorrentes.length === 1
+                  ? t("1 problema que já repetiu nos últimos 14 dias")
+                  : `${recorrentes.length} ${t("problemas que já repetiram nos últimos 14 dias")}`}
+              </div>
+              <div className="small" style={{ marginTop: 4, opacity: 0.92 }}>
+                {recorrentes.slice(0, 3).map((r) => (
+                  <div key={`${r.host_id}-${r.servico}`}>
+                    <span className="mono">{r.servico || t("máquina inteira")}</span>
+                    {" — "}{r.ocorrencias}× {t("em")} {r.host}
+                    {r.hora_tipica !== null && `, ${t("quase sempre por volta das")} ${String(r.hora_tipica).padStart(2, "0")}h`}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {nav && (
+              <button
+                type="button"
+                className="pill"
+                style={{ background: "rgba(0,0,0,.08)", border: "none", cursor: "pointer" }}
+                onClick={() => nav("diagnostico")}
+              >
+                {t("ver Diagnóstico")}
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ── Serviços por máquina ─────────────────────────────────────

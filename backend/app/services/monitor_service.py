@@ -48,15 +48,18 @@ def _pior_disco(discos: list[dict]) -> tuple[float, str, float, float]:
 
 
 class MonitorService:
-    def __init__(self, metrics, stack, config=None, incidentes=None, limiares=None) -> None:
+    def __init__(
+        self, metrics, stack, config=None, incidentes=None, limiares=None, analise=None
+    ) -> None:
         self.metrics = metrics
         self.stack = stack
         self.config = config
-        # Opcionais de propósito: um painel sem estas duas peças continua
+        # Opcionais de propósito: um painel sem estas peças continua
         # monitorando exatamente como antes, só sem histórico de
-        # indisponibilidade e sem limite por serviço.
+        # indisponibilidade, sem limite por serviço e sem análise de log.
         self.incidentes = incidentes
         self.limiares = limiares
+        self.analise = analise
         self._tarefa: asyncio.Task | None = None
         self._rodando = False
         # Último erro por host, para a tela não repetir a mesma queixa
@@ -164,6 +167,27 @@ class MonitorService:
         except Exception:
             log.exception("falha ao registrar incidente do host %s", host.id)
 
+    async def _analisar_logs(self, db, host, containers: dict | None = None) -> None:
+        """
+        Lê o log SÓ de quem já está com incidente aberto.
+
+        É o que mantém a promessa da tela: o painel não fica varrendo log
+        de produção por conta própria. Enquanto está tudo de pé, nada é
+        lido; quando algo cai, o log daquele container entra na análise —
+        que é exatamente quando alguém iria abrir o log na mão.
+        """
+        if self.analise is None or self.incidentes is None:
+            return
+        try:
+            abertos = await self.incidentes.listar_abertos(db, host_id=host.id)
+            servicos = [i["servico"] for i in abertos if i["tipo"] == "servico" and i["servico"]]
+            if servicos:
+                await self.analise.analisar_servicos(
+                    db, host, servicos, containers=containers,
+                )
+        except Exception:
+            log.exception("falha ao analisar log do host %s", host.id)
+
     async def _amostrar(self, db, host) -> None:
         amostra = Amostra(host_id=host.id)
 
@@ -249,6 +273,7 @@ class MonitorService:
                 doentes=saude.get("servicos_doentes", []),
                 reinicios=saude.get("reinicios", {}),
             )
+            await self._analisar_logs(db, host, containers=saude.get("containers"))
         except Exception:
             pass
 

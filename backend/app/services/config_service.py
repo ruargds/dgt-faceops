@@ -320,6 +320,35 @@ CATALOGO: list[ItemConfig] = [
                True,
                "Toca um som quando surge alerta novo, se a aba estiver "
                "aberta. O som é gerado pelo navegador — não há arquivo."),
+    ItemConfig("alerta.reincidencia_min", "alerta",
+               "Considerar reincidente a partir de (quedas)", "numero", 3,
+               "Quantas vezes o mesmo serviço precisa cair na janela para "
+               "aparecer em Diagnóstico como problema que repete.",
+               minimo=2, maximo=50),
+    ItemConfig("analise.ativa", "monitor",
+               "Analisar log dos serviços com problema", "booleano", True,
+               "Lê o log SÓ de serviço que já está com incidente aberto, "
+               "agrupa os erros por molde e casa com o catálogo de erros "
+               "conhecidos. Desligado, o painel não lê log sozinho."),
+    ItemConfig("analise.linhas", "monitor",
+               "Linhas de log lidas por análise", "numero", 200,
+               "Quanto maior, mais contexto e mais tráfego por leitura.",
+               minimo=50, maximo=2000),
+    ItemConfig("analise.intervalo_min", "monitor",
+               "Reler o log do mesmo serviço a cada (minutos)", "numero", 5,
+               "Evita reler o mesmo container a cada ciclo de 60 s enquanto "
+               "o incidente dura.",
+               minimo=1, maximo=120),
+    ItemConfig("analise.servicos_por_ciclo", "monitor",
+               "Máximo de serviços analisados por ciclo", "numero", 3,
+               "Teto por host, por ciclo. Segura o custo quando muita coisa "
+               "cai ao mesmo tempo.",
+               minimo=1, maximo=20),
+    ItemConfig("analise.retencao_dias", "monitor",
+               "Guardar padrões de log por (dias)", "numero", 30,
+               "Molde de log com contador — uma linha por tipo de erro, não "
+               "por ocorrência.",
+               minimo=1, maximo=365),
     ItemConfig("incidentes.retencao_dias", "monitor",
                "Guardar histórico de indisponibilidade por (dias)", "numero",
                30,

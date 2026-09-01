@@ -94,6 +94,10 @@
   heurística, retenção de 30 dias) e limite de alerta com exceção por
   host/serviço, por cima do padrão global.
 
+- **[27_DIAGNOSTICO](27_DIAGNOSTICO.md)** — o que repete, o log agrupado
+  por molde e a base de erros conhecidos (casos deste ambiente + manual da
+  NtechLab). Inclui por que não há modelo de linguagem no meio.
+
 - **[26_NAVEGACAO_E_INTERFACE](26_NAVEGACAO_E_INTERFACE.md)** — tela
   inicial, navegação com contexto entre telas, grupos do menu, sidebar em
   gaveta no celular/tablet e a autoria oculta — padrões trazidos do
