@@ -143,7 +143,32 @@
 [ ] Rota que age no Docker: chama _garantir_do_projeto()?
 [ ] Ação destrutiva: exige confirmação e gera auditoria critical?
 [ ] git config user.email "dev@dgt.com.br" e user.name "DGT Dev"
+[ ] cd backend && python tests/verificar.py  (26 cenários, sem Postgres)
+[ ] Índice novo no model: o nome COLIDE com o que index=True já gera?
+[ ] A tela afirma algo que ela realmente sabe? (ver regra abaixo)
 ```
+
+### A regra que mais custou: não afirmar sobre ausência de dado
+
+Quatro defeitos diferentes, a mesma raiz — o painel apresentava **falha de
+leitura** ou **arquitetura normal** como se fosse fato observado:
+
+| O que a tela dizia | O que era de verdade |
+|---|---|
+| "Serviço travado" (8×) | componente respondeu 404/405; a sonda só aceitava 2xx/3xx/401/403 |
+| "200 câmeras sem evento" | toda chamada de evento falhou e o erro foi engolido |
+| "Não consegui ler a licença" (3×) | esses servidores não hospedam o NTLS — é a arquitetura documentada |
+| "acaba em 77 dias" | a projeção ignorava a retenção que devolve o espaço |
+
+Alarme falso permanente é pior que alarme nenhum: ensina a ignorar a tela.
+Antes de escrever uma afirmação na interface, pergunte **três** coisas:
+
+1. Isto é um fato observado, ou a ausência de um fato?
+2. Se a leitura falhar, a tela vai saber diferenciar? (`falhou`, `erros`)
+3. Isto é defeito, ou é como o fabricante manda montar?
+
+Quando não dá para distinguir, a resposta honesta é "não verificado" — e
+ela é mais útil que um número errado com cara de certo.
 
 ## Verificar a API inteira sem banco
 

@@ -216,3 +216,18 @@ para depois.
 <div align="center">
 <sub>DGT · Projeto autônomo. Não depende do InfraCore nem do Camsync — segue os mesmos padrões de criação.</sub>
 </div>
+
+## Documentação, specs e skills
+
+- **`docs/`** — 29 documentos numerados; comece pelo
+  [índice](docs/00_INDICE.md).
+- **`specs/`** — [invariantes](specs/invariantes.md) (o que precisa
+  continuar verdadeiro, com o teste que trava cada um) e
+  [pendências](specs/pendencias.md).
+- **`.claude/skills/`** — o que já foi aprendido na marra, por subsistema.
+
+Antes de commitar:
+
+```bash
+cd backend && python tests/verificar.py     # 26 cenários, sem Postgres
+```

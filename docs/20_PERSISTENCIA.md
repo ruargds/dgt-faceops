@@ -130,6 +130,12 @@ Nada aqui cresce sem teto. Verificado item por item:
 | `audit_logs` | faxina, retenção em dias (crítico fica o triplo) |
 | `terminal_sessions` | faxina, junto com a auditoria |
 | `backup_runs.log` | faxina esvazia o texto e mantém a linha |
+| `amostras` (monitor) | faxina, `monitor.retencao_dias` (padrão 30) |
+| `incidentes` | faxina, `incidentes.retencao_dias` (padrão 30) — **só os fechados**; um aberto é estado atual, não histórico |
+| `log_padroes` | faxina, `analise.retencao_dias` (padrão 30). Guarda molde com contador, não a linha: mil ocorrências do mesmo erro são UMA linha |
+| `notificacao_envios` | faxina, `notificacao.retencao_dias` (padrão 14) — log operacional, some inclusive as falhas |
+| `licenca_amostras` | faxina, `faxina.licenca_dias` (padrão 365) |
+| `hosts.servicos_conhecidos` | lista sobrescrita, não acumulada; só grava quando muda |
 | Streams de log ao vivo | não gravam arquivo; sessão ociosa cai em 30 min |
 | Sessões de terminal | caem por inatividade em 30 min |
 | Conexões SSH | pool com TTL de 120 s |

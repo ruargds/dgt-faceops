@@ -25,7 +25,15 @@ O que **não** protege contra, e é importante dizer:
 `core/vault.py` — Fernet (AES-128-CBC + HMAC-SHA256), chave derivada por
 SHA-256 da `SECRET_KEY`.
 
-Guarda: chave PEM, senha da chave, senha SSH, senha de sudo. Colunas `*_enc`.
+Guarda: chave PEM, senha da chave, senha SSH, senha de sudo, senha/token
+da API do FindFace e o **token do bot do Telegram**. Colunas `*_enc`.
+
+O token do bot merece nota: quem o tem manda mensagem como o bot. Além de
+cifrado, ele é removido de log e de mensagem de erro — a URL do Telegram
+carrega o token no caminho, então um traceback de rede o levaria junto
+para dentro de um chamado ou de um anexo de e-mail
+(`telegram_service._limpar`). Há cenário de teste que falha se ele
+aparecer numa resposta de API ou num erro.
 
 **Nenhum schema de saída expõe essas colunas.** A tela confirma o que está
 guardado por fingerprint (SHA-256 truncado em 16 caracteres) — suficiente
@@ -187,6 +195,21 @@ checagem na gravação de terminal.
 
 Login com usuário inexistente e com senha errada devolvem a **mesma
 mensagem**. Diferenciar entregaria a lista de usuários válidos a quem tenta.
+
+## Saídas de rede do painel
+
+O painel é agentless e conversa para fora em três direções, e só nestas:
+
+| Destino | Porta | Quando | Por quê |
+|---|---|---|---|
+| Servidores do FindFace | 22 | coleta, backup, terminal | SSH — é a única via de leitura e ação |
+| API do FindFace (opcional) | 443/80 | licença, câmeras, retenção | quando URL e credencial estão cadastradas |
+| `api.telegram.org` | 443 | só quando há evento a avisar | envio de aviso ([28](28_AVISOS_TELEGRAM.md)) |
+| Destinos de backup | conforme o destino | fim de cada execução | Azure Blob / rclone, quando configurados |
+
+Não há escuta de entrada além da porta do próprio painel. O bot do
+Telegram **não** faz long-polling: só há chamada de saída, e só quando
+algo cai — não existe processo aguardando comando de fora.
 
 ## Superfície de ataque
 

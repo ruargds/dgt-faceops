@@ -156,6 +156,21 @@ fica `sucesso` com ressalva registrada em `error`.
 | `schedules` | recorrência: cron, perfil, destinos, retenção, aceite de janela |
 | `audit_logs` | toda ação que muda estado, com detalhe higienizado |
 | `terminal_sessions` | sessões do InTerminal, com caminho da gravação |
+| `amostras` | série do monitor contínuo: percentuais e absolutos, ~120 bytes por linha |
+| `incidentes` | janela de indisponibilidade por host/serviço, com causa provável ([25](25_INCIDENTES_E_LIMIARES.md)) |
+| `limiar_overrides` | exceção de limite por host e/ou serviço, sobre o catálogo global |
+| `log_padroes` | **molde** de linha de log com contador — não a linha ([27](27_DIAGNOSTICO.md)) |
+| `notificacao_contas` | bot do Telegram e grupo de destino; token cifrado ([28](28_AVISOS_TELEGRAM.md)) |
+| `notificacao_regras` | de quais servidores/serviços avisar, e a partir de qual gravidade |
+| `notificacao_envios` | o que já foi mandado — deduplicação, diagnóstico e retentativa |
+| `licenca_amostras` | consumo de licença ao longo do tempo, para a projeção de "quando acaba" |
+| `visoes_log` | visões salvas de log ao vivo, compartilhadas |
+| `configuracoes` | catálogo chave/valor editável pela web |
+| `destinos` | destinos de backup, com credencial cifrada |
+
+As cinco últimas tabelas do monitor (`amostras` em diante) têm retenção
+própria e são apagadas pela faxina — ver
+[20_PERSISTENCIA](20_PERSISTENCIA.md).
 
 Colunas `*_enc` guardam segredo cifrado com Fernet. **Nenhum schema de
 saída as expõe** — a UI confirma o que está guardado pelo fingerprint.
@@ -172,6 +187,14 @@ saída as expõe** — a UI confirma o que está guardado pelo fingerprint.
 | `scheduler_service` | APScheduler, validação e tradução de cron |
 | `terminal_service` | ponte PTY, gravação asciicast, sessões vivas |
 | `audit_service` | registro com higienização de segredo |
+| `monitor_service` | coletor contínuo, série, alertas — uma execução SSH por host por ciclo |
+| `incidente_service` | abre/fecha incidente a partir do que o ciclo já leu; laço de reinício por janela |
+| `limiar_service` | resolve limite em cascata: host+serviço > host > serviço > catálogo |
+| `log_analise_service` | molde de log (fingerprint), agrupamento e contagem |
+| `catalogo_erros` | base de erros conhecidos: sintoma → causa → ação → tela |
+| `notificacao_service` | casa evento com regra, monta a mensagem, deduplica |
+| `telegram_service` | só envio, sem laço de escuta; sem dependência nova |
+| `faxina_service` | retenção diária de tudo que cresce |
 
 Instanciados uma vez na subida e guardados em `app.state`.
 

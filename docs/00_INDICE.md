@@ -81,31 +81,31 @@
   sobrevive a cada operação, onde cada dado mora, por que não há volume
   fantasma e qual é o único comando que apaga o banco.
 
-- **[24_RASTREIO](24_RASTREIO.md)** — a tela que responde "tem algo
-  quebrado agora?": o que é checado, com que critério, e por que cada
-  achado carrega evidência, impacto e ação.
-
 - **[23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md)** — monitor contínuo
   sem onerar servidor, alertas com ação, câmeras e licenciamento do
   FindFace, e as exportações em CSV.
+
+- **[24_RASTREIO](24_RASTREIO.md)** — a tela que responde "tem algo
+  quebrado agora?": o que é checado, com que critério, e por que cada
+  achado carrega evidência, impacto e ação.
 
 - **[25_INCIDENTES_E_LIMIARES](25_INCIDENTES_E_LIMIARES.md)** — histórico
   de indisponibilidade por serviço (abre/fecha sozinho, causa provável
   heurística, retenção de 30 dias) e limite de alerta com exceção por
   host/serviço, por cima do padrão global.
 
-- **[28_AVISOS_TELEGRAM](28_AVISOS_TELEGRAM.md)** — um bot por cliente
-  mandando para o grupo de plantão: o que configurar, de quais servidores e
-  serviços receber, como a mensagem chega e as travas contra virar spam.
+- **[26_NAVEGACAO_E_INTERFACE](26_NAVEGACAO_E_INTERFACE.md)** — tela
+  inicial, navegação com contexto entre telas, grupos do menu, sidebar em
+  gaveta no celular/tablet e a autoria oculta — padrões trazidos do
+  InfraCore.
 
 - **[27_DIAGNOSTICO](27_DIAGNOSTICO.md)** — o que repete, o log agrupado
   por molde e a base de erros conhecidos (casos deste ambiente + manual da
   NtechLab). Inclui por que não há modelo de linguagem no meio.
 
-- **[26_NAVEGACAO_E_INTERFACE](26_NAVEGACAO_E_INTERFACE.md)** — tela
-  inicial, navegação com contexto entre telas, grupos do menu, sidebar em
-  gaveta no celular/tablet e a autoria oculta — padrões trazidos do
-  InfraCore.
+- **[28_AVISOS_TELEGRAM](28_AVISOS_TELEGRAM.md)** — um bot por cliente
+  mandando para o grupo de plantão: o que configurar, de quais servidores e
+  serviços receber, como a mensagem chega e as travas contra virar spam.
 
 ### Segurança e acesso
 
@@ -147,6 +147,26 @@
 - **[SCOPE.md](../SCOPE.md)** — o que faz, o que não faz, o que foi adiado
 - **[.env.example](../.env.example)** — todas as variáveis, comentadas
 - **`/api/docs`** — OpenAPI interativo do painel em execução
+
+## Specs e skills
+
+Três camadas com papéis diferentes, que não se repetem:
+
+| Camada | Onde | Responde |
+|---|---|---|
+| Documentação | `docs/` | como opera, como instala, como resolve |
+| Skills | `.claude/skills/` | o que já foi aprendido na marra ao mexer no código |
+| Specs | `specs/` | o que precisa continuar verdadeiro, e o que está aberto |
+
+- **[specs/invariantes.md](../specs/invariantes.md)** — 21 invariantes,
+  cada um com o motivo, o estrago se quebrar e o cenário de teste que o
+  trava.
+- **[specs/pendencias.md](../specs/pendencias.md)** — o que está aberto,
+  com evidência levantada e próximo passo.
+- **`.claude/skills/`** — sete skills no padrão do InfraCore:
+  `deploy-faceops`, `dev-checklist`, `monitor-e-incidentes`,
+  `diagnostico-e-log`, `avisos-telegram`, `findface-licenca-ntls`,
+  `cerca-de-acoes`.
 
 ## Referência externa
 
