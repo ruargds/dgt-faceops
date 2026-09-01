@@ -49,15 +49,25 @@ class Amostra(Base):
     mem_pct: Mapped[float] = mapped_column(Float, default=0.0)
     swap_pct: Mapped[float] = mapped_column(Float, default=0.0)
 
+    # Valor ABSOLUTO ao lado do percentual. "78,8%" não diz se sobra 1 GB
+    # ou 40 GB, e é a sobra que decide se dá para esperar até amanhã.
+    # Cinco números a mais por amostra (~40 bytes) — 30 dias de 4
+    # servidores continuam na casa de poucos MB.
+    mem_total_mb: Mapped[float] = mapped_column(Float, default=0.0)
+    mem_usado_mb: Mapped[float] = mapped_column(Float, default=0.0)
+
     # Do disco guardamos só o pior: é o que dispara alerta. Qual disco é
     # fica no campo ao lado, para a tela poder dizer "/ em 94%".
     disco_pct: Mapped[float] = mapped_column(Float, default=0.0)
     disco_ponto: Mapped[str] = mapped_column(String(64), default="")
     disco_livre_gb: Mapped[float] = mapped_column(Float, default=0.0)
+    disco_total_gb: Mapped[float] = mapped_column(Float, default=0.0)
 
     # Zero quando o host não tem GPU
     gpu_pct: Mapped[float] = mapped_column(Float, default=0.0)
     gpu_mem_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    gpu_mem_total_mb: Mapped[float] = mapped_column(Float, default=0.0)
+    gpu_mem_usado_mb: Mapped[float] = mapped_column(Float, default=0.0)
     gpu_temp: Mapped[float] = mapped_column(Float, default=0.0)
 
     containers_total: Mapped[int] = mapped_column(Integer, default=0)

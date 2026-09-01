@@ -53,6 +53,11 @@ class Host(Base):
     compose_file: Mapped[str] = mapped_column(String(255), default="")
 
     has_gpu: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Modelo da placa, como o nvidia-smi reporta ("NVIDIA A10-12Q").
+    # Preenchido pelo coletor: fica no host, e não na amostra, porque não
+    # muda de minuto em minuto — guardá-lo por amostra seria texto
+    # repetido milhares de vezes.
+    gpu_nome: Mapped[str] = mapped_column(String(120), default="")
     # Entra no coletor continuo. Ligado por padrao: cadastrar um
     # servidor e querer acompanha-lo sao a mesma coisa na pratica.
     monitorar: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

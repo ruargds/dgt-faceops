@@ -1,0 +1,6 @@
+# Só para rodar tests/verificar.py fora do container — a imagem de
+# produção continua com o requirements.txt e nada além dele.
+#
+#   pip install -r requirements-dev.txt
+#   python tests/verificar.py
+aiosqlite==0.22.1

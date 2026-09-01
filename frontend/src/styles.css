@@ -264,6 +264,28 @@ input[type="checkbox"] { width: auto; }
   text-transform: uppercase; color: #62748C; padding: 14px 12px 6px;
 }
 
+/* ── Submenu recolhível ────────────────────────────────────────────────
+   Grupo é botão, não rótulo: clicar recolhe. O item ativo ganha uma
+   guia à esquerda para a hierarquia continuar legível dentro do grupo. */
+.nav-principal { margin-bottom: 6px; }
+.nav-grupo { margin-top: 6px; }
+.nav-grupo-titulo {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 8px 12px 6px; background: transparent; border: none;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
+  text-transform: uppercase; color: #62748C; cursor: pointer;
+  text-align: left;
+}
+.nav-grupo-titulo:hover { color: #93A5BC; }
+.nav-chevron { transition: transform .15s ease; flex-shrink: 0; }
+.nav-chevron.aberto { transform: rotate(90deg); }
+.nav-grupo-itens {
+  display: flex; flex-direction: column;
+  margin-left: 11px; padding-left: 8px;
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
+.nav-grupo-itens .nav-item { font-size: 13px; padding: 7px 10px; }
+
 .sidebar-foot {
   padding: 12px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px;
 }

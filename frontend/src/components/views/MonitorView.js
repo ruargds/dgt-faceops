@@ -19,6 +19,17 @@ const JANELAS = [
  * A tela é usada por quem nunca abriu o FindFace. "Carga por núcleo:
  * 1,4" não diz nada sozinho; "há processo esperando CPU" diz.
  */
+/** "12,6 GB de 16,0 GB" — o absoluto que o percentual sozinho esconde. */
+function deTotal(usadoMb, totalMb) {
+  if (!totalMb) return "";
+  return `${formatBytes(usadoMb * 1024 * 1024)} de ${formatBytes(totalMb * 1024 * 1024)}`;
+}
+
+function deTotalGb(usadoGb, totalGb) {
+  if (!totalGb) return "";
+  return `${formatBytes(usadoGb * 1024 ** 3)} de ${formatBytes(totalGb * 1024 ** 3)}`;
+}
+
 const EXPLICACAO = {
   cpu:
     "Quanto da CPU está sendo gasta agora (0 a 100%). A carga por núcleo, " +
@@ -30,7 +41,7 @@ const EXPLICACAO = {
   gpu_mem: "Memória da placa. Perto do limite, a próxima câmera causa falha.",
 };
 
-export default function MonitorView({ alvo, nav, temPainel }) {
+export default function MonitorView({ alvo, nav }) {
   const [resumo, setResumo] = useState(null);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
@@ -39,7 +50,6 @@ export default function MonitorView({ alvo, nav, temPainel }) {
   const [janela, setJanela] = useState(6);
   const [som, setSom] = useState(true);
   const [pico, setPico] = useState(null);
-  const [resumoPainel, setResumoPainel] = useState(null);
   const [verRecentes, setVerRecentes] = useState(false);
   const [recentes, setRecentes] = useState(null);
 
@@ -147,14 +157,6 @@ export default function MonitorView({ alvo, nav, temPainel }) {
     }
   }, [detalhe, janela, carregarSerie]);
 
-  // Resumo crítico (servidores ativos, backup, disco do painel) — só para
-  // quem tem hosts.view, e uma vez só: não é dado que muda a cada 10s
-  // como o resto desta tela, então não entra no laço de atualização.
-  useEffect(() => {
-    if (!temPainel) return;
-    api.painel().then(setResumoPainel).catch(() => setResumoPainel(null));
-  }, [temPainel]);
-
   useEffect(() => {
     if (!verRecentes) return;
     api.incidentesRecentes(3).then((r) => setRecentes(r.incidentes)).catch(() => setRecentes([]));
@@ -167,6 +169,7 @@ export default function MonitorView({ alvo, nav, temPainel }) {
   const coletor = (resumo && resumo.coletor) || {};
   const criticos = alertas.filter((a) => a.nivel === "critico");
   const incidentesAbertos = (resumo && resumo.incidentes_abertos) || [];
+  const painel = (resumo && resumo.painel) || {};
 
   const hostDetalhe = servidores.find((s) => s.host_id === detalhe);
 
@@ -195,38 +198,49 @@ export default function MonitorView({ alvo, nav, temPainel }) {
         </div>
       </div>
 
-      {/* ── Resumo crítico ───────────────────────────────────────────
-          Condensado do Painel: só quem tem hosts.view, e só o essencial —
-          quantos servidores, se algum backup falhou, se o disco do painel
-          está apertado. Cabe numa faixa para não brigar por espaço numa
-          tela de notebook (1366×768 é o piso real de quem opera isto). */}
-      {resumoPainel && (
-        <div className="grid-stats" style={{ marginBottom: 14 }}>
-          <Estatistica
-            rotulo={t("Servidores")}
-            valor={`${resumoPainel.servidores.filter((s) => s.ativo).length}/${resumoPainel.servidores.length}`}
-            sub={t("ativos de cadastrados")}
-          />
+      {/* ── Resumo do topo ───────────────────────────────────────────
+          Números absolutos, não só percentual. Tudo daqui vem do mesmo
+          `/api/monitor/resumo` (banco do painel + disco local) — nenhum
+          SSH, para a tela inicial não bater nas VMs de produção a cada
+          abertura. */}
+      <div className="grid-stats" style={{ marginBottom: 16 }}>
+        <Estatistica
+          rotulo={t("Servidores monitorados")}
+          valor={`${servidores.filter((s) => s.ativo && s.monitorado).length} de ${servidores.length}`}
+          sub={t("ativos e sob coleta contínua")}
+        />
+        <Estatistica
+          rotulo={t("Serviços fora do ar")}
+          valor={incidentesAbertos.filter((i) => i.tipo === "servico").length}
+          sub={
+            incidentesAbertos.length
+              ? t("veja o detalhe em Serviços por máquina")
+              : t("nenhum serviço em queda agora")
+          }
+        />
+        {/* Backup e disco do painel só vêm do servidor para quem tem
+            permissão de backup — sem permissão, o campo nem existe na
+            resposta e o cartão não aparece. */}
+        {painel.backups_com_falha !== undefined && (
           <Estatistica
             rotulo={t("Backups com falha")}
-            valor={resumoPainel.servidores.filter((s) => !s.ultimo_backup || s.ultimo_backup.status !== "sucesso").length}
-            sub={t("desde o último ciclo")}
+            valor={painel.backups_com_falha}
+            sub={
+              painel.servidores_sem_backup
+                ? `${painel.servidores_sem_backup} ${t("servidor(es) sem backup nenhum")}`
+                : t("último backup de cada servidor")
+            }
           />
-          {resumoPainel.armazenamento_painel && (
-            <Estatistica
-              rotulo={t("Disco de backup do painel")}
-              valor={`${resumoPainel.armazenamento_painel.percentual}%`}
-              sub={`${formatBytes(resumoPainel.armazenamento_painel.livre_bytes)} ${t("livres")}`}
-              pct={resumoPainel.armazenamento_painel.percentual}
-            />
-          )}
+        )}
+        {painel.armazenamento && (
           <Estatistica
-            rotulo={t("Serviços com problema")}
-            valor={incidentesAbertos.length}
-            sub={t("em aberto agora")}
+            rotulo={t("Disco de backup do painel")}
+            valor={`${formatBytes(painel.armazenamento.usado_bytes)} de ${formatBytes(painel.armazenamento.total_bytes)}`}
+            sub={`${formatBytes(painel.armazenamento.livre_bytes)} ${t("livres")}`}
+            pct={painel.armazenamento.percentual}
           />
-        </div>
-      )}
+        )}
+      </div>
 
       <Erro mensagem={erro} onTentar={carregar} />
 
@@ -317,6 +331,12 @@ export default function MonitorView({ alvo, nav, temPainel }) {
       {servidores.length === 0 ? (
         <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as máquinas em")} <strong>{t("Servidores")}</strong> {t("para o monitor começar a acompanhar.")}</Vazio>
       ) : (
+        <>
+        <div className="section-title" style={{ marginBottom: 8 }}>
+          {t("Servidores")} · <span style={{ textTransform: "none", fontWeight: 400 }}>
+            {t("clique num cartão para abrir o histórico")}
+          </span>
+        </div>
         <div className="grid-cards">
           {servidores.map((s) => (
             <CartaoMonitor
@@ -329,6 +349,7 @@ export default function MonitorView({ alvo, nav, temPainel }) {
             />
           ))}
         </div>
+        </>
       )}
 
       {/* ── Serviços por máquina ─────────────────────────────────────
@@ -529,7 +550,11 @@ export default function MonitorView({ alvo, nav, temPainel }) {
                 explicacao={EXPLICACAO.mem}
                 serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.mem }))}
                 limite={90}
-                legenda={`agora: ${serie.amostras.at(-1).mem}%`}
+                legenda={
+                  deTotal(serie.amostras.at(-1).mem_usado_mb, serie.amostras.at(-1).mem_total_mb)
+                    ? `${deTotal(serie.amostras.at(-1).mem_usado_mb, serie.amostras.at(-1).mem_total_mb)} · ${serie.amostras.at(-1).mem}%`
+                    : `agora: ${serie.amostras.at(-1).mem}%`
+                }
               />
               <Painel
                 titulo={t("Disco")}
@@ -538,24 +563,39 @@ export default function MonitorView({ alvo, nav, temPainel }) {
                 limite={90}
                 legenda={
                   `${serie.amostras.at(-1).disco_ponto} — ` +
-                  `${serie.amostras.at(-1).disco_livre_gb} GB livres`
+                  (deTotalGb(
+                    serie.amostras.at(-1).disco_total_gb - serie.amostras.at(-1).disco_livre_gb,
+                    serie.amostras.at(-1).disco_total_gb
+                  ) || `${serie.amostras.at(-1).disco_livre_gb} GB livres`) +
+                  ` · ${serie.amostras.at(-1).disco_livre_gb} GB livres`
                 }
               />
               {serie.tem_gpu && (
                 <>
                   <Painel
-                    titulo={t("Placa de vídeo — uso")}
+                    titulo={
+                      hostDetalhe.gpu_nome
+                        ? `${t("Placa de vídeo")} — ${t("uso")} · ${hostDetalhe.gpu_nome}`
+                        : `${t("Placa de vídeo")} — ${t("uso")}`
+                    }
                     explicacao={EXPLICACAO.gpu}
                     serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.gpu }))}
                     limite={95}
-                    legenda={`${serie.amostras.at(-1).gpu_temp} °C`}
+                    legenda={`${serie.amostras.at(-1).gpu}% · ${serie.amostras.at(-1).gpu_temp} °C`}
                   />
                   <Painel
                     titulo={t("Placa de vídeo — memória")}
                     explicacao={EXPLICACAO.gpu_mem}
                     serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.gpu_mem }))}
                     limite={92}
-                    legenda={`agora: ${serie.amostras.at(-1).gpu_mem}%`}
+                    legenda={
+                      deTotal(
+                        serie.amostras.at(-1).gpu_mem_usado_mb,
+                        serie.amostras.at(-1).gpu_mem_total_mb
+                      )
+                        ? `${deTotal(serie.amostras.at(-1).gpu_mem_usado_mb, serie.amostras.at(-1).gpu_mem_total_mb)} · ${serie.amostras.at(-1).gpu_mem}%`
+                        : `agora: ${serie.amostras.at(-1).gpu_mem}%`
+                    }
                   />
                 </>
               )}
@@ -626,7 +666,9 @@ function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar }) {
           <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{s.host}</strong>
         </div>
         {s.tem_gpu && (
-          <span className="pill pill-info"><IconGPU size={12} /> {t("GPU")}</span>
+          <span className="pill pill-info" title={s.gpu_nome || t("GPU")}>
+            <IconGPU size={12} /> {s.gpu_nome || t("GPU")}
+          </span>
         )}
       </div>
 
@@ -655,19 +697,34 @@ function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar }) {
               detalhe={`${a.carga} por núcleo — uso de CPU ainda não medido`}
             />
           )}
-          <BarraMetrica rotulo={t("Memória")} valor={a.mem} limite={90} />
+          <BarraMetrica
+            rotulo={t("Memória")}
+            valor={a.mem}
+            limite={90}
+            detalhe={deTotal(a.mem_usado_mb, a.mem_total_mb)}
+          />
           <BarraMetrica
             rotulo={t("Disco")}
             valor={a.disco}
             limite={90}
-            detalhe={`${a.disco_ponto} — ${a.disco_livre_gb} GB livres`}
+            detalhe={
+              `${a.disco_ponto} — ` +
+              (deTotalGb(a.disco_total_gb - a.disco_livre_gb, a.disco_total_gb) ||
+                `${a.disco_livre_gb} GB`) +
+              ` · ${a.disco_livre_gb} GB livres`
+            }
           />
           {s.tem_gpu && (
             <BarraMetrica
               rotulo={t("Memória de vídeo")}
               valor={a.gpu_mem}
               limite={92}
-              detalhe={a.gpu_temp ? `${a.gpu_temp} °C` : ""}
+              detalhe={
+                [
+                  deTotal(a.gpu_mem_usado_mb, a.gpu_mem_total_mb),
+                  a.gpu_temp ? `${a.gpu_temp} °C` : "",
+                ].filter(Boolean).join(" · ")
+              }
             />
           )}
 

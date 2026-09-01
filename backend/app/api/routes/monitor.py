@@ -100,17 +100,24 @@ async def resumo(
             "ativo": host.enabled,
             "monitorado": host.monitorar,
             "tem_gpu": host.has_gpu,
+            "gpu_nome": host.gpu_nome,
             "amostra": None if a is None else {
                 "ts": a.ts.isoformat(),
                 "cpu": a.cpu_pct,
+                "cpu_uso": a.cpu_uso_pct if a.cpu_uso_pct > 0 else None,
                 "carga": a.carga_por_nucleo,
                 "mem": a.mem_pct,
+                "mem_total_mb": a.mem_total_mb,
+                "mem_usado_mb": a.mem_usado_mb,
                 "swap": a.swap_pct,
                 "disco": a.disco_pct,
                 "disco_ponto": a.disco_ponto,
                 "disco_livre_gb": a.disco_livre_gb,
+                "disco_total_gb": a.disco_total_gb,
                 "gpu": a.gpu_pct,
                 "gpu_mem": a.gpu_mem_pct,
+                "gpu_mem_total_mb": a.gpu_mem_total_mb,
+                "gpu_mem_usado_mb": a.gpu_mem_usado_mb,
                 "gpu_temp": a.gpu_temp,
                 "cont_rodando": a.containers_rodando,
                 "cont_total": a.containers_total,
@@ -132,6 +139,51 @@ async def resumo(
         # tela desenha o painel de indisponibilidade sem outra ida ao
         # servidor: os dados já saem juntos do mesmo poll de 10s.
         "incidentes_abertos": incidentes_abertos,
+        "painel": await _resumo_do_painel(db),
+    }
+
+
+async def _resumo_do_painel(db: AsyncSession) -> dict:
+    """
+    A faixa de resumo do topo do Monitor.
+
+    Tudo daqui é **local**: uma consulta no banco do painel e uma leitura
+    de disco da própria VM. Nenhum SSH. Isso é deliberado — o Monitor é a
+    tela inicial e atualiza a cada 10 s; se esta faixa fosse buscar em
+    `/api/painel` (que faz `docker ps` por SSH em cada servidor), abrir o
+    painel passaria a bater nas VMs de produção o tempo todo, exatamente
+    o que o monitor contínuo foi desenhado para não fazer.
+
+    Sobre permissão: a rota é liberada por `metrics.view` e devolve também
+    backup e disco do painel, que são de `backups.view`. Hoje isso não
+    expõe nada — **todo** perfil do catálogo que tem `metrics.view` tem
+    `backups.view` junto (há um cenário em `tests/verificar.py` que trava
+    essa premissa). Se algum dia existir um perfil só de métrica, é aqui
+    que precisa entrar o filtro.
+    """
+    from app.services.backup_service import BackupService
+    from app.services.storage_service import StorageService
+
+    try:
+        ultimos = await BackupService.ultimo_por_host(db)
+        com_falha = sum(1 for u in ultimos.values() if u and u.status != "sucesso")
+        sem_backup = 0
+        r = await db.execute(select(Host).where(Host.enabled.is_(True)))
+        for h in r.scalars().all():
+            if h.id not in ultimos:
+                sem_backup += 1
+    except Exception:
+        com_falha, sem_backup = 0, 0
+
+    try:
+        disco = StorageService.espaco_local()
+    except Exception:
+        disco = None
+
+    return {
+        "backups_com_falha": com_falha,
+        "servidores_sem_backup": sem_backup,
+        "armazenamento": disco,
     }
 
 

@@ -13,16 +13,23 @@ problemáticos do ciclo atual está resolvido. Não há "reabrir" — se o
 mesmo serviço cair nove segundos depois, é um incidente novo, com início
 próprio. Juntar os dois seria mentir sobre quanto tempo ficou fora.
 """
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
 
 from app.models.incidente import Incidente
 
-# Sem isto, um serviço batendo (RestartCount subindo) fica marcado como
-# "de pé" porque em algum instante do ciclo ele está `running` — a fila do
-# monitor pode até não ver o `restarting`. O limiar vem do LimiarService;
-# este é só o piso absoluto que dispensa configuração.
+log = logging.getLogger("faceops.incidentes")
+
+# Janela do laço de reinício. `RestartCount` do Docker é ACUMULADO desde
+# que o container foi criado — um worker com 7 reinícios em três meses não
+# tem problema nenhum, e tratá-lo como problema encheria a tela de alarme
+# falso permanente. O que interessa é reinício acontecendo AGORA, então
+# comparamos a contagem atual com a de até 30 min atrás: quando os
+# reinícios param, a janela desliza e o incidente fecha sozinho.
+JANELA_REINICIO_S = 30 * 60
+
 REINICIOS_PADRAO = 5
 
 
@@ -33,6 +40,12 @@ def _causa_provavel(d: dict) -> str:
     coleta em toda passada, lidos com o vocabulário de quem opera o
     FindFace.
     """
+    if d.get("motivo") == "loop":
+        return (
+            f"reiniciou {d.get('reinicios_janela', '?')}x nos últimos "
+            f"{JANELA_REINICIO_S // 60} min — sinal de câmera problemática ou "
+            "falta de recurso, comum no findface-video-worker."
+        )
     if d.get("oom_killed"):
         return (
             "morto por falta de memória (OOM) — memória ou VRAM perto do "
@@ -42,30 +55,99 @@ def _causa_provavel(d: dict) -> str:
         return f"saiu com código de erro {d['exit_code']} — veja o log do container."
     if d.get("saude") == "unhealthy":
         return "healthcheck do container está falhando — veja o log para o motivo."
-    reinicios = d.get("reinicios") or 0
-    if reinicios >= REINICIOS_PADRAO:
-        return (
-            f"reiniciando repetidamente ({reinicios}x) — sinal de câmera "
-            "problemática ou falta de recurso, comum no findface-video-worker."
-        )
     if d.get("estado") and d["estado"] != "running":
         return "container parado — verifique se foi manual ou por falta de memória/disco."
     return ""
 
 
 class IncidenteService:
+    def __init__(self, config=None, limiares=None) -> None:
+        self.config = config
+        # Opcional: sem ele, o limite de reinício é o global do catálogo.
+        self.limiares = limiares
+        # (host_id, servico) -> [(timestamp, RestartCount)] dentro da janela.
+        # Só memória: o baseline se refaz sozinho depois de um restart do
+        # painel, e perder essa memória não perde nada que esteja no banco.
+        self._hist_reinicios: dict[tuple[int, str], list[tuple[float, int]]] = {}
+
+    def _cfg(self, chave: str, padrao):
+        if self.config is None:
+            return padrao
+        try:
+            return self.config.get(chave)
+        except (KeyError, ValueError, TypeError):
+            return padrao
+
+    # ── Laço de reinício ───────────────────────────────────────────────
+
+    def _flapping(
+        self, host_id: int, reinicios: dict, agora: datetime, limites: dict
+    ) -> list[dict]:
+        """
+        Quais serviços reiniciaram demais DENTRO da janela. Compara a
+        contagem de agora com a mais antiga ainda na janela — não com o
+        total acumulado do container, que só cresce e nunca voltaria a
+        zero.
+        """
+        achados: list[dict] = []
+        ts = agora.timestamp()
+        corte = ts - JANELA_REINICIO_S
+        padrao = float(self._cfg("alerta.servico_reinicios", REINICIOS_PADRAO))
+
+        for servico, contagem in (reinicios or {}).items():
+            chave = (host_id, servico)
+            hist = [p for p in self._hist_reinicios.get(chave, []) if p[0] >= corte]
+            hist.append((ts, int(contagem)))
+            self._hist_reinicios[chave] = hist
+
+            # Container recriado zera o RestartCount: delta negativo vira 0
+            # em vez de virar um número sem sentido.
+            delta = max(0, hist[-1][1] - hist[0][1])
+            limite = float(limites.get(f"{servico}::servico_reinicios", padrao))
+            if delta >= limite:
+                achados.append({
+                    "servico": servico,
+                    "motivo": "loop",
+                    "reinicios_janela": delta,
+                })
+
+        # Serviço que sumiu da leitura (container removido) não precisa
+        # ocupar memória para sempre.
+        vivos = {(host_id, s) for s in (reinicios or {})}
+        for chave in [k for k in self._hist_reinicios if k[0] == host_id and k not in vivos]:
+            self._hist_reinicios.pop(chave, None)
+
+        return achados
+
     # ── Ciclo do monitor ─────────────────────────────────────────────────
 
-    async def registrar_ciclo(self, db, host, host_ok: bool, doentes: list[dict]) -> None:
+    async def registrar_ciclo(
+        self,
+        db,
+        host,
+        host_ok: bool,
+        doentes: list[dict],
+        reinicios: dict | None = None,
+        agora: datetime | None = None,
+    ) -> None:
         """
         Chamado uma vez por host a cada ciclo do monitor, depois da
         amostra. Abre incidente para quem entrou em problema, fecha quem
         saiu.
         """
+        agora = agora or datetime.now(timezone.utc)
+
         r = await db.execute(
             select(Incidente).where(Incidente.host_id == host.id, Incidente.fim.is_(None))
         )
         abertos = {(i.tipo, i.servico): i for i in r.scalars().all()}
+
+        limites = {}
+        if self.limiares is not None and host_ok:
+            try:
+                limites = await self.limiares.resolver_lote(db, host.id)
+            except Exception:
+                log.exception("falha ao resolver limiares do host %s", host.id)
 
         atuais: dict[tuple[str, str], dict] = {}
         if not host_ok:
@@ -75,6 +157,14 @@ class IncidenteService:
                 "causa": "rede fora, VM desligada ou parada — confira o provedor antes de investigar o painel.",
             }
         else:
+            # Laço de reinício primeiro: se o mesmo serviço também estiver
+            # doente por outro motivo, o motivo mais específico prevalece.
+            for d in self._flapping(host.id, reinicios or {}, agora, limites):
+                atuais[("servico", d["servico"])] = {
+                    "nivel": "atencao",
+                    "texto": f"{d['servico']} reiniciando em laço",
+                    "causa": _causa_provavel(d),
+                }
             for d in doentes or []:
                 nome = d.get("servico") or ""
                 if not nome:
@@ -86,16 +176,20 @@ class IncidenteService:
                     "causa": _causa_provavel(d),
                 }
 
-        agora = datetime.now(timezone.utc)
-
         # Fecha quem sumiu da lista de problemas.
         for chave, incidente in abertos.items():
-            if chave not in atuais:
-                incidente.fim = agora
-                inicio = incidente.inicio
-                if inicio.tzinfo is None:
-                    inicio = inicio.replace(tzinfo=timezone.utc)
-                incidente.duracao_s = max(0.0, (agora - inicio).total_seconds())
+            if chave in atuais:
+                continue
+            # Máquina sem contato: NÃO sabemos nada dos serviços dela. Fechar
+            # aqui registraria uma recuperação que ninguém observou — o
+            # serviço "voltou" no exato instante em que o host caiu.
+            if not host_ok and chave[0] == "servico":
+                continue
+            incidente.fim = agora
+            inicio = incidente.inicio
+            if inicio.tzinfo is None:
+                inicio = inicio.replace(tzinfo=timezone.utc)
+            incidente.duracao_s = max(0.0, (agora - inicio).total_seconds())
 
         # Abre quem é novo.
         for chave, info in atuais.items():
@@ -126,8 +220,6 @@ class IncidenteService:
 
     async def listar_recentes(self, db, dias: int = 3, host_id: int | None = None) -> list[dict]:
         """Abertos + fechados na janela — para o painel 'serviços por máquina'."""
-        from datetime import timedelta
-
         desde = datetime.now(timezone.utc) - timedelta(days=max(1, dias))
         condicoes = [
             (Incidente.fim.is_(None)) | (Incidente.fim >= desde),
@@ -151,8 +243,6 @@ class IncidenteService:
     async def contar_antigas(db, dias: int) -> int:
         if dias <= 0:
             return 0
-        from datetime import timedelta
-
         from sqlalchemy import func
 
         corte = datetime.now(timezone.utc) - timedelta(days=dias)
@@ -172,8 +262,6 @@ class IncidenteService:
         """
         if dias <= 0:
             return 0
-        from datetime import timedelta
-
         corte = datetime.now(timezone.utc) - timedelta(days=dias)
         r = await db.execute(
             delete(Incidente).where(Incidente.fim.isnot(None), Incidente.fim < corte)

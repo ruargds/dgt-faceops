@@ -13,6 +13,7 @@ import {
   IconLua,
   IconServicos,
   IconServidor,
+  IconChevron,
   IconLogs,
   IconMenu,
   IconTerminal,
@@ -48,44 +49,82 @@ import { GatilhoDeAutoria } from "../components/SobreOSistema";
 // tradução de menu é o mínimo para "escolher o idioma" significar alguma
 // coisa, e é onde a mão de quem opera passa o dia.
 //
-// Reorganizado em grupos menores (2026): "Operação" sozinho tinha 12 itens
-// soltos — uma coluna sem hierarquia nenhuma. Separado por tipo de
-// pergunta que a pessoa está fazendo ("o que está acontecendo agora" vs
-// "quanto está consumindo" vs "onde estão as câmeras" vs "ferramenta"),
-// no mesmo padrão de grupo raso do InfraCore — sem submenu aninhado, só
-// mais divisores.
+// **Monitor fica fora dos grupos, fixo no topo.** É a entrada principal do
+// painel (e a tela que abre por padrão): enterrá-lo dentro de um grupo que
+// pode estar recolhido esconderia justamente o que a pessoa veio ver.
+const PRINCIPAL = {
+  id: "monitor", chave: "menu.monitor", icone: IconRecursos, perm: "metrics.view",
+};
+
+// O resto vira submenu de verdade: grupo recolhível, com os itens
+// indentados embaixo. "Operação" sozinho tinha 12 itens soltos — uma
+// coluna sem hierarquia nenhuma, em que achar "Manutenção" exigia ler a
+// lista inteira. Agora cada grupo responde a um tipo de pergunta.
 const MENU = [
-  { grupo: "menu.operacao" },
-  { id: "monitor", chave: "menu.monitor", icone: IconRecursos, perm: "metrics.view" },
-  { id: "painel", chave: "menu.painel", icone: IconPainel, perm: "hosts.view" },
-  { id: "rastreio", chave: "menu.rastreio", icone: IconAlerta, perm: "metrics.view" },
-
-  { grupo: "menu.monitoramento" },
-  { id: "recursos", chave: "menu.recursos", icone: IconRecursos, perm: "metrics.view" },
-  { id: "processos", chave: "menu.processos", icone: IconRecursos, perm: "metrics.view" },
-  { id: "servicos", chave: "menu.servicos", icone: IconServicos, perm: "services.view" },
-
-  { grupo: "menu.dispositivos" },
-  { id: "dispositivos", chave: "menu.cameras", icone: IconServidor, perm: "metrics.view" },
-  { id: "descoberta", chave: "menu.descoberta", icone: IconServidor, perm: "hosts.view" },
-  { id: "topologia", chave: "menu.topologia", icone: IconServidor, perm: "hosts.view" },
-
-  { grupo: "menu.ferramentas" },
-  { id: "logs", chave: "menu.logs", icone: IconLogs, perm: "services.view" },
-  { id: "manutencao", chave: "menu.manutencao", icone: IconAlerta, perm: "maintenance.view" },
-  { id: "terminal", chave: "menu.terminal", icone: IconTerminal, perm: "terminal.use" },
-
-  { grupo: "menu.backup" },
-  { id: "backups", chave: "menu.backups", icone: IconBackup, perm: "backups.view" },
-  { id: "agendamentos", chave: "menu.agendamentos", icone: IconAgenda, perm: "schedules.view" },
-  { id: "destinos", chave: "menu.destinos", icone: IconChave, perm: "backups.view" },
-
-  { grupo: "menu.administracao" },
-  { id: "servidores", chave: "menu.servidores", icone: IconServidor, perm: "hosts.view" },
-  { id: "usuarios", chave: "menu.usuarios", icone: IconUsuarios, perm: "users.manage" },
-  { id: "auditoria", chave: "menu.auditoria", icone: IconAuditoria, perm: "audit.view" },
-  { id: "config", chave: "menu.config", icone: IconServicos, perm: "hosts.view" },
+  {
+    grupo: "menu.operacao",
+    itens: [
+      { id: "painel", chave: "menu.painel", icone: IconPainel, perm: "hosts.view" },
+      { id: "rastreio", chave: "menu.rastreio", icone: IconAlerta, perm: "metrics.view" },
+    ],
+  },
+  {
+    grupo: "menu.monitoramento",
+    itens: [
+      { id: "recursos", chave: "menu.recursos", icone: IconRecursos, perm: "metrics.view" },
+      { id: "processos", chave: "menu.processos", icone: IconRecursos, perm: "metrics.view" },
+      { id: "servicos", chave: "menu.servicos", icone: IconServicos, perm: "services.view" },
+    ],
+  },
+  {
+    grupo: "menu.dispositivos",
+    itens: [
+      { id: "dispositivos", chave: "menu.cameras", icone: IconServidor, perm: "metrics.view" },
+      { id: "descoberta", chave: "menu.descoberta", icone: IconServidor, perm: "hosts.view" },
+      { id: "topologia", chave: "menu.topologia", icone: IconServidor, perm: "hosts.view" },
+    ],
+  },
+  {
+    grupo: "menu.ferramentas",
+    itens: [
+      { id: "logs", chave: "menu.logs", icone: IconLogs, perm: "services.view" },
+      { id: "manutencao", chave: "menu.manutencao", icone: IconAlerta, perm: "maintenance.view" },
+      { id: "terminal", chave: "menu.terminal", icone: IconTerminal, perm: "terminal.use" },
+    ],
+  },
+  {
+    grupo: "menu.backup",
+    itens: [
+      { id: "backups", chave: "menu.backups", icone: IconBackup, perm: "backups.view" },
+      { id: "agendamentos", chave: "menu.agendamentos", icone: IconAgenda, perm: "schedules.view" },
+      { id: "destinos", chave: "menu.destinos", icone: IconChave, perm: "backups.view" },
+    ],
+  },
+  {
+    grupo: "menu.administracao",
+    itens: [
+      { id: "servidores", chave: "menu.servidores", icone: IconServidor, perm: "hosts.view" },
+      { id: "usuarios", chave: "menu.usuarios", icone: IconUsuarios, perm: "users.manage" },
+      { id: "auditoria", chave: "menu.auditoria", icone: IconAuditoria, perm: "audit.view" },
+      { id: "config", chave: "menu.config", icone: IconServicos, perm: "hosts.view" },
+    ],
+  },
 ];
+
+// Grupos recolhidos ficam no navegador, como tema e idioma: é preferência
+// de quem olha a tela, não configuração da instalação.
+const CHAVE_RECOLHIDOS = "faceops_menu_recolhido";
+
+function lerRecolhidos() {
+  try {
+    const bruto = JSON.parse(localStorage.getItem(CHAVE_RECOLHIDOS) || "[]");
+    return Array.isArray(bruto) ? new Set(bruto) : new Set();
+  } catch {
+    // localStorage bloqueado ou JSON corrompido: menu todo aberto é um
+    // padrão seguro, não vale derrubar a tela por causa disso.
+    return new Set();
+  }
+}
 
 // Telas com sessão viva do outro lado: WebSocket de terminal e stream de
 // log. Desmontar significa derrubar a sessão no servidor.
@@ -105,6 +144,7 @@ export default function AppShell() {
   // Mesmo padrão do `navContext` do InfraCore: estado simples no
   // componente que já troca de aba, sem Context novo para isso.
   const [alvo, setAlvo] = useState(null);
+  const [recolhidos, setRecolhidos] = useState(lerRecolhidos);
   const [trocandoSenha, setTrocandoSenha] = useState(false);
   const [saude, setSaude] = useState(null);
   // Gaveta do menu no celular/tablet — a barra lateral fixa não cabe
@@ -154,22 +194,26 @@ export default function AppShell() {
       revisao !== seloBundle
   );
 
-  // Monta o menu escondendo o que o perfil não pode ver. Um cabeçalho de
-  // grupo só aparece se sobrou pelo menos um item embaixo dele — título
-  // solto sobre espaço vazio parece defeito da tela.
-  const itens = [];
-  MENU.forEach((item, i) => {
-    if (!item.grupo) {
-      if (has(item.perm)) itens.push(item);
-      return;
-    }
-    const filhos = [];
-    for (let j = i + 1; j < MENU.length && !MENU[j].grupo; j++) filhos.push(MENU[j]);
-    if (filhos.some((f) => has(f.perm))) itens.push(item);
-  });
+  // Monta o menu escondendo o que o perfil não pode ver. Um grupo só
+  // aparece se sobrou pelo menos um item dentro dele — título solto sobre
+  // espaço vazio parece defeito da tela.
+  const grupos = MENU
+    .map((g) => ({ ...g, itens: g.itens.filter((i) => has(i.perm)) }))
+    .filter((g) => g.itens.length > 0);
 
-  const primeira = itens.find((i) => i.id);
-  const abaValida = itens.some((i) => i.id === aba) ? aba : primeira && primeira.id;
+  const principalVisivel = has(PRINCIPAL.perm) ? PRINCIPAL : null;
+  const todosItens = [
+    ...(principalVisivel ? [principalVisivel] : []),
+    ...grupos.flatMap((g) => g.itens),
+  ];
+
+  const primeira = todosItens[0];
+  const abaValida = todosItens.some((i) => i.id === aba) ? aba : primeira && primeira.id;
+
+  // O grupo que contém a tela aberta fica sempre visível, mesmo que a
+  // pessoa o tenha recolhido antes — menu que esconde a própria tela ativa
+  // deixa a barra lateral sem indicação de onde se está.
+  const grupoDaAba = grupos.find((g) => g.itens.some((i) => i.id === abaValida));
 
   // Navega para outra tela já com o contexto de onde veio o clique — um
   // atalho de alerta chama `nav("servicos", { hostId: 3, servico: "x" })`
@@ -179,6 +223,21 @@ export default function AppShell() {
     setAba(destino);
     setAlvo(alvoNovo || null);
     setGavetaAberta(false);
+  }
+
+  function alternarGrupo(chave) {
+    setRecolhidos((atual) => {
+      const nova = new Set(atual);
+      if (nova.has(chave)) nova.delete(chave);
+      else nova.add(chave);
+      try {
+        localStorage.setItem(CHAVE_RECOLHIDOS, JSON.stringify([...nova]));
+      } catch {
+        // Sem localStorage a preferência vale só para esta sessão — é
+        // cosmético, não vale quebrar o clique.
+      }
+      return nova;
+    });
   }
 
   // Registra a visita para as telas persistentes nascerem só quando forem
@@ -216,20 +275,48 @@ export default function AppShell() {
         </div>
 
         <nav className="sidebar-nav">
-          {itens.map((item, idx) =>
-            item.grupo ? (
-              <div className="nav-group" key={`g${idx}`}>{t(item.grupo)}</div>
-            ) : (
-              <button
-                key={item.id}
-                className={`nav-item ${abaValida === item.id ? "active" : ""}`}
-                onClick={() => nav(item.id)}
-              >
-                <item.icone size={17} />
-                {t(item.chave)}
-              </button>
-            )
+          {/* Entrada principal, fora de qualquer grupo. */}
+          {principalVisivel && (
+            <button
+              className={`nav-item nav-principal ${abaValida === PRINCIPAL.id ? "active" : ""}`}
+              onClick={() => nav(PRINCIPAL.id)}
+            >
+              <PRINCIPAL.icone size={17} />
+              {t(PRINCIPAL.chave)}
+            </button>
           )}
+
+          {grupos.map((g) => {
+            // O grupo da tela aberta nunca aparece fechado.
+            const aberto = !recolhidos.has(g.grupo) || g === grupoDaAba;
+            return (
+              <div className="nav-grupo" key={g.grupo}>
+                <button
+                  type="button"
+                  className="nav-grupo-titulo"
+                  aria-expanded={aberto}
+                  onClick={() => alternarGrupo(g.grupo)}
+                >
+                  <IconChevron size={12} className={`nav-chevron ${aberto ? "aberto" : ""}`} />
+                  {t(g.grupo)}
+                </button>
+                {aberto && (
+                  <div className="nav-grupo-itens">
+                    {g.itens.map((item) => (
+                      <button
+                        key={item.id}
+                        className={`nav-item ${abaValida === item.id ? "active" : ""}`}
+                        onClick={() => nav(item.id)}
+                      >
+                        <item.icone size={16} />
+                        {t(item.chave)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         <div className="sidebar-foot">
@@ -319,7 +406,7 @@ export default function AppShell() {
             <IconMenu size={19} />
           </button>
           <div className="mobile-topbar-titulo">
-            {t(itens.find((i) => i.id === abaValida)?.chave || "")}
+            {t(todosItens.find((i) => i.id === abaValida)?.chave || "")}
           </div>
         </div>
 
@@ -336,7 +423,7 @@ export default function AppShell() {
         <div className="content">
           {abaValida === "painel" && <PainelView />}
           {abaValida === "rastreio" && <RastreioView />}
-          {abaValida === "monitor" && <MonitorView alvo={alvo} nav={nav} temPainel={has("hosts.view")} />}
+          {abaValida === "monitor" && <MonitorView alvo={alvo} nav={nav} />}
           {abaValida === "dispositivos" && <DispositivosView />}
           {abaValida === "descoberta" && <DescobertaView />}
           {abaValida === "topologia" && <TopologiaView />}

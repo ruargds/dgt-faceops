@@ -30,8 +30,14 @@ class Incidente(Base):
         # A pergunta mais comum é "o que está aberto agora" e "o que
         # aconteceu com este host nos últimos dias" — os dois cabem neste
         # índice composto.
+        #
+        # O índice de `inicio` NÃO entra aqui: a coluna já é declarada com
+        # `index=True`, e o SQLAlchemy gera para ela o nome
+        # `ix_incidentes_inicio`. Declarar os dois emitia dois CREATE INDEX
+        # com o mesmo nome na subida — o segundo falhava, o startup do
+        # FastAPI morria junto e o painel nunca respondia (deploy de
+        # 01/09/2026, revertido automaticamente pelo atualizar.sh).
         Index("ix_incidentes_host_fim", "host_id", "fim"),
-        Index("ix_incidentes_inicio", "inicio"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

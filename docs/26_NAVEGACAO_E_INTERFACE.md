@@ -17,6 +17,39 @@ dela (servidores ativos, backups com falha, disco do painel) aparece
 condensado no topo do Monitor para quem tem a permissão `hosts.view` — sem
 duplicar a tela inteira.
 
+## Números absolutos, por componente
+
+Percentual sozinho esconde a decisão: "78,8% de memória" não diz se
+sobra 1 GB ou 40 GB, e é a sobra que define se dá para esperar até
+amanhã. Agora cada componente mostra o absoluto ao lado — "12,6 GB de
+16,0 GB · 78,8%" — nos cartões e nos gráficos, com a unidade certa para
+cada um (RAM e VRAM em GB do total da placa, disco em GB do sistema de
+arquivos mais cheio, com o total do volume).
+
+Para isso a amostra ganhou cinco números (`mem_total_mb`, `mem_usado_mb`,
+`disco_total_gb`, `gpu_mem_total_mb`, `gpu_mem_usado_mb`) — ~40 bytes a
+mais por linha, que em 30 dias de quatro servidores continua na casa de
+poucos MB. O **modelo da placa** (`hosts.gpu_nome`, ex.: "NVIDIA
+A10-12Q") ficou no host, e não na amostra: não muda de minuto em minuto,
+e repeti-lo em cada linha seria texto duplicado milhares de vezes.
+
+Colunas novas entram pelo mecanismo idempotente de sempre
+(`COLUNAS_NOVAS` em `main.py`, `ADD COLUMN IF NOT EXISTS`) — instalação
+existente atualiza sem migração manual.
+
+## A faixa do topo não fala com servidor
+
+O resumo no alto do Monitor (servidores monitorados, serviços fora do ar,
+backups com falha, disco do painel) vem do **mesmo** `/api/monitor/resumo`
+que a tela já consulta: banco do painel + uma leitura de disco local.
+Nenhum SSH.
+
+Isso é deliberado e vale registrar porque a primeira versão errava aqui:
+ela chamava `/api/painel`, que faz `docker ps` por SSH em **cada**
+servidor. Com o Monitor virando a tela inicial, abrir o painel passaria a
+bater nas VMs de produção toda vez — exatamente o que o monitor contínuo
+foi desenhado para não fazer.
+
 ## Navegação com contexto (`nav` / `alvo`)
 
 O painel não tem roteador (sem URL por tela — decisão antiga, ver
@@ -43,14 +76,27 @@ trocava de aba.
 Ver [25_INCIDENTES_E_LIMIARES](25_INCIDENTES_E_LIMIARES.md) para onde isso
 é usado (atalho de alerta).
 
-## Menu em grupos menores
+## Menu: entrada principal + submenus
 
-"Operação" tinha 12 itens soltos, sem hierarquia. Virou 4 grupos —
-Operação, Monitoramento, Dispositivos, Ferramentas — mesmo mecanismo de
-sempre (`{ grupo: "menu.chave" }` como divisor na lista, sem submenu
-aninhado). É o mesmo padrão raso que o InfraCore usa: grupo é só um
-título, não uma dobra — mais fácil de escanear, sem estado de
-aberto/fechado para gerenciar.
+**Monitor fica fora dos grupos, fixo no topo** (`PRINCIPAL` em
+`AppShell.js`). É a entrada principal e a tela que abre por padrão —
+enterrá-la dentro de um grupo recolhível esconderia justamente o que a
+pessoa veio ver.
+
+O resto virou submenu de verdade: seis grupos recolhíveis (Operação,
+Monitoramento, Dispositivos, Ferramentas, Backup, Administração), cada um
+com os itens indentados e uma guia à esquerda. Antes, "Operação" sozinho
+tinha 12 itens soltos — achar "Manutenção" exigia ler a lista inteira.
+
+Dois detalhes que evitam menu irritante:
+
+- **O grupo da tela aberta nunca aparece fechado**, mesmo que tenha sido
+  recolhido antes — barra lateral sem indicação de onde se está é pior
+  que barra lateral comprida.
+- **O estado recolhido fica no navegador** (`localStorage`, como tema e
+  idioma): é preferência de quem olha a tela, não configuração da
+  instalação. Se o `localStorage` estiver bloqueado, tudo abre — falhar
+  para o lado visível.
 
 ## Responsivo: sidebar em gaveta
 

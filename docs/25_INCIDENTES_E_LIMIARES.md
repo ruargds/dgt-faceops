@@ -43,6 +43,10 @@ Regra de fechamento: se o mesmo serviço cair de novo nove segundos depois,
 sobre quanto tempo ficou fora.
 
 Host inteiro sem contato (`a.erro`) também vira incidente, `tipo="host"`.
+E quando o host está sem contato os incidentes de **serviço dele ficam
+como estão**: sem alcançar a máquina não se sabe nada dos containers, e
+fechá-los ali registraria uma recuperação que ninguém observou — o
+serviço "voltando" no exato instante em que a máquina caiu.
 
 ### Causa provável — heurística, não IA
 
@@ -56,8 +60,26 @@ FindFace:
 | `oom_killed` | morto por falta de memória — confira Recursos antes de reiniciar |
 | `exit_code != 0` | saiu com código de erro — veja o log |
 | `saude == "unhealthy"` | healthcheck falhando — veja o log |
-| `reinicios >= alerta.servico_reinicios` (padrão 5) | reiniciando em loop — câmera problemática ou falta de recurso |
+| reinícios subindo dentro da janela | reiniciando em laço — câmera problemática ou falta de recurso |
 | parado sem nenhum dos anteriores | verifique se foi manual ou por falta de memória/disco |
+
+### Reinício em laço: variação, nunca total acumulado
+
+O `RestartCount` do Docker conta desde que o container foi **criado**. Um
+`findface-video-worker` com 40 reinícios em três meses, estável agora, não
+tem problema nenhum — tratar esse número absoluto como alarme criaria um
+alerta falso permanente, que é pior que alerta nenhum porque ensina a
+ignorar a tela.
+
+Por isso o critério é a **variação dentro de uma janela de 30 minutos**:
+o `IncidenteService` guarda em memória a contagem vista nos últimos
+ciclos e compara a atual com a mais antiga ainda na janela. Quando os
+reinícios param, a janela desliza, a diferença cai a zero e o incidente
+**fecha sozinho**. Container recriado zera o contador — a diferença
+negativa vira zero, em vez de virar um número sem sentido.
+
+O limite (`alerta.servico_reinicios`, padrão 5) aceita exceção por
+serviço, como os demais.
 
 Isso responde ao pedido de "usar IA para rastrear logs e erros" sem
 instalar nada: é regra sobre dado que o painel já lê, roda em
@@ -138,3 +160,29 @@ perfil Administrador, mesma permissão da configuração global.
 API: `GET /api/limiares` (lista + chaves aceitas), `PUT /api/limiares`
 (salva/atualiza uma exceção), `DELETE /api/limiares/{id}` (restaura o
 padrão).
+
+---
+
+## Como verificar antes de subir
+
+```bash
+cd backend
+pip install -r requirements-dev.txt     # só aiosqlite
+python tests/verificar.py
+```
+
+Roda sem Postgres e sem framework de teste, e cobre justamente o que
+"compila" e "importa" não pegam:
+
+| Cenário | Protege contra |
+|---|---|
+| DDL sem índice duplicado | o deploy de 01/09/2026: dois índices de mesmo nome no modelo derrubaram o startup inteiro |
+| Abre/fecha incidente | duplicar incidente a cada ciclo, ou gravar duração errada |
+| Host fora não fecha serviço | registrar recuperação que ninguém viu |
+| Reinício acumulado não vira alarme | alarme falso permanente por `RestartCount` histórico |
+| Reinício em laço abre e fecha | laço detectado agora, e encerrado quando para |
+| Limiar em cascata | precedência host+serviço > host > serviço > padrão |
+| Limiar recusa combinação inválida | limite de host gravado com serviço, e vice-versa |
+| Faxina só apaga fechado | apagar incidente ainda em aberto |
+| Resumo do painel degrada sem quebrar | a tela inicial dar 500 por causa de uma consulta de backup |
+| Resumo não expõe backup indevido | trava a premissa de permissão do bloco `painel` |

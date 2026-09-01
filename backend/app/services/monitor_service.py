@@ -34,15 +34,16 @@ from app.services.ssh_service import SSHError
 log = logging.getLogger("faceops.monitor")
 
 
-def _pior_disco(discos: list[dict]) -> tuple[float, str, float]:
+def _pior_disco(discos: list[dict]) -> tuple[float, str, float, float]:
     """O disco mais cheio — é o que dispara alerta."""
     if not discos:
-        return 0.0, "", 0.0
+        return 0.0, "", 0.0, 0.0
     pior = max(discos, key=lambda d: d.get("percentual", 0))
     return (
         float(pior.get("percentual", 0)),
         str(pior.get("ponto", ""))[:64],
         round(pior.get("livre_bytes", 0) / (1024 ** 3), 2),
+        round(pior.get("total_bytes", 0) / (1024 ** 3), 2),
     )
 
 
@@ -146,7 +147,9 @@ class MonitorService:
         self._ciclos += 1
         self._ultimo_ciclo = datetime.now(timezone.utc)
 
-    async def _registrar_incidentes(self, db, host, host_ok: bool, doentes: list[dict]) -> None:
+    async def _registrar_incidentes(
+        self, db, host, host_ok: bool, doentes: list[dict], reinicios: dict | None = None
+    ) -> None:
         """
         Abre/fecha incidente a partir do que este ciclo já leu — sem SSH
         extra. Isolado do resto do ciclo: um erro aqui não pode derrubar a
@@ -155,7 +158,9 @@ class MonitorService:
         if self.incidentes is None:
             return
         try:
-            await self.incidentes.registrar_ciclo(db, host, host_ok=host_ok, doentes=doentes)
+            await self.incidentes.registrar_ciclo(
+                db, host, host_ok=host_ok, doentes=doentes, reinicios=reinicios,
+            )
         except Exception:
             log.exception("falha ao registrar incidente do host %s", host.id)
 
@@ -201,17 +206,32 @@ class MonitorService:
 
         amostra.mem_pct = round(float(mem.get("percentual", 0) or 0), 1)
         amostra.swap_pct = round(float(mem.get("swap_percentual", 0) or 0), 1)
+        # Absolutos, para a tela poder dizer "12,6 GB de 16,0 GB" em vez
+        # de só "78,8%".
+        amostra.mem_total_mb = round((mem.get("total_bytes") or 0) / (1024 ** 2), 1)
+        amostra.mem_usado_mb = round((mem.get("usado_bytes") or 0) / (1024 ** 2), 1)
 
-        pct, ponto, livre = _pior_disco(dados.get("discos", []))
+        pct, ponto, livre, total_disco = _pior_disco(dados.get("discos", []))
         amostra.disco_pct = round(pct, 1)
         amostra.disco_ponto = ponto
         amostra.disco_livre_gb = livre
+        amostra.disco_total_gb = total_disco
 
         if gpus:
             g = gpus[0]
             amostra.gpu_pct = round(float(g.get("utilizacao_pct") or 0), 1)
             amostra.gpu_mem_pct = round(float(g.get("memoria_pct") or 0), 1)
             amostra.gpu_temp = round(float(g.get("temperatura_c") or 0), 1)
+            amostra.gpu_mem_total_mb = round(
+                (g.get("memoria_total_bytes") or 0) / (1024 ** 2), 1
+            )
+            amostra.gpu_mem_usado_mb = round(
+                (g.get("memoria_usada_bytes") or 0) / (1024 ** 2), 1
+            )
+            # Modelo da placa fica no host: não muda entre amostras.
+            nome_gpu = str(g.get("nome") or "")[:120]
+            if nome_gpu and host.gpu_nome != nome_gpu:
+                host.gpu_nome = nome_gpu
 
         amostra.containers_total = len(containers)
         amostra.coleta_ms = int(dados.get("coleta_ms", 0) or 0)
@@ -225,7 +245,9 @@ class MonitorService:
             amostra.containers_problema = int(saude.get("com_problema", 0))
             amostra.containers_total = int(saude.get("total", 0)) or amostra.containers_total
             await self._registrar_incidentes(
-                db, host, host_ok=True, doentes=saude.get("servicos_doentes", [])
+                db, host, host_ok=True,
+                doentes=saude.get("servicos_doentes", []),
+                reinicios=saude.get("reinicios", {}),
             )
         except Exception:
             pass
@@ -279,12 +301,17 @@ class MonitorService:
                     "cpu_uso": a.cpu_uso_pct if a.cpu_uso_pct > 0 else None,
                     "carga": a.carga_por_nucleo,
                     "mem": a.mem_pct,
+                    "mem_total_mb": a.mem_total_mb,
+                    "mem_usado_mb": a.mem_usado_mb,
                     "swap": a.swap_pct,
                     "disco": a.disco_pct,
                     "disco_ponto": a.disco_ponto,
                     "disco_livre_gb": a.disco_livre_gb,
+                    "disco_total_gb": a.disco_total_gb,
                     "gpu": a.gpu_pct,
                     "gpu_mem": a.gpu_mem_pct,
+                    "gpu_mem_total_mb": a.gpu_mem_total_mb,
+                    "gpu_mem_usado_mb": a.gpu_mem_usado_mb,
                     "gpu_temp": a.gpu_temp,
                     "cont_rodando": a.containers_rodando,
                     "cont_total": a.containers_total,
@@ -450,7 +477,14 @@ class MonitorService:
                             "'Reiniciar' resolve a maioria dos casos."
                         ),
                         onde="Serviços", onde_aba="servicos",
-                        extra={"servico": inc["servico"], "desde": inc["inicio"]})
+                        extra={
+                            "servico": inc["servico"],
+                            "desde": inc["inicio"],
+                            # A tela mostra "há 6min" ao lado do texto; sem
+                            # este campo ela recebia `undefined` e escrevia
+                            # "há —".
+                            "duracao_s": inc["duracao_s"],
+                        })
             elif a.containers_problema > 0:
                 # Sem o serviço de incidentes injetado (instalação antiga
                 # ou teste), cai no aviso agregado de antes.

@@ -77,6 +77,14 @@ COLUNAS_NOVAS = [
     ("hosts", "ff_api_pass_enc", "TEXT NOT NULL DEFAULT ''"),
     ("schedules", "tipo", "VARCHAR(16) NOT NULL DEFAULT 'backup'"),
     ("schedules", "parametros", "JSONB NOT NULL DEFAULT '{}'::jsonb"),
+    # Valor absoluto ao lado do percentual (2026): "78,8%" não diz se
+    # sobra 1 GB ou 40 GB.
+    ("amostras", "mem_total_mb", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+    ("amostras", "mem_usado_mb", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+    ("amostras", "disco_total_gb", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+    ("amostras", "gpu_mem_total_mb", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+    ("amostras", "gpu_mem_usado_mb", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+    ("hosts", "gpu_nome", "VARCHAR(120) NOT NULL DEFAULT ''"),
 ]
 
 # Alterações que não são "coluna nova". Escritas para serem idempotentes:

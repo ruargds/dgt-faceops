@@ -27,6 +27,12 @@ export const IconPainel = (p) => (
   </Svg>
 );
 
+export const IconChevron = (p) => (
+  <Svg {...p}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+  </Svg>
+);
+
 export const IconMenu = (p) => (
   <Svg {...p}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
