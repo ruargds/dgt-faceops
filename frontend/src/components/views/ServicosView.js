@@ -21,7 +21,7 @@ import {
   IconStop,
 } from "../Icons";
 
-export default function ServicosView() {
+export default function ServicosView({ alvo }) {
   const { has } = usePermissions();
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
 
@@ -32,6 +32,12 @@ export default function ServicosView() {
   const [logs, setLogs] = useState(null);
   const [acaoStack, setAcaoStack] = useState(null);
   const [aviso, setAviso] = useState("");
+
+  // Chegou de um atalho de alerta ("ir para Serviços") — abre já no host
+  // certo, em vez do primeiro host ativo que useHosts escolheria sozinho.
+  useEffect(() => {
+    if (alvo && alvo.hostId) setHostId(alvo.hostId);
+  }, [alvo, setHostId]);
 
   const carregar = useCallback(async () => {
     if (!hostId) return;

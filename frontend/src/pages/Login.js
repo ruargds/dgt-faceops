@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { api, setToken } from "../api";
 import { MARCA_PADRAO, urlLogo } from "../marca";
 import { t } from "../i18n";
+import { GatilhoDeAutoria } from "../components/SobreOSistema";
 
 export default function Login({ onEntrar, marca }) {
   const m = marca || MARCA_PADRAO;
@@ -77,6 +78,13 @@ export default function Login({ onEntrar, marca }) {
         </button>
 
         <div className="login-hint">{t("Use as credenciais fornecidas pelo administrador.")}<br /> {t("Troque a senha logo após o primeiro acesso.")}</div>
+
+        {/* Rodapé da marca de quem USA o painel. Quem o DESENVOLVEU fica a
+            cinco cliques daqui — mesmo padrão do InfraCore, ver
+            components/SobreOSistema.js. */}
+        <GatilhoDeAutoria style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: "var(--text-3)" }}>
+          {m.cliente ? `${m.nome} — ${m.cliente}` : m.nome}
+        </GatilhoDeAutoria>
       </form>
     </div>
   );

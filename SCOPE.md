@@ -36,8 +36,14 @@ no momento da investigação.
 
 ## O que não faz
 
-- **Não substitui o Zabbix.** Sem histórico de série temporal, sem trigger,
-  sem alerta por e-mail ou Telegram. A coleta é no clique do botão.
+- **Não substitui o Zabbix.** Desde 2026 o painel tem histórico de série
+  temporal próprio (aba Monitor) e um trigger simples — abre/fecha
+  incidente por serviço, com causa provável heurística (ver
+  [25_INCIDENTES_E_LIMIARES](docs/25_INCIDENTES_E_LIMIARES.md)) — mas
+  segue sem alerta por e-mail/Telegram e sem a profundidade de um
+  monitoramento genérico. A leitura sob demanda (Recursos, Rastreio)
+  continua existindo ao lado do monitor contínuo, para quando a pergunta é
+  "o que está acontecendo agora, sem esperar o próximo ciclo".
 - **Não instala agente** nos servidores do FindFace. Tudo por SSH.
 - **Não configura o FindFace.** Câmeras, dossiês, limiares e módulos
   continuam na plataforma da NtechLab.

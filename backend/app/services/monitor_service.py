@@ -47,10 +47,15 @@ def _pior_disco(discos: list[dict]) -> tuple[float, str, float]:
 
 
 class MonitorService:
-    def __init__(self, metrics, stack, config=None) -> None:
+    def __init__(self, metrics, stack, config=None, incidentes=None, limiares=None) -> None:
         self.metrics = metrics
         self.stack = stack
         self.config = config
+        # Opcionais de propósito: um painel sem estas duas peças continua
+        # monitorando exatamente como antes, só sem histórico de
+        # indisponibilidade e sem limite por serviço.
+        self.incidentes = incidentes
+        self.limiares = limiares
         self._tarefa: asyncio.Task | None = None
         self._rodando = False
         # Último erro por host, para a tela não repetir a mesma queixa
@@ -141,6 +146,19 @@ class MonitorService:
         self._ciclos += 1
         self._ultimo_ciclo = datetime.now(timezone.utc)
 
+    async def _registrar_incidentes(self, db, host, host_ok: bool, doentes: list[dict]) -> None:
+        """
+        Abre/fecha incidente a partir do que este ciclo já leu — sem SSH
+        extra. Isolado do resto do ciclo: um erro aqui não pode derrubar a
+        amostra, que é o dado que mais importa.
+        """
+        if self.incidentes is None:
+            return
+        try:
+            await self.incidentes.registrar_ciclo(db, host, host_ok=host_ok, doentes=doentes)
+        except Exception:
+            log.exception("falha ao registrar incidente do host %s", host.id)
+
     async def _amostrar(self, db, host) -> None:
         amostra = Amostra(host_id=host.id)
 
@@ -151,11 +169,13 @@ class MonitorService:
             amostra.erro = str(exc)[:255]
             self._ultimo_erro[host.id] = amostra.erro
             db.add(amostra)
+            await self._registrar_incidentes(db, host, host_ok=False, doentes=[])
             return
         except Exception as exc:
             amostra.erro = f"{type(exc).__name__}: {exc}"[:255]
             self._ultimo_erro[host.id] = amostra.erro
             db.add(amostra)
+            await self._registrar_incidentes(db, host, host_ok=False, doentes=[])
             return
 
         self._ultimo_erro.pop(host.id, None)
@@ -204,6 +224,9 @@ class MonitorService:
             amostra.containers_rodando = int(saude.get("rodando", 0))
             amostra.containers_problema = int(saude.get("com_problema", 0))
             amostra.containers_total = int(saude.get("total", 0)) or amostra.containers_total
+            await self._registrar_incidentes(
+                db, host, host_ok=True, doentes=saude.get("servicos_doentes", [])
+            )
         except Exception:
             pass
 
@@ -281,15 +304,21 @@ class MonitorService:
         derivável das amostras, e uma tabela de alertas exigiria decidir
         quando um alerta "fecha" — complexidade sem retorno para quatro
         servidores.
+
+        Os limites de host podem ter exceção por servidor (`LimiarService`);
+        os de serviço vêm sempre do incidente já aberto pelo ciclo do
+        monitor — assim o alerta aponta a causa provável, não só "algo
+        quebrou".
         """
-        limites = {
-            "cpu": float(self._cfg("alerta.cpu_pct", 90)),
-            "mem": float(self._cfg("alerta.mem_pct", 90)),
-            "swap": float(self._cfg("alerta.swap_pct", 50)),
-            "disco": float(self._cfg("alerta.disco_pct", 90)),
-            "gpu_mem": float(self._cfg("alerta.gpu_mem_pct", 92)),
+        padrao = {
+            "cpu_pct": float(self._cfg("alerta.cpu_pct", 90)),
+            "mem_pct": float(self._cfg("alerta.mem_pct", 90)),
+            "swap_pct": float(self._cfg("alerta.swap_pct", 50)),
+            "disco_pct": float(self._cfg("alerta.disco_pct", 90)),
+            "gpu_mem_pct": float(self._cfg("alerta.gpu_mem_pct", 92)),
             "gpu_temp": float(self._cfg("alerta.gpu_temp", 85)),
         }
+        indisponivel_min = float(self._cfg("alerta.servico_indisponivel_min", 15))
 
         resultado = await db.execute(
             select(Host).where(Host.enabled.is_(True), Host.monitorar.is_(True))
@@ -308,12 +337,20 @@ class MonitorService:
             if a is None:
                 continue
 
-            def add(chave, nivel, texto, valor, limite, acao="", onde=""):
+            # Uma consulta só cobre toda exceção de limite deste host —
+            # geral ou por serviço. Sem override nenhum, o dicionário vem
+            # vazio e tudo cai no padrão global.
+            overrides = await self.limiares.resolver_lote(db, host.id) if self.limiares else {}
+            limites = {k: overrides.get(f"::{k}", v) for k, v in padrao.items()}
+
+            def add(chave, nivel, texto, valor, limite, acao="", onde="", onde_aba="", extra=None):
                 # `acao` e `onde` existem para quem está de plantão às 3h
                 # e nunca viu este sistema. Alerta que só diz o que está
                 # errado obriga a pessoa a descobrir o que fazer — e é
-                # exatamente aí que ela liga para alguém.
-                saida.append({
+                # exatamente aí que ela liga para alguém. `onde_aba` é o
+                # mesmo destino, mas em id de aba — a tela usa isso para
+                # navegar de verdade, em vez de só escrever o nome.
+                item = {
                     "host_id": host.id,
                     "host": host.name,
                     "chave": chave,
@@ -323,8 +360,12 @@ class MonitorService:
                     "limite": limite,
                     "acao": acao,
                     "onde": onde,
+                    "onde_aba": onde_aba,
                     "em": a.ts.isoformat(),
-                })
+                }
+                if extra:
+                    item.update(extra)
+                saida.append(item)
 
             if a.erro:
                 add("conexao", "critico",
@@ -332,55 +373,55 @@ class MonitorService:
                     acao="Confira se a máquina está ligada e se a rede está "
                          "de pé. Em Servidores, use 'Testar conexão' para "
                          "ver o erro exato.",
-                    onde="Servidores")
+                    onde="Servidores", onde_aba="servidores")
                 continue
 
-            if a.disco_pct >= limites["disco"]:
+            if a.disco_pct >= limites["disco_pct"]:
                 add("disco", "critico" if a.disco_pct >= 95 else "atencao",
                     f"disco {a.disco_ponto} em {a.disco_pct}% "
                     f"— só {a.disco_livre_gb} GB livres",
-                    a.disco_pct, limites["disco"],
+                    a.disco_pct, limites["disco_pct"],
                     acao="Disco cheio para o banco de dados e o "
                          "reconhecimento para de gravar. Em Manutenção, use "
                          "'Diagnosticar' para ver o que está ocupando, e "
                          "'Arquivar log antigo' se for log.",
-                    onde="Manutenção")
+                    onde="Manutenção", onde_aba="manutencao")
 
-            if a.mem_pct >= limites["mem"]:
+            if a.mem_pct >= limites["mem_pct"]:
                 add("memoria", "critico" if a.mem_pct >= 95 else "atencao",
-                    f"memória em {a.mem_pct}%", a.mem_pct, limites["mem"],
+                    f"memória em {a.mem_pct}%", a.mem_pct, limites["mem_pct"],
                     acao="Perto do limite, o sistema mata containers por "
                          "falta de memória. Em Serviços, procure algum com "
                          "'morto por falta de memória'.",
-                    onde="Serviços")
+                    onde="Serviços", onde_aba="servicos")
 
-            if a.swap_pct >= limites["swap"]:
+            if a.swap_pct >= limites["swap_pct"]:
                 add("swap", "atencao",
                     f"swap em {a.swap_pct}%",
-                    a.swap_pct, limites["swap"],
+                    a.swap_pct, limites["swap_pct"],
                     acao="Swap em uso significa que a máquina está usando "
                          "disco como se fosse memória — o reconhecimento "
                          "fica lento. Não é urgente, mas indica que a VM "
                          "está pequena.",
-                    onde="Recursos")
+                    onde="Recursos", onde_aba="recursos")
 
-            if a.cpu_pct >= limites["cpu"]:
+            if a.cpu_pct >= limites["cpu_pct"]:
                 add("cpu", "atencao",
                     f"carga em {a.carga_por_nucleo} por núcleo",
-                    a.cpu_pct, limites["cpu"],
+                    a.cpu_pct, limites["cpu_pct"],
                     acao="Acima de 1,00 há processo esperando CPU. Em "
                          "Recursos, veja quais containers estão consumindo "
                          "mais.",
-                    onde="Recursos")
+                    onde="Recursos", onde_aba="recursos")
 
-            if a.gpu_mem_pct >= limites["gpu_mem"]:
+            if a.gpu_mem_pct >= limites["gpu_mem_pct"]:
                 add("gpu_mem", "critico",
                     f"memória de vídeo em {a.gpu_mem_pct}%",
-                    a.gpu_mem_pct, limites["gpu_mem"],
+                    a.gpu_mem_pct, limites["gpu_mem_pct"],
                     acao="Perto do limite, a próxima câmera causa falha e o "
                          "findface-video-worker entra em ciclo de reinício. "
                          "Em Serviços, confira a contagem de reinícios dele.",
-                    onde="Serviços")
+                    onde="Serviços", onde_aba="servicos")
 
             if a.gpu_temp >= limites["gpu_temp"]:
                 add("gpu_temp", "atencao",
@@ -388,16 +429,38 @@ class MonitorService:
                     acao="Acima de 85 °C a GPU reduz a própria velocidade "
                          "para não queimar, e o reconhecimento fica lento. "
                          "Costuma ser refrigeração do datacenter.",
-                    onde="Recursos")
+                    onde="Recursos", onde_aba="recursos")
 
-            if a.containers_problema > 0:
+            # Serviço com problema: um alerta POR container, com a causa
+            # provável e desde quando — em vez de "3 serviço(s) com
+            # problema", que obrigava abrir Serviços para descobrir qual.
+            if self.incidentes is not None:
+                abertos = [
+                    i for i in await self.incidentes.listar_abertos(db, host_id=host.id)
+                    if i["tipo"] == "servico"
+                ]
+                for inc in abertos:
+                    min_host = overrides.get(f"{inc['servico']}::servico_indisponivel_min", indisponivel_min)
+                    grave = inc["nivel"] == "critico" or (inc["duracao_s"] or 0) >= min_host * 60
+                    add("servico", "critico" if grave else "atencao",
+                        f"{inc['servico']} — {inc['texto']}",
+                        inc["duracao_s"], min_host * 60,
+                        acao=inc["causa_provavel"] or (
+                            "Em Serviços, veja o log do container para o motivo. "
+                            "'Reiniciar' resolve a maioria dos casos."
+                        ),
+                        onde="Serviços", onde_aba="servicos",
+                        extra={"servico": inc["servico"], "desde": inc["inicio"]})
+            elif a.containers_problema > 0:
+                # Sem o serviço de incidentes injetado (instalação antiga
+                # ou teste), cai no aviso agregado de antes.
                 add("servicos", "atencao",
                     f"{a.containers_problema} serviço(s) com problema",
                     a.containers_problema, 0,
                     acao="Em Serviços, veja qual não está rodando. O botão "
                          "de log mostra o motivo, e 'Reiniciar' resolve a "
                          "maioria dos casos sem afetar o resto.",
-                    onde="Serviços")
+                    onde="Serviços", onde_aba="servicos")
 
         ordem = {"critico": 0, "atencao": 1}
         saida.sort(key=lambda x: (ordem.get(x["nivel"], 9), x["host"]))

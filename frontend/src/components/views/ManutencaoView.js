@@ -1096,9 +1096,14 @@ function ConfigFindFace({ hostId, hostNome }) {
   );
 }
 
-export default function ManutencaoView() {
+export default function ManutencaoView({ alvo }) {
   const { has } = usePermissions();
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
+
+  // Chegou de um atalho de alerta de disco cheio — abre já no host certo.
+  useEffect(() => {
+    if (alvo && alvo.hostId) setHostId(alvo.hostId);
+  }, [alvo, setHostId]);
 
   const [diag, setDiag] = useState(null);
   const [erro, setErro] = useState("");

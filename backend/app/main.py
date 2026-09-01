@@ -15,13 +15,14 @@ from sqlalchemy import select
 
 from app.api.routes import (
     audit, auth, backups, configuracoes, descoberta, dispositivos, destinos,
-    exportar, hosts, logs, maintenance, marca, monitor, ops, processos, terminal,
+    exportar, hosts, incidentes, limiares, logs, maintenance, marca, monitor,
+    ops, processos, terminal,
 )
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
 from app.models import (  # noqa: F401 — registra todos os modelos
-    Amostra, Destino, LicencaAmostra, User, VisaoLog,
+    Amostra, Destino, Incidente, LicencaAmostra, LimiarOverride, User, VisaoLog,
 )
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
@@ -31,7 +32,9 @@ from app.services.faxina_service import FaxinaService
 from app.services.estimativa_service import EstimativaService
 from app.services.ffapi_service import FFApiService
 from app.services.configff_service import ConfigFFService
+from app.services.incidente_service import IncidenteService
 from app.services.licenca_service import LicencaService
+from app.services.limiar_service import LimiarService
 from app.services.internos_service import InternosService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
@@ -300,7 +303,15 @@ async def iniciar() -> None:
     app.state.logs = LogManager()
     app.state.faxina = FaxinaService(config)
     app.state.painel_backup = PainelBackupService(storage, config)
-    app.state.monitor = MonitorService(app.state.metrics, app.state.stack, config)
+    # Incidentes: abre/fecha sozinho a partir do ciclo do monitor (ver
+    # IncidenteService). Limiares: exceção de limite por host/serviço por
+    # cima do catálogo global (ver LimiarService).
+    app.state.incidentes = IncidenteService()
+    app.state.limiares = LimiarService(config)
+    app.state.monitor = MonitorService(
+        app.state.metrics, app.state.stack, config,
+        incidentes=app.state.incidentes, limiares=app.state.limiares,
+    )
     app.state.scheduler = SchedulerService(
         app.state.backups,
         faxina=app.state.faxina,
@@ -435,6 +446,8 @@ app.include_router(auth.router)
 app.include_router(configuracoes.router)
 app.include_router(marca.router)
 app.include_router(monitor.router)
+app.include_router(incidentes.router)
+app.include_router(limiares.router)
 app.include_router(dispositivos.router)
 app.include_router(descoberta.router)
 app.include_router(processos.router)

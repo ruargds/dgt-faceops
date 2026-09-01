@@ -15,7 +15,7 @@ const PAPEIS = [
   { id: "outro", nome: "Outro" },
 ];
 
-export default function ServidoresView() {
+export default function ServidoresView({ alvo }) {
   const { has } = usePermissions();
   const [lista, setLista] = useState([]);
   const [erro, setErro] = useState("");
@@ -37,6 +37,14 @@ export default function ServidoresView() {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Chegou de um alerta de "sem contato" — rola até o servidor certo em
+  // vez de deixar a pessoa procurar na lista.
+  useEffect(() => {
+    if (!alvo || !alvo.hostId || carregando) return;
+    const el = document.getElementById(`servidor-${alvo.hostId}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [alvo, carregando]);
 
   async function testar(h) {
     setTestes((t) => ({ ...t, [h.id]: { carregando: true } }));
@@ -90,7 +98,16 @@ export default function ServidoresView() {
           {lista.map((h) => {
             const teste = testes[h.id];
             return (
-              <div className="card" key={h.id} style={{ opacity: h.enabled ? 1 : 0.6 }}>
+              <div
+                className="card"
+                id={`servidor-${h.id}`}
+                key={h.id}
+                style={{
+                  opacity: h.enabled ? 1 : 0.6,
+                  borderColor: alvo && alvo.hostId === h.id ? "var(--blue)" : undefined,
+                  boxShadow: alvo && alvo.hostId === h.id ? "0 0 0 3px rgba(26,111,196,.10)" : undefined,
+                }}
+              >
                 <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
                   <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{h.name}</strong>
                   <div className="stack-h" style={{ gap: 5 }}>

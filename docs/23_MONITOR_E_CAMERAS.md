@@ -106,6 +106,34 @@ Cada alerta traz três coisas:
 Alerta que só diz o que está errado obriga a pessoa a descobrir o que
 fazer — e é exatamente aí que ela liga para alguém às 3h da manhã.
 
+### Atalho de verdade (2026)
+
+Cada alerta é clicável — leva direto ao cartão do servidor, com o histórico
+já aberto. Quando o problema é de um serviço específico, o selo "ir para
+X" navega para a tela certa **já com o host (e o serviço) selecionados**,
+em vez de só escrever o nome do destino e deixar a pessoa procurar de
+novo. Mecanismo: `AppShell.js` guarda um `alvo` além da aba ativa
+(`nav(aba, alvo)`), e cada tela de destino (Serviços, Recursos, Manutenção,
+Servidores) lê esse alvo ao montar para se posicionar sozinha — mesmo
+padrão do `navContext` do InfraCore, sem framework de rotas novo.
+
+### Serviços por máquina (2026)
+
+Painel abaixo dos cartões do Monitor: todo serviço com problema, agrupado
+por host, com a **causa provável** e **desde quando** — "voltou às 14:32,
+ficou fora por 6min" quando já resolveu. Vem do histórico de
+indisponibilidade (`Incidente`), aberto e fechado sozinho pelo próprio
+ciclo do monitor, sem nenhuma consulta extra ao servidor. Documentado em
+[25_INCIDENTES_E_LIMIARES](25_INCIDENTES_E_LIMIARES.md).
+
+### Horário de pico (2026)
+
+Na tela de detalhe de cada servidor: uma faixa com a média de uso por hora
+do dia, últimos 14 dias — "este host trabalha mais entre 8h e 18h".
+Nenhum modelo, nenhuma IA: é uma agregação SQL (`GROUP BY hora`) sobre o
+histórico que o monitor já grava, do mesmo custo de uma consulta de tela
+comum (`GET /api/monitor/pico`).
+
 ### Aviso sonoro
 
 Quando surge alerta **novo**, o navegador toca um som — dois tons para
@@ -129,6 +157,11 @@ Todos configuráveis em **Configurações → Limiares de alerta**:
 | Carga por núcleo | 90% (0,90) | — |
 | Memória de vídeo | 92% | sempre |
 | Temperatura da GPU | 85 °C | — |
+
+Isto é o **padrão global** — vale para toda a instalação. Para um limite
+diferente num host ou serviço específico ("o vm-ftpserver aceita carga
+mais alta", "o video-worker pode reiniciar mais vezes"), veja
+[25_INCIDENTES_E_LIMIARES](25_INCIDENTES_E_LIMIARES.md).
 
 ---
 

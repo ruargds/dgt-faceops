@@ -280,6 +280,21 @@ export const api = {
   monitorResumo: () => get("/monitor/resumo"),
   monitorSerie: (id, horas) => get(`/monitor/serie/${id}?horas=${horas}`),
   monitorAlertas: () => get("/monitor/alertas"),
+  // Horário de pico: agregação sobre o histórico já gravado, sem modelo.
+  monitorPico: (hostId, dias = 14) => get(`/monitor/pico?host_id=${hostId}&dias=${dias}`),
+
+  // Incidentes — histórico de indisponibilidade, aberto/fechado sozinho
+  // pelo ciclo do monitor.
+  incidentesAbertos: (hostId) =>
+    get(`/incidentes/abertos${hostId ? `?host_id=${hostId}` : ""}`),
+  incidentesRecentes: (dias = 3, hostId) =>
+    get(`/incidentes/recentes?dias=${dias}${hostId ? `&host_id=${hostId}` : ""}`),
+
+  // Limiares — exceção de limite por host/serviço, por cima do padrão
+  // global em Configurações.
+  limiares: () => get("/limiares"),
+  salvarLimiar: (d) => request("/limiares", { method: "PUT", body: JSON.stringify(d) }),
+  restaurarLimiar: (id) => del(`/limiares/${id}`),
 
   // Dispositivos (câmeras)
   // Última interação por câmera. Chamada SÓ por clique: a varredura lê o

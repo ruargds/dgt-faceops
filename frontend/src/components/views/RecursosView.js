@@ -12,7 +12,7 @@ import {
 } from "../Comuns";
 import { IconAtualizar, IconGPU } from "../Icons";
 
-export default function RecursosView() {
+export default function RecursosView({ alvo }) {
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState("");
@@ -20,6 +20,12 @@ export default function RecursosView() {
   const [coletadoEm, setColetadoEm] = useState(null);
   const [aoVivo, setAoVivo] = useState(false);
   const [intervalo, setIntervalo] = useState(15);
+
+  // Chegou de um atalho de alerta ("ir para Recursos") — abre já no host
+  // que estava com carga/swap alta, em vez do primeiro host ativo.
+  useEffect(() => {
+    if (alvo && alvo.hostId) setHostId(alvo.hostId);
+  }, [alvo, setHostId]);
 
   // Coleta SOB DEMANDA. Sem polling automático: o painel bate SSH no
   // servidor de produção a cada leitura, e ficar fazendo isso de minuto

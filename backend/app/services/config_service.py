@@ -320,6 +320,12 @@ CATALOGO: list[ItemConfig] = [
                True,
                "Toca um som quando surge alerta novo, se a aba estiver "
                "aberta. O som é gerado pelo navegador — não há arquivo."),
+    ItemConfig("incidentes.retencao_dias", "monitor",
+               "Guardar histórico de indisponibilidade por (dias)", "numero",
+               30,
+               "Quando um serviço ou host caiu e voltou. Uma linha por "
+               "evento — ocupa muito menos que as amostras.",
+               minimo=1, maximo=365),
 
     # Limiares
     ItemConfig("alerta.disco_pct", "alerta",
@@ -349,6 +355,18 @@ CATALOGO: list[ItemConfig] = [
                "Temperatura da GPU acima de (°C)", "numero", 85,
                "Acima de 85 °C costuma haver throttling.",
                minimo=50, maximo=110),
+    ItemConfig("alerta.servico_reinicios", "alerta",
+               "Serviço em loop a partir de (reinícios)", "numero", 5,
+               "Container que reinicia sozinho tantas vezes conta como "
+               "problema mesmo se estiver 'de pé' no instante da leitura. "
+               "Pode ter exceção por serviço em Limiares.",
+               minimo=1, maximo=100),
+    ItemConfig("alerta.servico_indisponivel_min", "alerta",
+               "Serviço parado vira crítico depois de (minutos)", "numero", 15,
+               "Abaixo disso o alerta fica em atenção; passado esse tempo "
+               "sem voltar, sobe para crítico. Pode ter exceção por "
+               "serviço em Limiares.",
+               minimo=1, maximo=1440),
 
     # Faxina
     ItemConfig("faxina.hora", "faxina",

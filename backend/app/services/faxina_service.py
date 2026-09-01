@@ -91,6 +91,7 @@ class FaxinaService:
             "sessoes_removidas": 0,
             "logs_esvaziados": 0,
             "amostras_removidas": 0,
+            "incidentes_removidos": 0,
             "licenca_removidas": 0,
             "erros": [],
         }
@@ -100,6 +101,7 @@ class FaxinaService:
             ("staging", self._staging),
             ("banco", self._banco),
             ("amostras", self._amostras),
+            ("incidentes", self._incidentes),
             ("licenca", self._licenca),
         ):
             try:
@@ -226,6 +228,17 @@ class FaxinaService:
 
         async with AsyncSessionLocal() as db:
             r["amostras_removidas"] = await MonitorService.limpar(db, dias)
+            await db.commit()
+
+    async def _incidentes(self, r: dict) -> None:
+        """Histórico de indisponibilidade, com retenção própria (padrão 30 dias)."""
+        dias = int(self._cfg("incidentes.retencao_dias", 30))
+        if dias <= 0:
+            return
+        from app.services.incidente_service import IncidenteService
+
+        async with AsyncSessionLocal() as db:
+            r["incidentes_removidos"] = await IncidenteService.limpar(db, dias)
             await db.commit()
 
     async def _licenca(self, r: dict) -> None:

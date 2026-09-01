@@ -89,6 +89,16 @@
   sem onerar servidor, alertas com ação, câmeras e licenciamento do
   FindFace, e as exportações em CSV.
 
+- **[25_INCIDENTES_E_LIMIARES](25_INCIDENTES_E_LIMIARES.md)** — histórico
+  de indisponibilidade por serviço (abre/fecha sozinho, causa provável
+  heurística, retenção de 30 dias) e limite de alerta com exceção por
+  host/serviço, por cima do padrão global.
+
+- **[26_NAVEGACAO_E_INTERFACE](26_NAVEGACAO_E_INTERFACE.md)** — tela
+  inicial, navegação com contexto entre telas, grupos do menu, sidebar em
+  gaveta no celular/tablet e a autoria oculta — padrões trazidos do
+  InfraCore.
+
 ### Segurança e acesso
 
 - **[05_PERMISSOES](05_PERMISSOES.md)** — os quatro perfis, o catálogo

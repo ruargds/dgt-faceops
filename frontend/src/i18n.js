@@ -26,6 +26,9 @@ export const NOMES_IDIOMA = { pt: "Português", en: "English" };
 const DICIONARIO = {
   // ── Menu ────────────────────────────────────────────────────────────
   "menu.operacao": { pt: "Operação", en: "Operations" },
+  "menu.monitoramento": { pt: "Monitoramento", en: "Monitoring" },
+  "menu.dispositivos": { pt: "Dispositivos", en: "Devices" },
+  "menu.ferramentas": { pt: "Ferramentas", en: "Tools" },
   "menu.backup": { pt: "Backup", en: "Backup" },
   "menu.administracao": { pt: "Administração", en: "Administration" },
   "menu.painel": { pt: "Painel", en: "Dashboard" },

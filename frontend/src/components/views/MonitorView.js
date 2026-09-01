@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { api, formatBytes, formatData } from "../../api";
+import { api, formatBytes, formatData, formatDuracao } from "../../api";
 import { t } from "../../i18n";
 import { BarraMetrica, Faisca, GraficoLinha, tocarAlerta } from "../Graficos";
-import { Carregando, Erro, Vazio } from "../Comuns";
+import { Carregando, Erro, Estatistica, Vazio } from "../Comuns";
 import { IconAlerta, IconAtualizar, IconDownload, IconGPU, IconOk } from "../Icons";
 
 const JANELAS = [
@@ -30,14 +30,34 @@ const EXPLICACAO = {
   gpu_mem: "Memória da placa. Perto do limite, a próxima câmera causa falha.",
 };
 
-export default function MonitorView() {
+export default function MonitorView({ alvo, nav, temPainel }) {
   const [resumo, setResumo] = useState(null);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
-  const [detalhe, setDetalhe] = useState(null);
+  const [detalhe, setDetalhe] = useState(alvo && alvo.hostId ? alvo.hostId : null);
   const [serie, setSerie] = useState(null);
   const [janela, setJanela] = useState(6);
   const [som, setSom] = useState(true);
+  const [pico, setPico] = useState(null);
+  const [resumoPainel, setResumoPainel] = useState(null);
+  const [verRecentes, setVerRecentes] = useState(false);
+  const [recentes, setRecentes] = useState(null);
+
+  // Chegou aqui a partir de um alerta em outra tela ("ir para Monitor"):
+  // abre direto no host certo, sem a pessoa precisar procurar de novo o
+  // que o alerta já sabia. Só reage quando o alvo muda de verdade — não
+  // pode disparar a cada nova referência de objeto do React.
+  useEffect(() => {
+    if (alvo && alvo.hostId) {
+      setDetalhe(alvo.hostId);
+      const temporizador = setTimeout(() => {
+        const el = document.getElementById(`host-card-${alvo.hostId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
+      return () => clearTimeout(temporizador);
+    }
+    return undefined;
+  }, [alvo]);
 
   // Chaves dos alertas já anunciados. Sem isso o som tocaria a cada
   // atualização enquanto o problema durasse — e alerta que repete sem
@@ -122,8 +142,23 @@ export default function MonitorView() {
     if (detalhe) {
       setSerie(null);
       carregarSerie(detalhe, janela);
+      setPico(null);
+      api.monitorPico(detalhe, 14).then(setPico).catch(() => setPico(null));
     }
   }, [detalhe, janela, carregarSerie]);
+
+  // Resumo crítico (servidores ativos, backup, disco do painel) — só para
+  // quem tem hosts.view, e uma vez só: não é dado que muda a cada 10s
+  // como o resto desta tela, então não entra no laço de atualização.
+  useEffect(() => {
+    if (!temPainel) return;
+    api.painel().then(setResumoPainel).catch(() => setResumoPainel(null));
+  }, [temPainel]);
+
+  useEffect(() => {
+    if (!verRecentes) return;
+    api.incidentesRecentes(3).then((r) => setRecentes(r.incidentes)).catch(() => setRecentes([]));
+  }, [verRecentes]);
 
   if (carregando && !resumo) return <Carregando texto={t("Lendo o histórico…")} />;
 
@@ -131,8 +166,15 @@ export default function MonitorView() {
   const servidores = (resumo && resumo.servidores) || [];
   const coletor = (resumo && resumo.coletor) || {};
   const criticos = alertas.filter((a) => a.nivel === "critico");
+  const incidentesAbertos = (resumo && resumo.incidentes_abertos) || [];
 
   const hostDetalhe = servidores.find((s) => s.host_id === detalhe);
+
+  function irParaHost(hostId) {
+    setDetalhe(hostId);
+    const el = document.getElementById(`host-card-${hostId}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   return (
     <>
@@ -152,6 +194,39 @@ export default function MonitorView() {
             <IconAtualizar size={15} /> {t("Atualizar")}</button>
         </div>
       </div>
+
+      {/* ── Resumo crítico ───────────────────────────────────────────
+          Condensado do Painel: só quem tem hosts.view, e só o essencial —
+          quantos servidores, se algum backup falhou, se o disco do painel
+          está apertado. Cabe numa faixa para não brigar por espaço numa
+          tela de notebook (1366×768 é o piso real de quem opera isto). */}
+      {resumoPainel && (
+        <div className="grid-stats" style={{ marginBottom: 14 }}>
+          <Estatistica
+            rotulo={t("Servidores")}
+            valor={`${resumoPainel.servidores.filter((s) => s.ativo).length}/${resumoPainel.servidores.length}`}
+            sub={t("ativos de cadastrados")}
+          />
+          <Estatistica
+            rotulo={t("Backups com falha")}
+            valor={resumoPainel.servidores.filter((s) => !s.ultimo_backup || s.ultimo_backup.status !== "sucesso").length}
+            sub={t("desde o último ciclo")}
+          />
+          {resumoPainel.armazenamento_painel && (
+            <Estatistica
+              rotulo={t("Disco de backup do painel")}
+              valor={`${resumoPainel.armazenamento_painel.percentual}%`}
+              sub={`${formatBytes(resumoPainel.armazenamento_painel.livre_bytes)} ${t("livres")}`}
+              pct={resumoPainel.armazenamento_painel.percentual}
+            />
+          )}
+          <Estatistica
+            rotulo={t("Serviços com problema")}
+            valor={incidentesAbertos.length}
+            sub={t("em aberto agora")}
+          />
+        </div>
+      )}
 
       <Erro mensagem={erro} onTentar={carregar} />
 
@@ -181,11 +256,14 @@ export default function MonitorView() {
                 <div
                   key={`${a.host_id}-${a.chave}-${i}`}
                   className="card card-tight"
+                  onClick={() => irParaHost(a.host_id)}
+                  title={t("Ver este servidor abaixo")}
                   style={{
                     background: grave ? "var(--red-bg)" : "var(--amber-bg)",
                     borderColor: grave ? "var(--red-bd)" : "var(--amber-bd)",
                     borderLeftWidth: 4,
                     borderLeftColor: grave ? "var(--red)" : "var(--amber)",
+                    cursor: "pointer",
                   }}
                 >
                   <div
@@ -196,6 +274,11 @@ export default function MonitorView() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 13.5 }}>
                         {a.host} — {a.texto}
+                        {a.desde && (
+                          <span className="small" style={{ fontWeight: 400, opacity: 0.85 }}>
+                            {" "}· {t("há")} {formatDuracao(a.duracao_s)}
+                          </span>
+                        )}
                       </div>
                       {a.acao && (
                         <div className="small" style={{ marginTop: 4, opacity: 0.92 }}>
@@ -203,10 +286,24 @@ export default function MonitorView() {
                         </div>
                       )}
                     </div>
+                    {/* Atalho de verdade: leva à tela e já com o
+                        host/serviço certos — não é mais só um rótulo. */}
                     {a.onde && (
-                      <span className="pill" style={{ background: "rgba(0,0,0,.07)" }}>
-                        ir para {a.onde}
-                      </span>
+                      <button
+                        type="button"
+                        className="pill"
+                        style={{ background: "rgba(0,0,0,.08)", border: "none", cursor: nav && a.onde_aba ? "pointer" : "default" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (nav && a.onde_aba) {
+                            nav(a.onde_aba, { hostId: a.host_id, servico: a.servico || a.chave });
+                          } else {
+                            irParaHost(a.host_id);
+                          }
+                        }}
+                      >
+                        {t("ir para")} {a.onde}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -224,6 +321,7 @@ export default function MonitorView() {
           {servidores.map((s) => (
             <CartaoMonitor
               key={s.host_id}
+              id={`host-card-${s.host_id}`}
               s={s}
               alertas={alertas.filter((a) => a.host_id === s.host_id)}
               selecionado={detalhe === s.host_id}
@@ -232,6 +330,93 @@ export default function MonitorView() {
           ))}
         </div>
       )}
+
+      {/* ── Serviços por máquina ─────────────────────────────────────
+          O que o painel de alertas não mostrava: qual serviço, em qual
+          host, desde quando — e a causa provável, quando dá para
+          adivinhar pelo que o Docker já contou (OOM, código de saída,
+          healthcheck, reinícios em loop). */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+          <div className="section-title" style={{ marginBottom: 0 }}>
+            {t("Serviços por máquina")}
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setVerRecentes((v) => !v)}
+          >
+            {verRecentes ? t("Só os em aberto") : t("Ver últimos 3 dias")}
+          </button>
+        </div>
+
+        {(() => {
+          const lista = verRecentes ? (recentes || []) : incidentesAbertos;
+          if (verRecentes && recentes === null) return <Carregando />;
+          if (lista.length === 0) {
+            return (
+              <div className="small muted">
+                {verRecentes
+                  ? t("Nenhum serviço caiu nos últimos 3 dias.")
+                  : t("Nenhum serviço com problema agora.")}
+              </div>
+            );
+          }
+          const porHost = {};
+          for (const inc of lista) {
+            (porHost[inc.host_id] = porHost[inc.host_id] || []).push(inc);
+          }
+          return (
+            <div className="stack-v" style={{ gap: 14 }}>
+              {Object.entries(porHost).map(([hostId, incs]) => {
+                const s = servidores.find((x) => String(x.host_id) === String(hostId));
+                return (
+                  <div key={hostId}>
+                    <div
+                      className="stack-h small"
+                      style={{ gap: 6, marginBottom: 6, cursor: "pointer" }}
+                      onClick={() => irParaHost(Number(hostId))}
+                    >
+                      <span className={`dot ${incs.some((i) => i.aberto && i.nivel === "critico") ? "dot-err" : incs.some((i) => i.aberto) ? "dot-warn" : "dot-ok"}`} />
+                      <strong>{s ? s.host : `host ${hostId}`}</strong>
+                    </div>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>{t("Serviço")}</th>
+                            <th>{t("Situação")}</th>
+                            <th>{t("Causa provável")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {incs.map((inc) => (
+                            <tr key={inc.id}>
+                              <td className="mono">{inc.servico || "—"}</td>
+                              <td>
+                                {inc.aberto ? (
+                                  <span className={`pill ${inc.nivel === "critico" ? "pill-err" : "pill-warn"}`}>
+                                    {t("parado há")} {formatDuracao(inc.duracao_s)}
+                                  </span>
+                                ) : (
+                                  <span className="pill pill-ok">
+                                    {t("voltou")} {formatData(inc.fim)} · {t("ficou fora")} {formatDuracao(inc.duracao_s)}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="small muted">{inc.causa_provavel || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </div>
 
       {/* ── Detalhe ──────────────────────────────────────────────── */}
       {detalhe && hostDetalhe && (
@@ -269,6 +454,38 @@ export default function MonitorView() {
               </button>
             </div>
           </div>
+
+          {/* Horário de pico — média por hora do dia nos últimos 14 dias.
+              Agregação sobre o histórico já gravado, sem modelo nenhum:
+              responde "quando esta máquina mais trabalha" sem custar mais
+              que a consulta que a tela já fazia. */}
+          {pico && pico.horas.some((h) => h.amostras > 0) && (
+            <div style={{ marginBottom: 16 }}>
+              <div className="small muted" style={{ marginBottom: 6 }}>
+                {t("Horário de pico (média de CPU por hora, últimos 14 dias)")}
+              </div>
+              <div className="stack-h" style={{ gap: 2, alignItems: "flex-end", height: 40 }}>
+                {pico.horas.map((h, hora) => {
+                  const v = h.cpu || 0;
+                  const cor = v >= 90 ? "var(--red)" : v >= 70 ? "var(--amber)" : "var(--blue)";
+                  return (
+                    <div
+                      key={hora}
+                      title={`${String(hora).padStart(2, "0")}h — cpu ${h.cpu ?? "—"}% · mem ${h.mem ?? "—"}%`}
+                      style={{
+                        flex: 1, height: `${Math.max(3, Math.min(100, v))}%`,
+                        background: h.amostras ? cor : "var(--border)",
+                        borderRadius: 2,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <div className="stack-h small muted" style={{ justifyContent: "space-between", marginTop: 2 }}>
+                <span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span>
+              </div>
+            </div>
+          )}
 
           {!serie ? (
             <Carregando />
@@ -377,7 +594,7 @@ function Painel({ titulo, explicacao, serie, limite, legenda, maximo = 100 }) {
   );
 }
 
-function CartaoMonitor({ s, alertas, selecionado, onSelecionar }) {
+function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar }) {
   const a = s.amostra;
   const grave = alertas.some((x) => x.nivel === "critico");
   const aviso = alertas.length > 0;
@@ -393,6 +610,7 @@ function CartaoMonitor({ s, alertas, selecionado, onSelecionar }) {
 
   return (
     <div
+      id={id}
       className="card"
       onClick={onSelecionar}
       style={{

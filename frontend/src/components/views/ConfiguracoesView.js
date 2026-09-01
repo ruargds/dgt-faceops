@@ -2,8 +2,195 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api, enviarLogo } from "../../api";
 import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
-import { Carregando, Erro } from "../Comuns";
+import { Carregando, Erro, useHosts } from "../Comuns";
 import { IconAtualizar, IconLixeira, IconOk } from "../Icons";
+
+// Rótulo amigável para cada chave de limiar — mesmo vocabulário das
+// opções globais acima, só que aplicável a um host ou serviço específico.
+const ROTULOS_LIMIAR = {
+  disco_pct: "Disco acima de (%)",
+  mem_pct: "Memória acima de (%)",
+  swap_pct: "Swap acima de (%)",
+  cpu_pct: "Carga por núcleo acima de (%)",
+  gpu_mem_pct: "Memória de vídeo acima de (%)",
+  gpu_temp: "Temperatura da GPU acima de (°C)",
+  servico_reinicios: "Serviço em loop a partir de (reinícios)",
+  servico_indisponivel_min: "Serviço parado vira crítico depois de (minutos)",
+};
+
+/**
+ * Exceção de limiar por host e/ou serviço.
+ *
+ * O padrão global fica nas opções "Limiares" acima — aqui é só o que foge
+ * dele: "no vm-ftpserver, aceito carga mais alta", "o video-worker pode
+ * reiniciar mais vezes antes de virar alarme". Sem exceção nenhuma
+ * cadastrada, tudo se comporta exatamente como antes.
+ */
+function LimiaresPorServico() {
+  const { has } = usePermissions();
+  const podeEditar = has("users.manage");
+  const { hosts } = useHosts(false);
+
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [novo, setNovo] = useState({ chave: "disco_pct", host_id: "", servico: "", valor: "" });
+
+  const carregar = useCallback(async () => {
+    try {
+      setDados(await api.limiares());
+    } catch (ex) {
+      setErro(ex.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  const chaveEhServico = dados && dados.chaves_servico.includes(novo.chave);
+
+  async function salvar(e) {
+    e.preventDefault();
+    if (novo.valor === "") return;
+    setSalvando(true);
+    setErro("");
+    try {
+      await api.salvarLimiar({
+        chave: novo.chave,
+        valor: Number(novo.valor),
+        host_id: novo.host_id ? Number(novo.host_id) : null,
+        servico: chaveEhServico ? novo.servico.trim() : "",
+      });
+      setNovo((n) => ({ ...n, servico: "", valor: "" }));
+      await carregar();
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function restaurar(id) {
+    try {
+      await api.restaurarLimiar(id);
+      await carregar();
+    } catch (ex) {
+      setErro(ex.message);
+    }
+  }
+
+  if (!dados) return null;
+
+  const nomeHost = (id) => (id ? hosts.find((h) => h.id === id)?.name || `#${id}` : "Todos os hosts");
+
+  return (
+    <div className="card">
+      <div className="section-title" style={{ marginBottom: 4 }}>{t("Limiares por servidor ou serviço")}</div>
+      <div className="small muted" style={{ marginBottom: 16 }}>
+        {t("Exceção ao padrão acima. Sem nada aqui, todo host e todo serviço usa o padrão global. Apagar a exceção volta ao padrão.")}
+      </div>
+
+      <Erro mensagem={erro} onTentar={carregar} />
+
+      {dados.overrides.length > 0 && (
+        <div className="table-wrap" style={{ marginBottom: 16 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>{t("Onde")}</th>
+                <th>{t("Limite")}</th>
+                <th>{t("Valor")}</th>
+                {podeEditar && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {dados.overrides.map((o) => (
+                <tr key={o.id}>
+                  <td>
+                    {nomeHost(o.host_id)}
+                    {o.servico && <span className="mono"> · {o.servico}</span>}
+                  </td>
+                  <td className="small muted">{ROTULOS_LIMIAR[o.chave] || o.chave}</td>
+                  <td>{o.valor}</td>
+                  {podeEditar && (
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => restaurar(o.id)}
+                      >
+                        {t("restaurar padrão")}
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {podeEditar && (
+        <form className="row row-4" onSubmit={salvar} style={{ alignItems: "flex-end" }}>
+          <div className="field">
+            <label className="label">{t("Limite")}</label>
+            <select
+              value={novo.chave}
+              onChange={(e) => setNovo((n) => ({ ...n, chave: e.target.value, servico: "" }))}
+            >
+              <optgroup label={t("Da máquina")}>
+                {dados.chaves_host.map((c) => (
+                  <option key={c} value={c}>{ROTULOS_LIMIAR[c] || c}</option>
+                ))}
+              </optgroup>
+              <optgroup label={t("De um serviço")}>
+                {dados.chaves_servico.map((c) => (
+                  <option key={c} value={c}>{ROTULOS_LIMIAR[c] || c}</option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+          <div className="field">
+            <label className="label">{t("Servidor")}</label>
+            <select value={novo.host_id} onChange={(e) => setNovo((n) => ({ ...n, host_id: e.target.value }))}>
+              <option value="">{t("Todos os hosts")}</option>
+              {hosts.map((h) => (
+                <option key={h.id} value={h.id}>{h.name}</option>
+              ))}
+            </select>
+          </div>
+          {chaveEhServico && (
+            <div className="field">
+              <label className="label label-required">{t("Serviço")}</label>
+              <input
+                className="mono"
+                placeholder="findface-video-worker"
+                value={novo.servico}
+                onChange={(e) => setNovo((n) => ({ ...n, servico: e.target.value }))}
+                required
+              />
+            </div>
+          )}
+          <div className="field">
+            <label className="label label-required">{t("Valor")}</label>
+            <input
+              type="number"
+              value={novo.valor}
+              onChange={(e) => setNovo((n) => ({ ...n, valor: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="field">
+            <button className="btn btn-primary" disabled={salvando}>
+              {salvando ? t("Salvando…") : t("Adicionar exceção")}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
 
 /**
  * A tela se monta a partir do catálogo do backend.
@@ -362,6 +549,7 @@ export default function ConfiguracoesView() {
           {g.categoria === "projeto" && podeEditar && (
             <Marca onMudou={() => window.location.reload()} />
           )}
+          {g.categoria === "alerta" && <LimiaresPorServico />}
           </React.Fragment>
         ))}
       </div>

@@ -183,6 +183,58 @@ POST /api/services/1/stack
 `acao`: `stop` | `up` | `restart`. `stop` e `restart` exigem
 `confirmar_host` igual ao nome do servidor — nome errado devolve 400.
 
+## Monitor, incidentes e limiares
+
+Ver [23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md) e
+[25_INCIDENTES_E_LIMIARES](25_INCIDENTES_E_LIMIARES.md).
+
+| Método | Rota | Permissão |
+|---|---|---|
+| GET | `/monitor/estado` | `metrics.view` |
+| GET | `/monitor/alertas` | `metrics.view` |
+| GET | `/monitor/serie/{host_id}` | `metrics.view` |
+| GET | `/monitor/resumo` | `metrics.view` |
+| GET | `/monitor/incidentes/recentes` | `metrics.view` |
+| GET | `/monitor/pico` | `metrics.view` |
+| GET | `/incidentes/abertos` | `metrics.view` |
+| GET | `/incidentes/recentes` | `metrics.view` |
+| GET | `/limiares` | `hosts.view` |
+| PUT | `/limiares` | `users.manage` |
+| DELETE | `/limiares/{override_id}` | `users.manage` |
+
+```http
+GET /api/monitor/resumo
+
+200
+{
+  "servidores": [ ... ],
+  "alertas": [
+    { "host_id": 3, "host": "vm-ftpserver", "chave": "servico",
+      "nivel": "critico", "texto": "findface-video-worker — findface-video-worker com problema",
+      "servico": "findface-video-worker", "desde": "2026-08-26T18:07:00Z",
+      "acao": "reiniciando repetidamente (7x) — sinal de câmera problemática ...",
+      "onde": "Serviços", "onde_aba": "servicos" }
+  ],
+  "incidentes_abertos": [
+    { "id": 42, "host_id": 3, "tipo": "servico", "servico": "findface-video-worker",
+      "nivel": "critico", "causa_provavel": "reiniciando repetidamente (7x) ...",
+      "inicio": "2026-08-26T18:07:00Z", "fim": null, "aberto": true }
+  ]
+}
+```
+
+```http
+PUT /api/limiares
+{ "chave": "servico_reinicios", "valor": 10, "host_id": 3, "servico": "findface-video-worker" }
+```
+
+`chave` de host (`disco_pct`, `mem_pct`, `swap_pct`, `cpu_pct`,
+`gpu_mem_pct`, `gpu_temp`) exige `servico` vazio; `chave` de serviço
+(`servico_reinicios`, `servico_indisponivel_min`) exige `servico`
+preenchido. `host_id` omitido/nulo vale para todos os hosts.
+`DELETE /api/limiares/{id}` apaga a exceção — o limite volta ao padrão
+global de Configurações.
+
 ## Backups
 
 | Método | Rota | Permissão |

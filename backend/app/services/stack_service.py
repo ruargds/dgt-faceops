@@ -105,6 +105,16 @@ class StackService:
         except (KeyError, ValueError, TypeError):
             return 90
 
+    def _limite_reinicios(self) -> int:
+        """A partir de quantos reinícios um serviço 'de pé' já conta como
+        problema — ver `alerta.servico_reinicios` em Configurações."""
+        if self.config is None:
+            return 5
+        try:
+            return int(self.config.get("alerta.servico_reinicios"))
+        except (KeyError, ValueError, TypeError):
+            return 5
+
     # ── Detecção de ambiente ───────────────────────────────────────────
 
     async def compose_bin(self, host) -> str:
@@ -366,8 +376,11 @@ echo "{SEP}END"
 
 
         # Um job só é problema se terminou com erro; um serviço contínuo é
-        # problema se não está de pé, está unhealthy, ou morreu por falta
-        # de memória.
+        # problema se não está de pé, está unhealthy, morreu por falta de
+        # memória, ou está reiniciando em loop — "de pé" no instante da
+        # leitura não significa saudável quando o RestartCount não para
+        # de subir (câmera problemática, GPU sem memória).
+        limite_reinicios = self._limite_reinicios()
         doentes = [
             s for s in servicos
             if (
@@ -375,6 +388,7 @@ echo "{SEP}END"
                 or s["saude"] == "unhealthy"
                 or (s["e_job"] and s["exit_code"] != 0)
                 or (not s["e_job"] and s["estado"] != "running")
+                or (not s["e_job"] and s["reinicios"] >= limite_reinicios)
             )
         ]
 
@@ -400,6 +414,10 @@ echo "{SEP}END"
             "jobs": len(servicos) - len(continuos),
             "com_problema": len(doentes),
             "servicos": servicos,
+            # Só os problemáticos, já filtrados — o monitor contínuo usa
+            # isto para abrir/fechar incidente sem reprocessar a lista
+            # inteira a cada ciclo.
+            "doentes": doentes,
             "discos": discos,
             "discos_criticos": criticos,
         }
@@ -538,6 +556,7 @@ echo "{SEP}END"
                 "rodando": 0,
                 "com_problema": 0,
                 "discos_criticos": [],
+                "servicos_doentes": [],
             }
         criticos = dados.get("discos_criticos", [])
         return {
@@ -554,6 +573,19 @@ echo "{SEP}END"
                 {"ponto": d["ponto"], "percentual": d["percentual"],
                  "livre_bytes": d["livre_bytes"]}
                 for d in criticos
+            ],
+            # Detalhe de quem está doente, para o monitor abrir incidente
+            # sem precisar de outra ida ao servidor.
+            "servicos_doentes": [
+                {
+                    "servico": s["servico"],
+                    "estado": s["estado"],
+                    "saude": s["saude"],
+                    "reinicios": s["reinicios"],
+                    "exit_code": s["exit_code"],
+                    "oom_killed": s["oom_killed"],
+                }
+                for s in dados.get("doentes", [])
             ],
         }
 

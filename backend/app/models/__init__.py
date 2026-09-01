@@ -13,6 +13,8 @@ from app.models.licenca_amostra import LicencaAmostra
 from app.models.configuracao import Configuracao
 from app.models.destino import TIPOS as TIPOS_DESTINO, Destino
 from app.models.host import Host
+from app.models.incidente import Incidente
+from app.models.limiar_override import LimiarOverride
 from app.models.user import User
 from app.models.visao_log import VisaoLog
 
@@ -27,6 +29,8 @@ __all__ = [
     "Configuracao",
     "Amostra",
     "LicencaAmostra",
+    "Incidente",
+    "LimiarOverride",
     "VisaoLog",
     "TIPOS_DESTINO",
     "PROFILES",

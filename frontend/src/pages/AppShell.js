@@ -14,6 +14,7 @@ import {
   IconServicos,
   IconServidor,
   IconLogs,
+  IconMenu,
   IconTerminal,
   IconUsuarios,
 } from "../components/Icons";
@@ -41,21 +42,35 @@ import { MARCA_PADRAO, urlLogo } from "../marca";
 import { useSessao, usePermissions } from "../usePermissions";
 import { alternarTema, temaAtual } from "../tema";
 import { NOMES_IDIOMA, IDIOMAS, definirIdioma, idiomaAtual, t } from "../i18n";
+import { GatilhoDeAutoria } from "../components/SobreOSistema";
 
 // O rótulo sai do dicionário (i18n.js) na hora de montar o menu — a
 // tradução de menu é o mínimo para "escolher o idioma" significar alguma
 // coisa, e é onde a mão de quem opera passa o dia.
+//
+// Reorganizado em grupos menores (2026): "Operação" sozinho tinha 12 itens
+// soltos — uma coluna sem hierarquia nenhuma. Separado por tipo de
+// pergunta que a pessoa está fazendo ("o que está acontecendo agora" vs
+// "quanto está consumindo" vs "onde estão as câmeras" vs "ferramenta"),
+// no mesmo padrão de grupo raso do InfraCore — sem submenu aninhado, só
+// mais divisores.
 const MENU = [
   { grupo: "menu.operacao" },
+  { id: "monitor", chave: "menu.monitor", icone: IconRecursos, perm: "metrics.view" },
   { id: "painel", chave: "menu.painel", icone: IconPainel, perm: "hosts.view" },
   { id: "rastreio", chave: "menu.rastreio", icone: IconAlerta, perm: "metrics.view" },
-  { id: "monitor", chave: "menu.monitor", icone: IconRecursos, perm: "metrics.view" },
+
+  { grupo: "menu.monitoramento" },
   { id: "recursos", chave: "menu.recursos", icone: IconRecursos, perm: "metrics.view" },
   { id: "processos", chave: "menu.processos", icone: IconRecursos, perm: "metrics.view" },
   { id: "servicos", chave: "menu.servicos", icone: IconServicos, perm: "services.view" },
+
+  { grupo: "menu.dispositivos" },
   { id: "dispositivos", chave: "menu.cameras", icone: IconServidor, perm: "metrics.view" },
   { id: "descoberta", chave: "menu.descoberta", icone: IconServidor, perm: "hosts.view" },
   { id: "topologia", chave: "menu.topologia", icone: IconServidor, perm: "hosts.view" },
+
+  { grupo: "menu.ferramentas" },
   { id: "logs", chave: "menu.logs", icone: IconLogs, perm: "services.view" },
   { id: "manutencao", chave: "menu.manutencao", icone: IconAlerta, perm: "maintenance.view" },
   { id: "terminal", chave: "menu.terminal", icone: IconTerminal, perm: "terminal.use" },
@@ -80,9 +95,22 @@ export default function AppShell() {
   const { usuario, sair, recarregar, marca } = useSessao();
   const m = marca || MARCA_PADRAO;
   const { has } = usePermissions();
-  const [aba, setAba] = useState("painel");
+  // Monitor é a primeira coisa que a tela mostra: é onde os alertas
+  // aparecem, e é o que alguém chegando para o plantão precisa ver antes
+  // de qualquer outra coisa.
+  const [aba, setAba] = useState("monitor");
+  // Alvo de uma navegação vinda de outra tela — "este alerta é sobre o
+  // host 3, serviço X" — para a tela de destino já abrir com o contexto
+  // certo, em vez da pessoa procurar de novo o que o alerta já sabia.
+  // Mesmo padrão do `navContext` do InfraCore: estado simples no
+  // componente que já troca de aba, sem Context novo para isso.
+  const [alvo, setAlvo] = useState(null);
   const [trocandoSenha, setTrocandoSenha] = useState(false);
   const [saude, setSaude] = useState(null);
+  // Gaveta do menu no celular/tablet — a barra lateral fixa não cabe
+  // abaixo de ~960px, então vira painel deslizante (mesmo padrão do
+  // InfraCore: backdrop clicável fecha, hambúrguer no topo abre).
+  const [gavetaAberta, setGavetaAberta] = useState(false);
   // Telas que seguram sessão viva continuam montadas depois da primeira
   // visita, apenas escondidas: sair da aba não pode derrubar um PTY nem um
   // stream de log. As demais seguem desmontando — Processos e Monitor têm
@@ -143,6 +171,16 @@ export default function AppShell() {
   const primeira = itens.find((i) => i.id);
   const abaValida = itens.some((i) => i.id === aba) ? aba : primeira && primeira.id;
 
+  // Navega para outra tela já com o contexto de onde veio o clique — um
+  // atalho de alerta chama `nav("servicos", { hostId: 3, servico: "x" })`
+  // em vez de só `setAba`, e a tela de destino decide o que fazer com o
+  // alvo (pré-selecionar o host, por exemplo).
+  function nav(destino, alvoNovo) {
+    setAba(destino);
+    setAlvo(alvoNovo || null);
+    setGavetaAberta(false);
+  }
+
   // Registra a visita para as telas persistentes nascerem só quando forem
   // usadas de fato — e, ao voltar para elas, avisa o layout para refazer
   // as medidas: o xterm mede zero enquanto está escondido, e voltaria
@@ -166,7 +204,13 @@ export default function AppShell() {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
+      {/* Fundo do menu no celular — clicar fora fecha, mesmo padrão do InfraCore. */}
+      <div
+        className={`sidebar-backdrop ${gavetaAberta ? "open" : ""}`}
+        onClick={() => setGavetaAberta(false)}
+      />
+
+      <aside className={`sidebar ${gavetaAberta ? "open" : ""}`}>
         <div className="sidebar-brand">
           <img src={urlLogo(m.logos, "sidebar", "/logos/dgt-sidebar.png")} alt={m.nome} />
         </div>
@@ -179,7 +223,7 @@ export default function AppShell() {
               <button
                 key={item.id}
                 className={`nav-item ${abaValida === item.id ? "active" : ""}`}
-                onClick={() => setAba(item.id)}
+                onClick={() => nav(item.id)}
               >
                 <item.icone size={17} />
                 {t(item.chave)}
@@ -239,12 +283,17 @@ export default function AppShell() {
               existia no `curl /api/saude` da VM ou no fim do
               atualizar.sh. Quem está com o painel aberto não tem nenhum
               dos dois à mão. */}
-          <div
-            className="sidebar-versao"
-            title={t("rodape.versao")}
-          >
-            {saude ? `v${saude.versao} · ${saude.revisao}` : "—"}
-          </div>
+          {/* Cinco cliques aqui abrem a autoria do sistema (ver
+              components/SobreOSistema.js) — mesmo canto discreto que o
+              InfraCore usa para isto. */}
+          <GatilhoDeAutoria>
+            <div
+              className="sidebar-versao"
+              title={t("rodape.versao")}
+            >
+              {saude ? `v${saude.versao} · ${saude.revisao}` : "—"}
+            </div>
+          </GatilhoDeAutoria>
 
           {bundleDefasado && (
             <div
@@ -258,6 +307,22 @@ export default function AppShell() {
       </aside>
 
       <main className="main">
+        {/* Barra só existe visualmente no celular/tablet (ver
+            .mobile-topbar em styles.css) — no desktop a sidebar fixa já
+            cobre a navegação, e um cabeçalho extra só tomaria espaço. */}
+        <div className="mobile-topbar">
+          <button
+            className="mobile-menu-button"
+            onClick={() => setGavetaAberta(true)}
+            aria-label={t("Abrir menu")}
+          >
+            <IconMenu size={19} />
+          </button>
+          <div className="mobile-topbar-titulo">
+            {t(itens.find((i) => i.id === abaValida)?.chave || "")}
+          </div>
+        </div>
+
         {usuario.senha_padrao && (
           <div className="banner banner-warn">
             {t("senha.aviso_1")} <strong>{t("senha.aviso_forte")}</strong>.{" "}
@@ -271,13 +336,13 @@ export default function AppShell() {
         <div className="content">
           {abaValida === "painel" && <PainelView />}
           {abaValida === "rastreio" && <RastreioView />}
-          {abaValida === "monitor" && <MonitorView />}
+          {abaValida === "monitor" && <MonitorView alvo={alvo} nav={nav} temPainel={has("hosts.view")} />}
           {abaValida === "dispositivos" && <DispositivosView />}
           {abaValida === "descoberta" && <DescobertaView />}
           {abaValida === "topologia" && <TopologiaView />}
-          {abaValida === "recursos" && <RecursosView />}
+          {abaValida === "recursos" && <RecursosView alvo={alvo} />}
           {abaValida === "processos" && <ProcessosView />}
-          {abaValida === "servicos" && <ServicosView />}
+          {abaValida === "servicos" && <ServicosView alvo={alvo} />}
           {/* Montadas uma vez e escondidas depois: a sessão continua viva
               enquanto se navega por outras telas. */}
           {visitadas.has("logs") && (
@@ -285,7 +350,7 @@ export default function AppShell() {
               <LogsView />
             </div>
           )}
-          {abaValida === "manutencao" && <ManutencaoView />}
+          {abaValida === "manutencao" && <ManutencaoView alvo={alvo} />}
           {visitadas.has("terminal") && (
             <div style={{ display: abaValida === "terminal" ? "block" : "none" }}>
               <TerminalView />
@@ -294,7 +359,7 @@ export default function AppShell() {
           {abaValida === "backups" && <BackupsView />}
           {abaValida === "agendamentos" && <AgendamentosView />}
           {abaValida === "destinos" && <DestinosView />}
-          {abaValida === "servidores" && <ServidoresView />}
+          {abaValida === "servidores" && <ServidoresView alvo={alvo} />}
           {abaValida === "usuarios" && <UsuariosView />}
           {abaValida === "auditoria" && <AuditoriaView />}
           {abaValida === "config" && <ConfiguracoesView />}
