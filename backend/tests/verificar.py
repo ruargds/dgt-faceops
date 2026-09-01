@@ -858,6 +858,44 @@ async def cenario_processos_junta_gpu_e_container_sem_coletor_novo():
     assert sem_gpu["container"] == "", sem_gpu
 
 
+async def cenario_licenca_so_cobra_quem_hospeda_o_ntls():
+    """
+    O manual da NtechLab define UMA instância de `findface-ntls` por
+    instalação. Numa instalação distribuída ela mora no appserver, e
+    dbserver/extraction/ftpserver não têm nada na 3185 — arquitetura
+    documentada, não defeito.
+
+    O painel acusava "Não consegui ler a licença" em cada um deles.
+    """
+    from app.services.rastreio_service import RastreioService
+
+    class HostFalso:
+        def __init__(self, nome, servicos):
+            self.id = 1
+            self.name = nome
+            self.servicos_conhecidos = servicos
+
+    servico = RastreioService(licenca=None, internos=None, ffapi=None)
+    falha = RuntimeError(
+        "o serviço de licença (NTLS) não respondeu dentro de 'vm-dbserver'. "
+        "nada escutando na 3185 nem na 80"
+    )
+
+    # Quem NÃO roda NTLS: nenhum achado.
+    sem = HostFalso("vm-dbserver", ["postgresql", "pgbouncer"])
+    assert servico._checar_licenca(sem, falha) == [], "acusou host sem NTLS"
+
+    # Ainda sem lista coletada: não se afirma falha sobre o que não se sabe.
+    novo = HostFalso("vm-novo", [])
+    assert servico._checar_licenca(novo, falha) == [], "afirmou sem saber"
+
+    # Quem hospeda o NTLS: aí sim é achado de verdade.
+    com = HostFalso("vm-appserver", ["findface-ntls", "findface-sf-api"])
+    achados = servico._checar_licenca(com, falha)
+    assert len(achados) == 1, achados
+    assert "licen" in achados[0]["origem"], achados[0]
+
+
 async def cenario_reincidencia_conta_e_datilha_horario():
     """
     Cinco quedas do mesmo serviço, sempre de madrugada, têm que virar uma
@@ -948,6 +986,7 @@ CENARIOS = [
     cenario_camera_sem_evento_nao_mente_quando_a_leitura_falha,
     cenario_camera_tenta_de_novo_sem_ordering,
     cenario_processos_junta_gpu_e_container_sem_coletor_novo,
+    cenario_licenca_so_cobra_quem_hospeda_o_ntls,
 ]
 
 

@@ -41,6 +41,7 @@ import ServidoresView from "../components/views/ServidoresView";
 import TerminalView from "../components/views/TerminalView";
 import UsuariosView from "../components/views/UsuariosView";
 import { fecharSeForaLimpo } from "../components/Comuns";
+import LimiteDeErro from "../components/LimiteDeErro";
 import { MARCA_PADRAO, urlLogo } from "../marca";
 import { useSessao, usePermissions } from "../usePermissions";
 import { alternarTema, temaAtual } from "../tema";
@@ -451,6 +452,7 @@ export default function AppShell() {
         )}
 
         <div className="content">
+          <LimiteDeErro key={abaValida}>
           {abaValida === "painel" && <PainelView />}
           {abaValida === "rastreio" && <RastreioView />}
           {abaValida === "monitor" && <MonitorView alvo={alvo} nav={nav} />}
@@ -482,6 +484,7 @@ export default function AppShell() {
           {abaValida === "usuarios" && <UsuariosView />}
           {abaValida === "auditoria" && <AuditoriaView />}
           {abaValida === "config" && <ConfiguracoesView />}
+          </LimiteDeErro>
         </div>
       </main>
 

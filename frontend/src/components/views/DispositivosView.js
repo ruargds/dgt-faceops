@@ -36,7 +36,7 @@ const PERIODOS = [
  * 2.400.054 de 2.400.000 na instalação real) sobe para o topo e aparece em
  * vermelho: é o que trava operação sem avisar ninguém.
  */
-function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo }) {
+function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo, hostId }) {
   const [verBruto, setVerBruto] = useState(false);
 
   if (erro) {
@@ -716,6 +716,7 @@ export default function DispositivosView() {
       )}
 
       <Licenciamento
+        hostId={hostId}
         ritmo={ritmo}
         dados={licenca}
         erro={erroLicenca}

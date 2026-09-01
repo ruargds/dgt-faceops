@@ -177,49 +177,79 @@ export default function NotificacoesView() {
           </div>
         )}
 
-        <form className="row row-3" onSubmit={salvarConta} style={{ alignItems: "flex-end" }}>
-          <div className="field">
-            <label className="label">
-              {conta && conta.configurado ? t("Trocar token do bot") : t("Token do bot")}
-            </label>
-            <input
-              type="password"
-              className="mono"
-              autoComplete="new-password"
-              placeholder={conta && conta.configurado ? t("deixe vazio para manter") : "123456:ABC-DEF..."}
-              value={form.bot_token}
-              onChange={(e) => setForm({ ...form, bot_token: e.target.value })}
-            />
-            <div className="field-help">{t("Validado no Telegram antes de salvar.")}</div>
+        <form onSubmit={salvarConta}>
+          {/* Dois campos de mesma altura, lado a lado. O que ficava torto
+              antes era o checkbox e o botão dividindo coluna com campo de
+              texto — cada um com altura própria. */}
+          <div className="row row-2">
+            <div className="field">
+              <label className="label">
+                {conta && conta.configurado ? t("Trocar token do bot") : t("Token do bot")}
+              </label>
+              <input
+                type="password"
+                className="mono"
+                autoComplete="new-password"
+                placeholder={conta && conta.configurado ? t("deixe vazio para manter") : "123456:ABC-DEF..."}
+                value={form.bot_token}
+                onChange={(e) => setForm({ ...form, bot_token: e.target.value })}
+              />
+              <div className="field-help">{t("Validado no Telegram antes de salvar.")}</div>
+            </div>
+            <div className="field">
+              <label className="label label-required">{t("Id do grupo")}</label>
+              <input
+                className="mono"
+                placeholder="-1001234567890"
+                value={form.chat_id}
+                onChange={(e) => setForm({ ...form, chat_id: e.target.value })}
+                required
+              />
+              <div className="field-help">
+                {t("Grupo do Telegram tem id negativo, começando por -100.")}
+              </div>
+            </div>
           </div>
-          <div className="field">
-            <label className="label label-required">{t("Id do grupo")}</label>
-            <input
-              className="mono"
-              placeholder="-1001234567890"
-              value={form.chat_id}
-              onChange={(e) => setForm({ ...form, chat_id: e.target.value })}
-              required
-            />
-          </div>
-          <div className="field">
-            <label className="check" style={{ marginBottom: 10 }}>
+
+          {/* Habilitar o envio é decisão própria, não um checkbox perdido ao
+              lado de um botão: enquanto estiver desligado, nada sai daqui. */}
+          <div
+            className="card card-tight"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: 16, flexWrap: "wrap", marginBottom: 14,
+              borderColor: form.ativo ? "var(--green-bd)" : "var(--border)",
+              background: form.ativo ? "var(--green-bg)" : "var(--bg-2)",
+            }}
+          >
+            <label className="check" style={{ margin: 0, alignItems: "center" }}>
               <input
                 type="checkbox"
                 checked={form.ativo}
                 onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
               />
-              <span>{t("Enviar avisos")}</span>
+              <span>
+                <strong style={{ color: form.ativo ? "var(--green-fg)" : "var(--text-2)" }}>
+                  {form.ativo ? t("Envio de eventos habilitado") : t("Envio de eventos desligado")}
+                </strong>
+                <br />
+                <span className="muted">
+                  {form.ativo
+                    ? t("Quedas e retornos ao normal são enviados conforme as regras abaixo.")
+                    : t("Nada é enviado enquanto estiver desligado — as regras ficam guardadas.")}
+                </span>
+              </span>
             </label>
+
             <div className="stack-h" style={{ gap: 6 }}>
-              <button className="btn btn-primary" disabled={salvando}>
-                {salvando ? t("Salvando…") : t("Salvar conta")}
-              </button>
               {conta && conta.configurado && (
                 <button type="button" className="btn btn-secondary" onClick={testar}>
                   {t("Enviar teste")}
                 </button>
               )}
+              <button className="btn btn-primary" disabled={salvando}>
+                {salvando ? t("Salvando…") : t("Salvar conta")}
+              </button>
             </div>
           </div>
         </form>

@@ -267,10 +267,44 @@ class RastreioService:
 
     # ── Licença ────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _roda_ntls(host) -> bool | None:
+        """
+        Este servidor hospeda o `findface-ntls`?
+
+        `True`/`False` quando o coletor já viu a lista de serviços do host;
+        `None` quando ainda não viu — e não saber é diferente de saber que
+        não tem.
+        """
+        vistos = list(getattr(host, "servicos_conhecidos", None) or [])
+        if not vistos:
+            return None
+        return any("ntls" in s.lower() for s in vistos)
+
     def _checar_licenca(self, host, dados) -> list[dict]:
         if isinstance(dados, Exception):
-            # Só é achado onde o FindFace deveria estar. Máquina de outra
-            # função na topologia não tem NTLS, e isso não é falha.
+            # A licença é da INSTALAÇÃO, não do servidor.
+            #
+            # O manual da NtechLab é explícito: há **uma** instância de
+            # `findface-ntls` por instalação ("a single instance of
+            # findface-ntls should be enough; if your system requires more
+            # license servers, contact NtechLab support beforehand to
+            # prevent your system from being blocked"). Numa instalação
+            # distribuída ela mora no appserver, e dbserver, extraction e
+            # ftpserver **não devem** ter nada na 3185 — é a arquitetura
+            # documentada, não defeito.
+            #
+            # Antes o guarda era por texto da exceção, e a mensagem real
+            # ("nada escutando na 3185 nem na 80") não casava: rendia um
+            # crítico por servidor sem NTLS, todo rastreio.
+            roda = self._roda_ntls(host)
+            if roda is False:
+                return []
+            if roda is None:
+                # Sem saber se este host deveria ter NTLS, não se afirma
+                # falha — é a mesma regra 2 do cabeçalho deste arquivo.
+                return []
+
             texto = str(dados)
             if "nenhum container do FindFace" in texto or "não encontrei" in texto:
                 return []
