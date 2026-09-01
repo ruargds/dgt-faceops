@@ -247,9 +247,25 @@ echo "{SEP}FIM"
                 "",
             )
 
-            # 2xx/3xx é vivo. 401/403 também: o serviço respondeu, só não
-            # deixou entrar sem credencial — informação boa, não falha.
-            vivo = bool(codigo[:1] in ("2", "3") or codigo in ("401", "403"))
+            # QUALQUER resposta HTTP prova que o componente está de pé.
+            #
+            # Isto já valia para 401/403 ("respondeu, só não deixou
+            # entrar") e vale igualmente para 404 e 405 — o script acima
+            # para na PRIMEIRA porta que responde, então este código é o
+            # que aquele caminho devolveu, e não um veredito de saúde.
+            #
+            # A lista incompleta gerava falso crítico em produção
+            # (01/09/2026): `findface-ntls` responde 404 em /health porque
+            # o caminho documentado dele é /v1/licenses.json, e
+            # `findface-extraction-api` responde 405 porque espera POST.
+            # Os dois estavam Up há 11 dias, atendendo — e o painel
+            # anunciava "Serviço travado". Alarme falso permanente é pior
+            # que alarme nenhum: ensina a ignorar a tela.
+            respondeu = bool(codigo and codigo != "000")
+            vivo = respondeu
+            # 5xx é caso à parte: respondeu, mas com erro do próprio
+            # servidor. Fica registrado para a tela poder diferenciar.
+            erro_servidor = codigo[:1] == "5"
 
             # Sem resposta e sem porta local: pode ser serviço interno que
             # não fala HTTP (tarantool, por exemplo) ou rede que o host não
@@ -280,6 +296,7 @@ echo "{SEP}FIM"
                 "resumo": resumo,
                 "container": container,
                 "vivo": vivo,
+                "erro_servidor": erro_servidor,
                 "sondavel": sondavel,
             })
 

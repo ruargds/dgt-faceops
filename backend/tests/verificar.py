@@ -34,10 +34,17 @@ from app.models.host import Host  # noqa: E402
 from app.models.incidente import Incidente  # noqa: E402
 from app.models.limiar_override import LimiarOverride  # noqa: E402
 from app.models.log_padrao import LogPadrao  # noqa: E402
+from app.models.notificacao import (  # noqa: E402
+    NotificacaoConta, NotificacaoEnvio, NotificacaoRegra,
+)
 from app.services.incidente_service import JANELA_REINICIO_S, IncidenteService  # noqa: E402
 from app.services.limiar_service import LimiarService  # noqa: E402
 
-TABELAS = [Host.__table__, Amostra.__table__, Incidente.__table__, LimiarOverride.__table__, LogPadrao.__table__]
+TABELAS = [
+    Host.__table__, Amostra.__table__, Incidente.__table__,
+    LimiarOverride.__table__, LogPadrao.__table__,
+    NotificacaoConta.__table__, NotificacaoRegra.__table__, NotificacaoEnvio.__table__,
+]
 
 AGORA = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -472,6 +479,227 @@ async def cenario_analise_le_o_container_e_nao_o_servico():
     await engine.dispose()
 
 
+async def cenario_sonda_404_405_nao_e_servico_travado():
+    """
+    O falso crítico de 01/09/2026: `findface-ntls` responde 404 em /health
+    (o caminho documentado dele é /v1/licenses.json) e
+    `findface-extraction-api` responde 405 (espera POST). Os dois estavam
+    Up há 11 dias, atendendo — e o painel anunciava "Serviço travado",
+    oito vezes.
+
+    Qualquer resposta HTTP prova que o componente está de pé. Só 000
+    (curl não conectou) é ausência de resposta.
+    """
+    import inspect
+
+    from app.services import internos_service
+
+    fonte = inspect.getsource(internos_service)
+    assert 'vivo = bool(codigo[:1] in ("2", "3")' not in fonte, (
+        "a classificação antiga voltou: 404/405 seriam tratados como travado"
+    )
+
+    # A regra em si, exercitada nos códigos que importam.
+    def vivo_de(codigo: str) -> bool:
+        return bool(codigo and codigo != "000")
+
+    for codigo in ("200", "204", "301", "401", "403", "404", "405", "500"):
+        assert vivo_de(codigo), f"{codigo} deveria contar como respondeu"
+    assert not vivo_de("000"), "000 é ausência de resposta"
+    assert not vivo_de(""), "vazio é ausência de resposta"
+
+
+async def cenario_notificacao_regra_do_mais_especifico_ao_geral():
+    """
+    Ordem de precedência: (host+serviço) > (host) > (serviço em todo host)
+    > (geral). E sem regra nenhuma, nada é enviado — silêncio por omissão.
+    """
+    from app.models.notificacao import NotificacaoRegra
+    from app.services.notificacao_service import NotificacaoService
+
+    queda_critica = {"tipo": "queda", "host_id": 1, "servico": "pgbouncer", "nivel": "critico"}
+    queda_atencao = {"tipo": "queda", "host_id": 1, "servico": "pgbouncer", "nivel": "atencao"}
+
+    assert NotificacaoService.decidir([], queda_critica) is False, "sem regra, não manda"
+
+    geral = NotificacaoRegra(host_id=None, servico="", nivel_minimo="critico",
+                             avisar_retorno=True, ativo=True)
+    assert NotificacaoService.decidir([geral], queda_critica) is True
+    # A regra geral é "só quando parar": atenção não passa.
+    assert NotificacaoService.decidir([geral], queda_atencao) is False
+
+    # Regra do host, mais específica, abre para atenção.
+    do_host = NotificacaoRegra(host_id=1, servico="", nivel_minimo="atencao",
+                               avisar_retorno=True, ativo=True)
+    assert NotificacaoService.decidir([geral, do_host], queda_atencao) is True
+
+    # Regra do serviço no host vence a do host.
+    do_servico = NotificacaoRegra(host_id=1, servico="pgbouncer", nivel_minimo="critico",
+                                  avisar_retorno=False, ativo=True)
+    assert NotificacaoService.decidir([geral, do_host, do_servico], queda_atencao) is False
+
+    # Outro host não é afetado pela regra do host 1.
+    outro = {"tipo": "queda", "host_id": 2, "servico": "pgbouncer", "nivel": "atencao"}
+    assert NotificacaoService.decidir([do_host], outro) is False
+
+    # Retorno respeita o "avisar quando voltar" da regra vencedora.
+    retorno = {"tipo": "retorno", "host_id": 1, "servico": "pgbouncer", "duracao_s": 90}
+    assert NotificacaoService.decidir([geral, do_host, do_servico], retorno) is False
+    assert NotificacaoService.decidir([geral, do_host], retorno) is True
+
+
+async def cenario_notificacao_mensagem_curta_e_sem_ip():
+    """
+    A mensagem tem que caber na prévia do celular — e não pode levar
+    endereço interno para um grupo de Telegram.
+    """
+    from app.services.notificacao_service import montar_mensagem
+
+    texto = montar_mensagem({
+        "tipo": "queda", "host": "vm-appserver", "servico": "findface-video-worker",
+        "nivel": "critico", "texto": "findface-video-worker com problema",
+        "causa_provavel": "reiniciou 7x nos últimos 30 min — sinal de câmera problemática.",
+        "inicio": AGORA,
+    })
+    linhas = texto.splitlines()
+    assert len(linhas) <= 4, texto
+    assert "PARADO" in linhas[0] and "vm-appserver" in linhas[0], texto
+    assert "10.0" not in texto and "192.168" not in texto, "vazou endereço interno"
+    # Curta o suficiente para a prévia do celular.
+    assert len(texto) <= 220, f"mensagem longa demais ({len(texto)}): {texto}"
+    # A causa entra cortada na primeira frase e limitada a 140 caracteres.
+    longa = montar_mensagem({
+        "tipo": "queda", "host": "vm-appserver", "servico": "x", "nivel": "critico",
+        "texto": "x com problema", "inicio": AGORA,
+        "causa_provavel": "primeira frase curta. " + ("detalhe " * 40),
+    })
+    assert "detalhe" not in longa, longa
+
+    volta = montar_mensagem({
+        "tipo": "retorno", "host": "vm-appserver", "servico": "findface-video-worker",
+        "duracao_s": 360,
+    })
+    assert "NORMALIZADO" in volta and "6min" in volta, volta
+
+
+async def cenario_notificacao_nao_repete_o_mesmo_evento():
+    """
+    Aviso que repete vira aviso que se ignora. O mesmo evento não pode ser
+    mandado duas vezes, mesmo que o ciclo o veja de novo.
+    """
+    from app.core.vault import encrypt_secret
+    from app.models.notificacao import NotificacaoConta, NotificacaoEnvio, NotificacaoRegra
+    from app.services import notificacao_service as ns
+
+    engine, fabrica = await nova_sessao()
+    enviados = []
+
+    async def enviar_falso(token, chat_id, texto):
+        enviados.append(texto)
+        return {"ok": True}
+
+    original = ns.telegram_service.enviar
+    ns.telegram_service.enviar = enviar_falso
+    try:
+        async with fabrica() as db:
+            host = await com_host(db)
+            db.add(NotificacaoConta(
+                bot_nome="bot", bot_token_enc=encrypt_secret("123:abc"),
+                chat_id="-100123", ativo=True,
+            ))
+            db.add(NotificacaoRegra(host_id=None, servico="", nivel_minimo="critico", ativo=True))
+            await db.flush()
+
+            evento = {
+                "tipo": "queda", "chave": "ini:1:servico:pgbouncer:x",
+                "host_id": host.id, "host": host.name, "servico": "pgbouncer",
+                "nivel": "critico", "texto": "pgbouncer com problema", "inicio": AGORA,
+            }
+            serv = ns.NotificacaoService()
+            assert await serv.despachar(db, [evento]) == 1
+            await db.flush()
+            # Mesmo evento de novo: não manda.
+            assert await serv.despachar(db, [evento]) == 0
+            await db.flush()
+            assert len(enviados) == 1, enviados
+
+            r = await db.execute(sa.select(NotificacaoEnvio))
+            assert len(list(r.scalars().all())) == 1
+    finally:
+        ns.telegram_service.enviar = original
+    await engine.dispose()
+
+
+async def cenario_notificacao_nunca_derruba_o_ciclo():
+    """
+    Telegram fora do ar não pode quebrar o monitor: a amostra e o
+    incidente já estão gravados quando o aviso é tentado.
+    """
+    from app.core.vault import encrypt_secret
+    from app.models.notificacao import NotificacaoConta, NotificacaoEnvio, NotificacaoRegra
+    from app.services import notificacao_service as ns
+
+    engine, fabrica = await nova_sessao()
+
+    async def explodir(token, chat_id, texto):
+        raise RuntimeError("timeout falso")
+
+    original = ns.telegram_service.enviar
+    ns.telegram_service.enviar = explodir
+    try:
+        async with fabrica() as db:
+            host = await com_host(db)
+            db.add(NotificacaoConta(
+                bot_nome="bot", bot_token_enc=encrypt_secret("123:abc"),
+                chat_id="-100123", ativo=True,
+            ))
+            db.add(NotificacaoRegra(host_id=None, servico="", nivel_minimo="critico", ativo=True))
+            await db.flush()
+
+            serv = ns.NotificacaoService()
+            enviados = await serv.despachar(db, [{
+                "tipo": "queda", "chave": "k1", "host_id": host.id, "host": host.name,
+                "servico": "x", "nivel": "critico", "texto": "x", "inicio": AGORA,
+            }])
+            assert enviados == 0
+            await db.flush()
+
+            # A falha fica registrada — é a resposta para "não recebi".
+            r = await db.execute(sa.select(NotificacaoEnvio))
+            registro = r.scalars().one()
+            assert registro.status == "falha" and "timeout falso" in registro.erro
+    finally:
+        ns.telegram_service.enviar = original
+    await engine.dispose()
+
+
+async def cenario_token_do_telegram_nunca_aparece():
+    """
+    O token manda mensagem como o bot: não pode sair em resposta de API
+    nem em mensagem de erro (que vai parar em log, chamado e anexo).
+    """
+    from app.api.routes.notificacoes import _conta_publica
+    from app.core.vault import encrypt_secret
+    from app.models.notificacao import NotificacaoConta
+    from app.services.telegram_service import _limpar
+
+    segredo = "7654321:AAH-super-secreto"
+    conta = NotificacaoConta(
+        bot_nome="meu_bot", bot_token_enc=encrypt_secret(segredo),
+        token_fingerprint="abc123", chat_id="-100999", ativo=True,
+    )
+    publico = _conta_publica(conta)
+    inteiro = repr(publico)
+    assert segredo not in inteiro, publico
+    assert conta.bot_token_enc not in inteiro, "vazou o token cifrado"
+    assert publico["bot_nome"] == "meu_bot" and publico["token_fingerprint"] == "abc123"
+
+    # E o token some das mensagens de erro.
+    limpo = _limpar(f"HTTP 401 em https://api.telegram.org/bot{segredo}/sendMessage", segredo)
+    assert segredo not in limpo, limpo
+    assert "***" in limpo, limpo
+
+
 async def cenario_reincidencia_conta_e_datilha_horario():
     """
     Cinco quedas do mesmo serviço, sempre de madrugada, têm que virar uma
@@ -553,7 +781,23 @@ CENARIOS = [
     cenario_analise_le_o_container_e_nao_o_servico,
     cenario_reincidencia_conta_e_datilha_horario,
     cenario_reincidencia_nao_inventa_horario,
+    cenario_sonda_404_405_nao_e_servico_travado,
+    cenario_notificacao_regra_do_mais_especifico_ao_geral,
+    cenario_notificacao_mensagem_curta_e_sem_ip,
+    cenario_notificacao_nao_repete_o_mesmo_evento,
+    cenario_notificacao_nunca_derruba_o_ciclo,
+    cenario_token_do_telegram_nunca_aparece,
 ]
+
+
+def _seguro(texto: str) -> str:
+    """
+    Console do Windows é cp1252: emoji ou acento numa mensagem de falha
+    derrubava o próprio relatório com UnicodeEncodeError, escondendo os
+    outros cenários. O relatório tem que sobreviver ao que ele relata.
+    """
+    codificacao = getattr(sys.stdout, "encoding", None) or "utf-8"
+    return str(texto).encode(codificacao, "replace").decode(codificacao, "replace")
 
 
 async def principal() -> int:
@@ -565,7 +809,7 @@ async def principal() -> int:
             print(f"  ok    {nome}")
         except Exception as exc:
             falhas += 1
-            print(f"  FALHA {nome}: {type(exc).__name__}: {exc}")
+            print(_seguro(f"  FALHA {nome}: {type(exc).__name__}: {exc}"))
     print(f"\n{len(CENARIOS) - falhas}/{len(CENARIOS)} cenários passaram")
     return 1 if falhas else 0
 

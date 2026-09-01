@@ -10,10 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_permission
+from app.core.deps import client_ip, require_permission
 from app.db.database import get_db
 from app.models.host import Host
 from app.models.user import User
+from app.services import audit_service
 from app.services.catalogo_erros import CATALOGO
 
 router = APIRouter(prefix="/api/diagnostico", tags=["diagnostico"])
@@ -83,6 +84,42 @@ async def analisar(
         "analisados": analisados,
         "itens": await request.app.state.analise.listar(db, host_id=host_id, dias=7),
     }
+
+
+@router.delete("/padroes")
+async def limpar_padroes(
+    request: Request,
+    host_id: int | None = Query(default=None),
+    autor: User = Depends(require_permission("maintenance.apply")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Zera os padrões de log coletados — de um servidor ou de todos.
+
+    Serve para recomeçar depois de resolver a causa: o contador acumulado
+    de um erro já corrigido só atrapalha a leitura da tela. Não apaga
+    incidente nem histórico de indisponibilidade; isso é outra coisa e
+    tem retenção própria.
+    """
+    from sqlalchemy import delete as _delete
+
+    from app.models.log_padrao import LogPadrao
+
+    condicoes = []
+    if host_id is not None:
+        condicoes.append(LogPadrao.host_id == host_id)
+
+    r = await db.execute(_delete(LogPadrao).where(*condicoes) if condicoes
+                         else _delete(LogPadrao))
+    removidos = r.rowcount or 0
+
+    await audit_service.registrar(
+        db, usuario=autor.username, action="diagnostico.limpar",
+        target=str(host_id) if host_id else "todos", ip=client_ip(request),
+        detail={"padroes_removidos": removidos},
+    )
+    await db.commit()
+    return {"ok": True, "removidos": removidos}
 
 
 @router.get("/catalogo")

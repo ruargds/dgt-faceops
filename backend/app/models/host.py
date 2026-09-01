@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -53,6 +53,13 @@ class Host(Base):
     compose_file: Mapped[str] = mapped_column(String(255), default="")
 
     has_gpu: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Serviços do compose já vistos neste host, para a tela de
+    # notificações poder listar o que existe SEM abrir SSH: escolher de
+    # quais serviços receber aviso é configuração, e configuração não pode
+    # custar uma ida a quatro servidores de produção. Atualizado pelo
+    # coletor, e só quando a lista muda.
+    servicos_conhecidos: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+
     # Modelo da placa, como o nvidia-smi reporta ("NVIDIA A10-12Q").
     # Preenchido pelo coletor: fica no host, e não na amostra, porque não
     # muda de minuto em minuto — guardá-lo por amostra seria texto

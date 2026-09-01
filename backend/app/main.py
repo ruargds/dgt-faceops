@@ -16,13 +16,14 @@ from sqlalchemy import select
 from app.api.routes import (
     audit, auth, backups, configuracoes, descoberta, dispositivos, destinos,
     diagnostico, exportar, hosts, incidentes, limiares, logs, maintenance, marca,
-    monitor, ops, processos, terminal,
+    monitor, notificacoes, ops, processos, terminal,
 )
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
 from app.models import (  # noqa: F401 — registra todos os modelos
-    Amostra, Destino, Incidente, LicencaAmostra, LimiarOverride, User, VisaoLog,
+    Amostra, Destino, Incidente, LicencaAmostra, LimiarOverride, LogPadrao,
+    NotificacaoConta, NotificacaoEnvio, NotificacaoRegra, User, VisaoLog,
 )
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
@@ -36,6 +37,7 @@ from app.services.incidente_service import IncidenteService
 from app.services.licenca_service import LicencaService
 from app.services.limiar_service import LimiarService
 from app.services.log_analise_service import LogAnaliseService
+from app.services.notificacao_service import NotificacaoService
 from app.services.internos_service import InternosService
 from app.services.limpeza_service import LimpezaService
 from app.services.painel_backup_service import PainelBackupService
@@ -86,6 +88,11 @@ COLUNAS_NOVAS = [
     ("amostras", "gpu_mem_total_mb", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
     ("amostras", "gpu_mem_usado_mb", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
     ("hosts", "gpu_nome", "VARCHAR(120) NOT NULL DEFAULT ''"),
+    # Serviços já vistos no host, para a tela de notificações listar o que
+    # existe sem abrir SSH. JSON (não JSONB): a coluna é lida inteira,
+    # nunca consultada por dentro, e JSON funciona igual no SQLite dos
+    # testes.
+    ("hosts", "servicos_conhecidos", "JSON NOT NULL DEFAULT '[]'::json"),
 ]
 
 # Alterações que não são "coluna nova". Escritas para serem idempotentes:
@@ -320,10 +327,13 @@ async def iniciar() -> None:
     # Análise de log: agrupa erro por molde e casa com o catálogo de erros
     # conhecidos. Lê SÓ de serviço com incidente aberto — ver o serviço.
     app.state.analise = LogAnaliseService(app.state.stack, config)
+    # Aviso por Telegram: um bot por cliente, mandando para o grupo
+    # configurado. Só envio, sem laço de escuta — ver telegram_service.
+    app.state.notificacoes = NotificacaoService(config)
     app.state.monitor = MonitorService(
         app.state.metrics, app.state.stack, config,
         incidentes=app.state.incidentes, limiares=app.state.limiares,
-        analise=app.state.analise,
+        analise=app.state.analise, notificacoes=app.state.notificacoes,
     )
     app.state.scheduler = SchedulerService(
         app.state.backups,
@@ -462,6 +472,7 @@ app.include_router(monitor.router)
 app.include_router(incidentes.router)
 app.include_router(limiares.router)
 app.include_router(diagnostico.router)
+app.include_router(notificacoes.router)
 app.include_router(dispositivos.router)
 app.include_router(descoberta.router)
 app.include_router(processos.router)

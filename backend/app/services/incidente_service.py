@@ -129,11 +129,15 @@ class IncidenteService:
         doentes: list[dict],
         reinicios: dict | None = None,
         agora: datetime | None = None,
-    ) -> None:
+    ) -> list[dict]:
         """
         Chamado uma vez por host a cada ciclo do monitor, depois da
         amostra. Abre incidente para quem entrou em problema, fecha quem
         saiu.
+
+        Devolve os eventos desta passada (o que abriu e o que fechou) —
+        é o que alimenta a notificação, sem que a notificação precise
+        reler o banco para descobrir o que mudou.
         """
         agora = agora or datetime.now(timezone.utc)
 
@@ -176,6 +180,8 @@ class IncidenteService:
                     "causa": _causa_provavel(d),
                 }
 
+        eventos: list[dict] = []
+
         # Fecha quem sumiu da lista de problemas.
         for chave, incidente in abertos.items():
             if chave in atuais:
@@ -190,6 +196,17 @@ class IncidenteService:
             if inicio.tzinfo is None:
                 inicio = inicio.replace(tzinfo=timezone.utc)
             incidente.duracao_s = max(0.0, (agora - inicio).total_seconds())
+            eventos.append({
+                "tipo": "retorno",
+                "host_id": host.id,
+                "host": host.name,
+                "servico": incidente.servico,
+                "nivel": incidente.nivel,
+                "duracao_s": incidente.duracao_s,
+                # A chave carrega o início: o mesmo serviço caindo de novo
+                # amanhã é outro evento, e precisa avisar de novo.
+                "chave": f"fim:{host.id}:{incidente.tipo}:{incidente.servico}:{inicio.isoformat()}",
+            })
 
         # Abre quem é novo.
         for chave, info in atuais.items():
@@ -201,6 +218,19 @@ class IncidenteService:
                 nivel=info["nivel"], texto=info["texto"],
                 causa_provavel=info["causa"], inicio=agora,
             ))
+            eventos.append({
+                "tipo": "queda",
+                "host_id": host.id,
+                "host": host.name,
+                "servico": servico,
+                "nivel": info["nivel"],
+                "texto": info["texto"],
+                "causa_provavel": info["causa"],
+                "inicio": agora,
+                "chave": f"ini:{host.id}:{tipo}:{servico}:{agora.isoformat()}",
+            })
+
+        return eventos
 
     # ── Consulta ───────────────────────────────────────────────────────
 

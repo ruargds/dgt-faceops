@@ -35,6 +35,7 @@ const DICIONARIO = {
   "menu.rastreio": { pt: "Rastreio", en: "Trace" },
   "menu.monitor": { pt: "Monitor", en: "Monitor" },
   "menu.diagnostico": { pt: "Diagnóstico", en: "Diagnostics" },
+  "menu.notificacoes": { pt: "Avisos (Telegram)", en: "Alerts (Telegram)" },
   "menu.recursos": { pt: "Recursos", en: "Resources" },
   "menu.processos": { pt: "Processos", en: "Processes" },
   "menu.servicos": { pt: "Serviços", en: "Services" },

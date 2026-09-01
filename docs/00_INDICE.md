@@ -94,6 +94,10 @@
   heurística, retenção de 30 dias) e limite de alerta com exceção por
   host/serviço, por cima do padrão global.
 
+- **[28_AVISOS_TELEGRAM](28_AVISOS_TELEGRAM.md)** — um bot por cliente
+  mandando para o grupo de plantão: o que configurar, de quais servidores e
+  serviços receber, como a mensagem chega e as travas contra virar spam.
+
 - **[27_DIAGNOSTICO](27_DIAGNOSTICO.md)** — o que repete, o log agrupado
   por molde e a base de erros conhecidos (casos deste ambiente + manual da
   NtechLab). Inclui por que não há modelo de linguagem no meio.

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData, formatDuracao } from "../../api";
 import { t } from "../../i18n";
 import { Carregando, Erro, Estatistica, Vazio } from "../Comuns";
-import { IconAlerta, IconAtualizar, IconLogs, IconOk } from "../Icons";
+import { IconAlerta, IconAtualizar, IconLixeira, IconLogs, IconOk } from "../Icons";
 
 /**
  * Diagnóstico — o que repete, o que o log diz, e o que fazer.
@@ -35,6 +35,7 @@ export default function DiagnosticoView({ nav }) {
   const [verCatalogo, setVerCatalogo] = useState(false);
   const [erro, setErro] = useState("");
   const [analisando, setAnalisando] = useState("");
+  const [limpando, setLimpando] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro("");
@@ -58,6 +59,22 @@ export default function DiagnosticoView({ nav }) {
     if (!verCatalogo || catalogo) return;
     api.catalogoErros().then((r) => setCatalogo(r.itens)).catch(() => setCatalogo([]));
   }, [verCatalogo, catalogo]);
+
+  // Zera os padrões coletados para recomeçar depois de resolver a causa.
+  // Só o log agrupado sai; incidente e histórico de queda ficam.
+  async function limparPadroes() {
+    if (!window.confirm(t("Apagar os padrões de log coletados e recomeçar a contagem?"))) return;
+    setLimpando(true);
+    setErro("");
+    try {
+      await api.limparPadroesLog();
+      setPadroes([]);
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setLimpando(false);
+    }
+  }
 
   // Leitura de log no servidor — só no clique, nunca sozinha.
   async function analisarAgora(hostId, servico) {
@@ -100,6 +117,16 @@ export default function DiagnosticoView({ nav }) {
           ))}
           <button className="btn btn-secondary" onClick={carregar}>
             <IconAtualizar size={15} /> {t("Atualizar")}
+          </button>
+          {/* Recomeçar: o contador acumulado de um erro já resolvido só
+              atrapalha a leitura. Não toca em incidente. */}
+          <button
+            className="btn btn-danger"
+            onClick={limparPadroes}
+            disabled={limpando || !(padroes || []).length}
+            title={t("Apaga os padrões de log coletados e recomeça a contagem")}
+          >
+            <IconLixeira size={14} /> {limpando ? t("limpando…") : t("Limpar log")}
           </button>
         </div>
       </div>

@@ -205,11 +205,19 @@ Ver [23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md) e
 | GET | `/diagnostico/padroes` | `services.view` |
 | POST | `/diagnostico/analisar/{host_id}` | `services.view` |
 | GET | `/diagnostico/catalogo` | `services.view` |
+| DELETE | `/diagnostico/padroes` | `maintenance.apply` |
+| GET/PUT | `/notificacoes/conta` | `users.manage` |
+| POST | `/notificacoes/testar` | `users.manage` |
+| GET/PUT | `/notificacoes/regras` | `users.manage` |
+| DELETE | `/notificacoes/regras/{id}` | `users.manage` |
+| GET | `/notificacoes/envios` | `users.manage` |
 
 As rotas de `/diagnostico` são leitura barata (banco do painel), com uma
 exceção: `POST /diagnostico/analisar/{host_id}?servico=` **lê o log no
 servidor** — por isso é POST e só roda no clique. Ver
-[27_DIAGNOSTICO](27_DIAGNOSTICO.md).
+[27_DIAGNOSTICO](27_DIAGNOSTICO.md). As de `/notificacoes` exigem
+administrador e **nunca devolvem o token do bot** — ver
+[28_AVISOS_TELEGRAM](28_AVISOS_TELEGRAM.md).
 
 ```http
 GET /api/monitor/resumo

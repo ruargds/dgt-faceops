@@ -93,6 +93,7 @@ class FaxinaService:
             "amostras_removidas": 0,
             "incidentes_removidos": 0,
             "padroes_removidos": 0,
+            "avisos_removidos": 0,
             "licenca_removidas": 0,
             "erros": [],
         }
@@ -104,6 +105,7 @@ class FaxinaService:
             ("amostras", self._amostras),
             ("incidentes", self._incidentes),
             ("padroes de log", self._padroes_log),
+            ("avisos enviados", self._notificacoes),
             ("licenca", self._licenca),
         ):
             try:
@@ -241,6 +243,17 @@ class FaxinaService:
 
         async with AsyncSessionLocal() as db:
             r["incidentes_removidos"] = await IncidenteService.limpar(db, dias)
+            await db.commit()
+
+    async def _notificacoes(self, r: dict) -> None:
+        """Log de avisos enviados, com retenção própria (padrão 14 dias)."""
+        dias = int(self._cfg("notificacao.retencao_dias", 14))
+        if dias <= 0:
+            return
+        from app.services.notificacao_service import NotificacaoService
+
+        async with AsyncSessionLocal() as db:
+            r["avisos_removidos"] = await NotificacaoService.limpar(db, dias)
             await db.commit()
 
     async def _padroes_log(self, r: dict) -> None:

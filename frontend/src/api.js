@@ -299,6 +299,18 @@ export const api = {
   analisarLog: (hostId, servico) =>
     post(`/diagnostico/analisar/${hostId}?servico=${encodeURIComponent(servico)}`),
   catalogoErros: () => get("/diagnostico/catalogo"),
+  limparPadroesLog: (hostId) =>
+    del(`/diagnostico/padroes${hostId ? `?host_id=${hostId}` : ""}`),
+
+  // Aviso por Telegram. O token vai no corpo e NUNCA volta — as leituras
+  // trazem só o nome do bot e a impressão digital.
+  notifConta: () => get("/notificacoes/conta"),
+  salvarNotifConta: (d) => request("/notificacoes/conta", { method: "PUT", body: JSON.stringify(d) }),
+  testarNotif: () => post("/notificacoes/testar"),
+  notifRegras: () => get("/notificacoes/regras"),
+  salvarNotifRegra: (d) => request("/notificacoes/regras", { method: "PUT", body: JSON.stringify(d) }),
+  removerNotifRegra: (id) => del(`/notificacoes/regras/${id}`),
+  notifEnvios: (limite = 30) => get(`/notificacoes/envios?limite=${limite}`),
 
   // Limiares — exceção de limite por host/serviço, por cima do padrão
   // global em Configurações.

@@ -26,6 +26,7 @@ import LogsView from "../components/views/LogsView";
 import MonitorView from "../components/views/MonitorView";
 import DescobertaView from "../components/views/DescobertaView";
 import DiagnosticoView from "../components/views/DiagnosticoView";
+import NotificacoesView from "../components/views/NotificacoesView";
 import TopologiaView from "../components/views/TopologiaView";
 import DispositivosView from "../components/views/DispositivosView";
 import ProcessosView from "../components/views/ProcessosView";
@@ -106,6 +107,7 @@ const MENU = [
     grupo: "menu.administracao",
     itens: [
       { id: "servidores", chave: "menu.servidores", icone: IconServidor, perm: "hosts.view" },
+      { id: "notificacoes", chave: "menu.notificacoes", icone: IconAlerta, perm: "users.manage" },
       { id: "usuarios", chave: "menu.usuarios", icone: IconUsuarios, perm: "users.manage" },
       { id: "auditoria", chave: "menu.auditoria", icone: IconAuditoria, perm: "audit.view" },
       { id: "config", chave: "menu.config", icone: IconServicos, perm: "hosts.view" },
@@ -227,19 +229,34 @@ export default function AppShell() {
     setGavetaAberta(false);
   }
 
+  function guardarRecolhidos(nova) {
+    try {
+      localStorage.setItem(CHAVE_RECOLHIDOS, JSON.stringify([...nova]));
+    } catch {
+      // Sem localStorage a preferência vale só para esta sessão — é
+      // cosmético, não vale quebrar o clique.
+    }
+    return nova;
+  }
+
   function alternarGrupo(chave) {
     setRecolhidos((atual) => {
       const nova = new Set(atual);
       if (nova.has(chave)) nova.delete(chave);
       else nova.add(chave);
-      try {
-        localStorage.setItem(CHAVE_RECOLHIDOS, JSON.stringify([...nova]));
-      } catch {
-        // Sem localStorage a preferência vale só para esta sessão — é
-        // cosmético, não vale quebrar o clique.
-      }
-      return nova;
+      return guardarRecolhidos(nova);
     });
+  }
+
+  // Recolher tudo de uma vez, além do um a um. Numa tela de notebook a
+  // lista inteira aberta empurra o rodapé da barra para fora; fechar tudo
+  // e abrir só o grupo em uso é a forma mais rápida de chegar lá.
+  const todosRecolhidos = grupos.length > 0 && grupos.every((g) => recolhidos.has(g.grupo));
+
+  function alternarTudo() {
+    setRecolhidos(() =>
+      guardarRecolhidos(todosRecolhidos ? new Set() : new Set(grupos.map((g) => g.grupo)))
+    );
   }
 
   // Registra a visita para as telas persistentes nascerem só quando forem
@@ -285,6 +302,17 @@ export default function AppShell() {
             >
               <PRINCIPAL.icone size={17} />
               {t(PRINCIPAL.chave)}
+            </button>
+          )}
+
+          {grupos.length > 1 && (
+            <button
+              type="button"
+              className="nav-recolher-tudo"
+              onClick={alternarTudo}
+              title={todosRecolhidos ? t("Abrir todos os grupos") : t("Fechar todos os grupos")}
+            >
+              {todosRecolhidos ? t("expandir tudo") : t("recolher tudo")}
             </button>
           )}
 
@@ -427,6 +455,7 @@ export default function AppShell() {
           {abaValida === "rastreio" && <RastreioView />}
           {abaValida === "monitor" && <MonitorView alvo={alvo} nav={nav} />}
           {abaValida === "diagnostico" && <DiagnosticoView nav={nav} />}
+          {abaValida === "notificacoes" && <NotificacoesView />}
           {abaValida === "dispositivos" && <DispositivosView />}
           {abaValida === "descoberta" && <DescobertaView />}
           {abaValida === "topologia" && <TopologiaView />}

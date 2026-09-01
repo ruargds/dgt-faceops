@@ -49,7 +49,8 @@ def _pior_disco(discos: list[dict]) -> tuple[float, str, float, float]:
 
 class MonitorService:
     def __init__(
-        self, metrics, stack, config=None, incidentes=None, limiares=None, analise=None
+        self, metrics, stack, config=None, incidentes=None, limiares=None,
+        analise=None, notificacoes=None,
     ) -> None:
         self.metrics = metrics
         self.stack = stack
@@ -60,6 +61,7 @@ class MonitorService:
         self.incidentes = incidentes
         self.limiares = limiares
         self.analise = analise
+        self.notificacoes = notificacoes
         self._tarefa: asyncio.Task | None = None
         self._rodando = False
         # Último erro por host, para a tela não repetir a mesma queixa
@@ -161,11 +163,18 @@ class MonitorService:
         if self.incidentes is None:
             return
         try:
-            await self.incidentes.registrar_ciclo(
+            eventos = await self.incidentes.registrar_ciclo(
                 db, host, host_ok=host_ok, doentes=doentes, reinicios=reinicios,
             )
         except Exception:
             log.exception("falha ao registrar incidente do host %s", host.id)
+            return
+
+        # Aviso externo é o último passo de propósito: se o Telegram
+        # estiver fora, a amostra e o incidente já estão gravados. O
+        # serviço nunca levanta — ver `NotificacaoService.despachar`.
+        if eventos and self.notificacoes is not None:
+            await self.notificacoes.despachar(db, eventos)
 
     async def _analisar_logs(self, db, host, containers: dict | None = None) -> None:
         """
@@ -274,6 +283,13 @@ class MonitorService:
                 reinicios=saude.get("reinicios", {}),
             )
             await self._analisar_logs(db, host, containers=saude.get("containers"))
+
+            # Catálogo de serviços do host, para a tela de notificações
+            # listar sem SSH. Só grava quando muda — UPDATE por ciclo em
+            # dado que não mudou é escrita à toa.
+            vistos = sorted((saude.get("containers") or {}).keys())
+            if vistos and list(host.servicos_conhecidos or []) != vistos:
+                host.servicos_conhecidos = vistos
         except Exception:
             pass
 

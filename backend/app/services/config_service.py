@@ -349,6 +349,11 @@ CATALOGO: list[ItemConfig] = [
                "Molde de log com contador — uma linha por tipo de erro, não "
                "por ocorrência.",
                minimo=1, maximo=365),
+    ItemConfig("notificacao.retencao_dias", "monitor",
+               "Guardar log de avisos enviados por (dias)", "numero", 14,
+               "Registro de quem foi avisado e quando. É log operacional, "
+               "não histórico: passado o prazo, sai.",
+               minimo=1, maximo=180),
     ItemConfig("incidentes.retencao_dias", "monitor",
                "Guardar histórico de indisponibilidade por (dias)", "numero",
                30,
