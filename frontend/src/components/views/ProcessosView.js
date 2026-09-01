@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, nivel } from "../../api";
 import { t } from "../../i18n";
+import { usePermissions } from "../../usePermissions";
 import { Carregando, Erro, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { IconAtualizar } from "../Icons";
 
@@ -16,6 +17,12 @@ const INTERVALO_MS = 2500;
 
 export default function ProcessosView() {
   const { hosts, hostId, setHostId, erro: erroHosts, carregando: carregandoHosts } = useHosts();
+  const { has } = usePermissions();
+  // Reinício reaproveita a MESMA rota cercada da tela de Serviços — nada
+  // de matar PID: ver o rodapé da tabela.
+  const podeReiniciar = has("services.restart");
+  const [reiniciando, setReiniciando] = useState("");
+  const [avisoAcao, setAvisoAcao] = useState("");
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState("");
   // Ordenação por coluna. Números (pid/cpu/mem) ordenam 0-9; texto
@@ -69,11 +76,25 @@ export default function ProcessosView() {
     };
   }, [hostId, pausado, carregar]);
 
+  async function reiniciarContainer(container) {
+    if (!window.confirm(`Reiniciar o container ${container}?`)) return;
+    setReiniciando(container);
+    setAvisoAcao("");
+    try {
+      const r = await api.reiniciarContainer(hostId, container);
+      setAvisoAcao(`${container} reiniciado — estado atual: ${r.estado}.`);
+    } catch (ex) {
+      setAvisoAcao(`Falhou: ${ex.message}`);
+    } finally {
+      setReiniciando("");
+    }
+  }
+
   if (carregandoHosts) return <Carregando />;
   if (erroHosts) return <Erro mensagem={erroHosts} />;
   if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
-  const NUM = new Set(["pid", "cpu", "mem"]);
+  const NUM = new Set(["pid", "cpu", "mem", "gpu_bytes"]);
   const processos = dados
     ? [...dados.processos].sort((a, b) => {
         const { campo, dir } = ordem;
@@ -126,6 +147,11 @@ export default function ProcessosView() {
 
       {dados && (
         <>
+          {avisoAcao && (
+            <div className="card card-tight" style={{ marginBottom: 12 }}>
+              <span className="small">{avisoAcao}</span>
+            </div>
+          )}
           <Resumo d={dados} />
 
           <div className="card" style={{ marginTop: 16 }}>
@@ -139,6 +165,10 @@ export default function ProcessosView() {
               (pode passar de 100% se usa vários). <strong>{t("Memória")}</strong> é a
               fatia da memória física. <strong>{t("Tempo")}</strong> é quanto de CPU ele
               já acumulou desde que iniciou.
+              {dados.tem_gpu && (
+                <> <strong>{t("GPU")}</strong> é a memória de vídeo que o processo
+                  reservou — a mesma leitura que aparece em Recursos.</>
+              )}
             </div>
 
             <div className="table-wrap">
@@ -147,10 +177,17 @@ export default function ProcessosView() {
                   <tr>
                     <Th campo="pid" ordem={ordem} onClick={ordenarPor} className="right">{t("PID")}</Th>
                     <Th campo="usuario" ordem={ordem} onClick={ordenarPor}>{t("Usuário")}</Th>
-                    <Th campo="cpu" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 132 }}>{t("CPU")}</Th>
-                    <Th campo="mem" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 132 }}>{t("Memória")}</Th>
+                    <Th campo="cpu" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 120 }}>{t("CPU")}</Th>
+                    <Th campo="mem" ordem={ordem} onClick={ordenarPor} className="right" style={{ width: 120 }}>{t("Memória")}</Th>
+                    {dados.tem_gpu && (
+                      <Th campo="gpu_bytes" ordem={ordem} onClick={ordenarPor} className="right">{t("GPU")}</Th>
+                    )}
                     <Th campo="tempo" ordem={ordem} onClick={ordenarPor} className="right">{t("Tempo")}</Th>
                     <Th campo="comando" ordem={ordem} onClick={ordenarPor}>{t("Programa")}</Th>
+                    {/* Serviço dono do processo. É o que transforma
+                        "python3 consumindo 31%" em algo acionável. */}
+                    <Th campo="container" ordem={ordem} onClick={ordenarPor}>{t("Serviço")}</Th>
+                    {podeReiniciar && <th style={{ width: 1 }} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -160,15 +197,48 @@ export default function ProcessosView() {
                       <td className="small">{p.usuario}</td>
                       <CelulaPct valor={p.cpu} />
                       <CelulaPct valor={p.mem} />
+                      {dados.tem_gpu && (
+                        <td className="right mono small">
+                          {p.gpu_bytes ? formatBytes(p.gpu_bytes) : <span className="muted">—</span>}
+                        </td>
+                      )}
                       <td className="right mono small">{p.tempo}</td>
-                      <td className="mono small" style={{ maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.comando}>
+                      <td className="mono small" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.comando}>
                         {p.comando}
                       </td>
+                      <td className="mono small" style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.container}>
+                        {p.container || <span className="muted">—</span>}
+                      </td>
+                      {podeReiniciar && (
+                        <td>
+                          {p.container ? (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              disabled={reiniciando === p.container}
+                              onClick={() => reiniciarContainer(p.container)}
+                              title={t("Reinicia o container inteiro, pela mesma rota cercada da tela de Serviços")}
+                            >
+                              {reiniciando === p.container ? t("reiniciando…") : t("reiniciar")}
+                            </button>
+                          ) : null}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {podeReiniciar && (
+              <div className="small muted" style={{ marginTop: 10 }}>
+                O botão reinicia o <strong>container</strong> dono do processo, não o
+                PID. É de propósito: matar processo solto num servidor de
+                reconhecimento facial pode corromper banco, e a rota de reinício já
+                tem a cerca que só age em container do projeto do FindFace e recusa
+                agir durante limpeza de eventos.
+              </div>
+            )}
           </div>
 
           <div className="small muted" style={{ marginTop: 12 }}>

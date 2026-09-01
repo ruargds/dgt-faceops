@@ -63,9 +63,25 @@ echo "{SEP}MEM"
 free -b 2>/dev/null
 echo "{SEP}TOP"
 COLUMNS=220 top -bn2 -d 0.5 2>/dev/null
+echo "{SEP}GPUPROC"
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits 2>/dev/null
+fi
+echo "{SEP}CGROUP"
+# Container dono de cada processo, lido do cgroup — barato porque é
+# arquivo local. `docker top` por container custaria uma execução por
+# container, e aqui já estamos dentro de uma leitura só.
+for p in $(ls -1 /proc 2>/dev/null | grep -E '^[0-9]+$' | head -400); do
+  linha="$(tr '\\0' ' ' < /proc/$p/cgroup 2>/dev/null | grep -oE '(docker[-/][0-9a-f]{{12}}|/docker/[0-9a-f]{{12}})' | head -1)"
+  [ -n "$linha" ] && echo "$p|$linha"
+done
+echo "{SEP}CTNAMES"
+if command -v docker >/dev/null 2>&1; then
+  docker ps --no-trunc --format '{{{{.ID}}}}|{{{{.Names}}}}' 2>/dev/null
+fi
 echo "{SEP}END"
 """
-        r = await self.ssh.run_script(host, script, timeout=40)
+        r = await self.ssh.run_script(host, script, timeout=45)
         s = _split(r.stdout)
 
         nucleos = self._int(s.get("NPROC", ""), 1) or 1
@@ -73,8 +89,43 @@ echo "{SEP}END"
         mem, swap = self._free(s.get("MEM", ""))
         cpu_pct, cpu_det, tarefas, processos = self._top(s.get("TOP", ""), limite)
 
+        # GPU por processo: MESMA leitura que a tela de Recursos já fazia,
+        # com o MESMO parser (`metrics_service._parse_gpu_procs`). O dado
+        # existia e não aparecia aqui — quem está olhando "quem consome a
+        # máquina" precisa ver a placa junto, não em outra tela.
+        from app.services.metrics_service import _parse_gpu_procs
+
+        gpu_por_pid = {
+            p["pid"]: p["memoria_bytes"]
+            for p in _parse_gpu_procs(s.get("GPUPROC", ""))
+        }
+
+        # Container dono de cada processo, para o botão de reinício agir no
+        # container (cercado) em vez de matar PID solto.
+        curto_por_pid: dict[str, str] = {}
+        for linha in s.get("CGROUP", "").strip().splitlines():
+            if "|" not in linha:
+                continue
+            pid, bruto = linha.split("|", 1)
+            achado = bruto.strip().rsplit("/", 1)[-1].replace("docker-", "")
+            if achado:
+                curto_por_pid[pid.strip()] = achado[:12]
+
+        nome_por_curto: dict[str, str] = {}
+        for linha in s.get("CTNAMES", "").strip().splitlines():
+            if "|" not in linha:
+                continue
+            cid, nome = linha.split("|", 1)
+            nome_por_curto[cid.strip()[:12]] = nome.strip()
+
+        for p in processos:
+            pid = str(p.get("pid", ""))
+            p["gpu_bytes"] = gpu_por_pid.get(pid, 0)
+            p["container"] = nome_por_curto.get(curto_por_pid.get(pid, ""), "")
+
         return {
             "host": host.name,
+            "tem_gpu": bool(gpu_por_pid),
             "nucleos": nucleos,
             "load": load,
             # Carga por núcleo: load/nprocs. >1 = há processo esperando a vez.

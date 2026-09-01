@@ -265,6 +265,14 @@ function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo }) {
                 ))}
             </tbody>
           </table>
+          {/* Rotatividade ao lado da projeção. Antes esta informação só
+              existia na tela de Manutenção, e sem ela o "acaba em N dias"
+              engana: a projeção supõe que nada é apagado, quando é
+              justamente a retenção do FindFace que devolve o espaço. Mesmo
+              endpoint da outra tela — nada novo, só visível onde a
+              pergunta é feita. */}
+          <Rotatividade hostId={hostId} />
+
           <div className="small muted" style={{ marginTop: 6 }}>
             Medido ponta a ponta nos últimos {ritmo.dias} dias — e não pela média
             das variações diárias, que a limpeza de eventos transformaria em
@@ -365,16 +373,59 @@ function UltimaInteracao({ dados, buscando, filtro }) {
       >
         <div className="section-title" style={{ marginBottom: 0 }}>
           Última interação por câmera
-          {dados.sem_interacao > 0 && (
+          {/* Quando NENHUM evento foi lido e houve erro, a tela não pode
+              dizer "sem evento": ela não sabe. Dizer que 200 câmeras estão
+              mudas quando a verdade é "não consegui perguntar" manda a
+              equipe procurar defeito onde não há. */}
+          {v.falhou ? (
+            <span className="pill pill-err" style={{ marginLeft: 8 }}>
+              <IconAlerta size={11} /> não consegui ler os eventos
+            </span>
+          ) : dados.sem_interacao > 0 ? (
             <span className="pill pill-warn" style={{ marginLeft: 8 }}>
               <IconAlerta size={11} /> {dados.sem_interacao} sem evento
             </span>
-          )}
+          ) : null}
         </div>
         <span className="small muted">
           consultado em {formatData(dados.gerado_em)}
         </span>
       </div>
+
+      {/* O motivo, quando houve. É isto que transforma "sem evento" em
+          algo acionável: qual tipo falhou e o que a API respondeu. */}
+      {v.erros && Object.keys(v.erros).length > 0 && (
+        <div
+          className="card card-tight"
+          style={{
+            background: v.falhou ? "var(--red-bg)" : "var(--amber-bg)",
+            borderColor: v.falhou ? "var(--red-bd)" : "var(--amber-bd)",
+            marginBottom: 12,
+          }}
+        >
+          <div className="small" style={{ color: v.falhou ? "var(--red-fg)" : "var(--amber-fg)" }}>
+            <strong>
+              {v.falhou
+                ? "Nenhum evento pôde ser lido — o número de 'sem evento' abaixo não é confiável."
+                : "Parte dos tipos de evento não pôde ser lida."}
+            </strong>
+            {Object.entries(v.erros).map(([tipo, msg]) => (
+              <div key={tipo} className="mono" style={{ marginTop: 4 }}>
+                /events/{tipo}/ — {msg}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {v.sem_ordenacao && v.sem_ordenacao.length > 0 && (
+        <div className="small muted" style={{ marginBottom: 10 }}>
+          Lido sem ordenação em: {v.sem_ordenacao.join(", ")} — esta versão da
+          API recusou <span className="mono">ordering</span>. A data mostrada é
+          a mais recente encontrada na varredura, e pode não ser a última
+          absoluta.
+        </div>
+      )}
 
       <div className="grid-stats" style={{ marginBottom: 12 }}>
         <div>
@@ -386,7 +437,7 @@ function UltimaInteracao({ dados, buscando, filtro }) {
           <div className="stat-value">{dados.com_interacao}</div>
         </div>
         <div>
-          <span className="stat-label">Sem evento</span>
+          <span className="stat-label">{v.falhou ? "Não verificadas" : "Sem evento"}</span>
           <div
             className="stat-value"
             style={{
@@ -463,7 +514,7 @@ function UltimaInteracao({ dados, buscando, filtro }) {
                       </span>
                     ) : (
                       <span className="pill pill-warn">
-                        <IconAlerta size={11} /> sem evento
+                        <IconAlerta size={11} /> {v.falhou ? "não verificada" : "sem evento"}
                       </span>
                     )}
                   </td>
@@ -476,6 +527,8 @@ function UltimaInteracao({ dados, buscando, filtro }) {
                       <span className="muted">
                         {v.ate
                           ? `sem evento desde ${formatData(v.ate)}`
+                          : v.falhou
+                          ? "não verificada"
                           : "sem evento"}
                       </span>
                     )}
@@ -795,5 +848,105 @@ export default function DispositivosView() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Rotatividade do FindFace, ao lado da projeção de consumo.
+ *
+ * A projeção "no ritmo atual, acaba em N dias" supõe que nada é apagado.
+ * Quem desmente essa suposição é a retenção do próprio FindFace — e ela
+ * só existia na tela de Manutenção, longe de onde a pergunta é feita.
+ *
+ * Mesma rota que aquela tela usa (`/dispositivos/{id}/retencao`): nenhum
+ * endpoint novo, nenhuma leitura a mais fora do clique.
+ */
+function Rotatividade({ hostId }) {
+  const [dados, setDados] = React.useState(null);
+  const [erro, setErro] = React.useState("");
+  const [aberto, setAberto] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!aberto || dados || !hostId) return;
+    api
+      .retencao(hostId)
+      .then(setDados)
+      .catch((ex) => setErro(ex.message));
+  }, [aberto, dados, hostId]);
+
+  const campos = [];
+  for (const g of (dados && dados.grupos) || []) {
+    for (const c of g.campos || []) {
+      if (c.dias !== null && c.dias !== undefined) campos.push({ ...c, grupo: g.grupo });
+    }
+  }
+  const menor = campos.length
+    ? campos.reduce((a, b) => (a.dias <= b.dias ? a : b))
+    : null;
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() => setAberto((v) => !v)}
+      >
+        {aberto ? "esconder rotatividade" : "ver rotatividade (o que é apagado, e quando)"}
+      </button>
+
+      {aberto && erro && (
+        <div className="small" style={{ color: "var(--red)", marginTop: 8 }}>
+          {erro}
+        </div>
+      )}
+
+      {aberto && !dados && !erro && (
+        <div className="small muted" style={{ marginTop: 8 }}>lendo a política…</div>
+      )}
+
+      {aberto && dados && (
+        <div style={{ marginTop: 8 }}>
+          <div className="small muted" style={{ marginBottom: 8 }}>
+            A projeção acima supõe que <strong>nada</strong> é apagado. Estes são os
+            prazos que o FindFace aplica sozinho — é o que devolve espaço e
+            estica o prazo real.
+            {menor && (
+              <> O mais curto é <strong>{menor.rotulo}</strong>, com {menor.dias} dia(s).</>
+            )}
+          </div>
+          {campos.length === 0 ? (
+            <div className="small" style={{ color: "var(--amber-fg)" }}>
+              Nenhum prazo de retenção configurado — nada é apagado sozinho, e a
+              projeção acima vale como está. Ajuste em Manutenção.
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table className="tabela-densa">
+                <thead>
+                  <tr>
+                    <th>O que</th>
+                    <th>Grupo</th>
+                    <th className="right">Fica por</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {campos.map((c) => (
+                    <tr key={c.chave}>
+                      <td>{c.rotulo}</td>
+                      <td className="small muted">{c.grupo}</td>
+                      <td className="right mono">{c.dias} dia(s)</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="small muted" style={{ marginTop: 6 }}>
+            Alterar estes prazos continua em <strong>Manutenção</strong> — aqui é
+            leitura, para a projeção fazer sentido sem trocar de tela.
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

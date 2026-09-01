@@ -700,6 +700,164 @@ async def cenario_token_do_telegram_nunca_aparece():
     assert "***" in limpo, limpo
 
 
+async def cenario_camera_sem_evento_nao_mente_quando_a_leitura_falha():
+    """
+    O caso das 200 câmeras: toda chamada de evento falhou, o erro foi
+    engolido por `except FFApiError: pass`, e a tela afirmou "200 sem
+    evento". Falha de leitura e ausência de evento não podem ficar iguais.
+    """
+    from app.services.ffapi_service import FFApiError, FFApiService
+
+    servico = FFApiService()
+
+    class HostFalso:
+        id = 1
+        name = "vm-appserver"
+        ff_api_url = "https://10.0.0.1"
+        ff_api_user = "u"
+        ff_api_pass_enc = "x"
+        ff_api_token_enc = ""
+
+    async def credenciais_falsas(host):
+        return {}
+
+    async def base_falsa(host):
+        return "https://10.0.0.1/api"
+
+    async def get_falso(url, auth, params=None):
+        if "/cameras/" in url:
+            return {"results": [{"id": 1, "name": "cam A"}, {"id": 2, "name": "cam B"}],
+                    "next": None}
+        # Qualquer rota de evento falha — foi o que aconteceu em produção.
+        raise FFApiError("HTTP 400: unknown query parameter 'ordering'")
+
+    servico._credenciais = credenciais_falsas
+    servico._base = base_falsa
+    servico._get = get_falso
+
+    r = await servico.ultima_interacao(HostFalso())
+    v = r["varredura"]
+
+    assert r["total_cameras"] == 2, r
+    assert v["eventos_lidos"] == 0, v
+    assert v["falhou"] is True, "a tela afirmaria 'sem evento' sem saber"
+    assert v["erros"], "o motivo tem que chegar à tela"
+    assert "ordering" in " ".join(v["erros"].values()), v["erros"]
+
+
+async def cenario_camera_tenta_de_novo_sem_ordering():
+    """
+    Se a API recusa `ordering`, o tipo inteiro era descartado. Agora tenta
+    de novo sem o parâmetro e usa a data mais recente que encontrar.
+    """
+    from app.services.ffapi_service import FFApiError, FFApiService
+
+    servico = FFApiService()
+    chamadas = []
+
+    class HostFalso:
+        id = 1
+        name = "vm-appserver"
+        ff_api_url = "https://10.0.0.1"
+        ff_api_user = "u"
+        ff_api_pass_enc = "x"
+        ff_api_token_enc = ""
+
+    async def credenciais_falsas(host):
+        return {}
+
+    async def base_falsa(host):
+        return "https://10.0.0.1/api"
+
+    async def get_falso(url, auth, params=None):
+        if "/cameras/" in url:
+            return {"results": [{"id": 7, "name": "cam A"}], "next": None}
+        chamadas.append(dict(params or {}))
+        if params and "ordering" in params:
+            raise FFApiError("HTTP 400: unknown query parameter 'ordering'")
+        return {
+            "results": [
+                {"id": 100, "camera": 7, "created_date": "2026-09-01T10:00:00Z"},
+                {"id": 101, "camera": 7, "created_date": "2026-09-01T12:00:00Z"},
+            ],
+            "next": None,
+        }
+
+    servico._credenciais = credenciais_falsas
+    servico._base = base_falsa
+    servico._get = get_falso
+
+    r = await servico.ultima_interacao(HostFalso())
+    v = r["varredura"]
+
+    assert v["falhou"] is False, v
+    assert v["eventos_lidos"] > 0, v
+    assert "faces" in v["sem_ordenacao"], v
+    cam = r["cameras"][0]
+    # Sem ordenação, vale a MAIS RECENTE vista — não a primeira da lista.
+    assert cam["ultima_interacao"].startswith("2026-09-01T12:00"), cam
+    assert any("ordering" in c for c in chamadas), chamadas
+
+
+async def cenario_processos_junta_gpu_e_container_sem_coletor_novo():
+    """
+    GPU por processo já era coletada em Recursos. Aqui ela aparece junto de
+    quem consome CPU, com o MESMO parser — e o container dono vem do
+    cgroup, para o botão reiniciar o container em vez de matar PID.
+    """
+    from app.services.processos_service import ProcessosService
+
+    saida = "\n".join([
+        "###FACEOPS:LOAD", "0.50 0.40 0.30 2/300 1234",
+        "###FACEOPS:NPROC", "8",
+        "###FACEOPS:MEM",
+        "              total        used        free      shared  buff/cache   available",
+        "Mem:    16000000000  8000000000  2000000000           0  6000000000  7000000000",
+        "Swap:             0           0           0",
+        "###FACEOPS:TOP",
+        "top - 10:00:00 up 1 day",
+        "Tasks: 300 total,   1 running, 299 sleeping,   0 stopped,   0 zombie",
+        "%Cpu(s):  3.0 us,  1.0 sy,  0.0 ni, 96.0 id,  0.0 wa",
+        "MiB Mem :  16000.0 total",
+        "  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND",
+        " 4242 root      20   0  100000  50000  10000 S  31.4   0.3   1:12.01 python3",
+        " 4243 root      20   0  100000  50000  10000 S   9.8   0.2   0:12.01 postgres",
+        "###FACEOPS:GPUPROC",
+        "4242, python3, 2048",
+        "###FACEOPS:CGROUP",
+        "4242|docker-aaaabbbbcccc",
+        "###FACEOPS:CTNAMES",
+        "aaaabbbbccccddddeeee|findface-multi-findface-video-worker-1",
+        "###FACEOPS:END", "",
+    ])
+
+    class Resultado:
+        stdout = saida
+        duration_ms = 10
+
+    class SSHFalso:
+        async def run_script(self, host, script, timeout=None, sudo=False):
+            return Resultado()
+
+    class HostFalso:
+        id = 1
+        name = "vm-appserver"
+
+    servico = ProcessosService(SSHFalso())
+    r = await servico.snapshot(HostFalso())
+
+    assert r["tem_gpu"] is True, r
+    por_pid = {p["pid"]: p for p in r["processos"]}
+    com_gpu = por_pid.get("4242") or por_pid.get(4242)
+    assert com_gpu, por_pid.keys()
+    assert com_gpu["gpu_bytes"] == 2048 * 1024 * 1024, com_gpu
+    assert com_gpu["container"] == "findface-multi-findface-video-worker-1", com_gpu
+
+    sem_gpu = por_pid.get("4243") or por_pid.get(4243)
+    assert sem_gpu["gpu_bytes"] == 0, sem_gpu
+    assert sem_gpu["container"] == "", sem_gpu
+
+
 async def cenario_reincidencia_conta_e_datilha_horario():
     """
     Cinco quedas do mesmo serviço, sempre de madrugada, têm que virar uma
@@ -787,6 +945,9 @@ CENARIOS = [
     cenario_notificacao_nao_repete_o_mesmo_evento,
     cenario_notificacao_nunca_derruba_o_ciclo,
     cenario_token_do_telegram_nunca_aparece,
+    cenario_camera_sem_evento_nao_mente_quando_a_leitura_falha,
+    cenario_camera_tenta_de_novo_sem_ordering,
+    cenario_processos_junta_gpu_e_container_sem_coletor_novo,
 ]
 
 

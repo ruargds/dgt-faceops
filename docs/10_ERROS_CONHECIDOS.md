@@ -469,6 +469,38 @@ num servidor diferente do PostgreSQL.
 `essencial` onde cada componente realmente está. Um agendamento por
 servidor com dado, não um só.
 
+### "Serviço travado" em componente que está de pé (404/405)
+
+**Sintoma:** Rastreio acusa vários "Serviço travado" — `findface-ntls`,
+`findface-extraction-api`, `findface-deduplicator` — com a evidência
+dizendo *porta escutando, container Up 11 days, sem resposta HTTP (404)*.
+
+**Causa:** era classificação errada do painel. A sonda tenta `/health`,
+`/status` e `/`, **para na primeira que responde qualquer coisa** e guarda
+o código. Só 2xx/3xx/401/403 contavam como vivo — mas 404 e 405 também
+são resposta: o `findface-ntls` devolve 404 em `/health` porque o caminho
+documentado dele é `/v1/licenses.json`, e o `extraction-api` devolve 405
+porque espera POST.
+
+**Correção:** qualquer código diferente de `000` (curl não conectou) conta
+como vivo. Corrigido em 01/09/2026; há cenário de teste travando a regra.
+
+### "200 câmeras sem evento" quando existem eventos
+
+**Sintoma:** Licenciamento e dispositivos → Última interação mostra todas
+as câmeras como "sem evento", com **0 eventos varridos** e **1 requisição
+à API**.
+
+**Causa:** "1 requisição" é só a página de câmeras — todas as chamadas de
+evento falharam e o erro era engolido (`except FFApiError: pass`). A tela
+então afirmava "sem evento" quando a verdade era "não consegui perguntar".
+A causa mais comum é a versão da API recusar o parâmetro `ordering`.
+
+**Correção:** o painel tenta de novo sem `ordering` (e avisa que a ordem
+não é garantida); se ainda assim falhar, mostra o motivo por tipo e troca
+"sem evento" por **"não verificada"**. Ausência de dado deixou de ser
+apresentada como resposta.
+
 ## Método quando nada aqui serve
 
 1. `docker compose logs --tail 200 backend` — o erro está lá, quase sempre

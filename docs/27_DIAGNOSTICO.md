@@ -143,6 +143,13 @@ para achar, registre no doc **e** no catálogo.
 
 ---
 
+## Recomeçar
+
+O botão **Limpar log** zera os padrões coletados. Serve depois de resolver
+a causa: contador acumulado de erro já corrigido só atrapalha a leitura.
+Não toca em incidente nem no histórico de indisponibilidade — isso tem
+retenção própria. Exige `maintenance.apply` e fica registrado em auditoria.
+
 ## API
 
 | Método | Rota | Permissão |

@@ -1339,47 +1339,69 @@ class FFApiService:
         mais_antigo = None
         por_tipo: dict[str, int] = {}
 
+        erros: dict[str, str] = {}
+        sem_ordenacao: list[str] = []
+
         for tipo in TIPOS_EVENTO:
             if not faltam or lidos >= max_eventos:
                 break
-            url = f"{base}/events/{tipo}/"
             # `ordering` é do Django REST. Sem ele a ordem não é garantida,
             # e "a primeira vez que a câmera aparece" deixaria de significar
-            # "o evento mais recente dela". Tipo que recusar o parâmetro é
-            # pulado: data errada seria pior que data ausente.
-            params = {"limit": por_pagina, "ordering": "-created_date"}
+            # "o evento mais recente dela".
+            #
+            # Antes, o tipo que recusasse o parâmetro era PULADO INTEIRO — e
+            # como o erro era engolido, a tela dizia "200 câmeras sem
+            # evento" quando a verdade era "não consegui ler nenhum evento".
+            # Agora tenta de novo sem `ordering` e conta o que aconteceu.
             lidos_tipo = 0
-            try:
-                while faltam and lidos < max_eventos:
-                    dados = await self._get(url, auth, params)
-                    requisicoes += 1
-                    itens = dados.get(
-                        "results", dados if isinstance(dados, list) else []
-                    )
-                    if not itens:
-                        break
-                    for ev in itens:
-                        lidos += 1
-                        lidos_tipo += 1
-                        quando = self._quando(
-                            ev.get("created_date") or ev.get("timestamp")
+            for tentativa, params in enumerate((
+                {"limit": por_pagina, "ordering": "-created_date"},
+                {"limit": por_pagina},
+            )):
+                url = f"{base}/events/{tipo}/"
+                try:
+                    while faltam and lidos < max_eventos:
+                        dados = await self._get(url, auth, params)
+                        requisicoes += 1
+                        itens = dados.get(
+                            "results", dados if isinstance(dados, list) else []
                         )
-                        if quando and (mais_antigo is None or quando < mais_antigo):
-                            mais_antigo = quando
-                        cam = cameras.get(_id_camera(ev))
-                        if cam is None or cam["ultima_interacao"] or not quando:
-                            continue
-                        cam["ultima_interacao"] = quando.isoformat()
-                        cam["tipo"] = tipo
-                        cam["evento_id"] = ev.get("id")
-                        faltam.discard(cam["id"])
-                    seguinte = dados.get("next") if isinstance(dados, dict) else None
-                    if not seguinte:
-                        break
-                    url, params = seguinte, None
-            except FFApiError:
-                # Tipo que não existe nesta instalação não invalida os outros
-                pass
+                        if not itens:
+                            break
+                        for ev in itens:
+                            lidos += 1
+                            lidos_tipo += 1
+                            quando = self._quando(
+                                ev.get("created_date") or ev.get("timestamp")
+                            )
+                            if quando and (mais_antigo is None or quando < mais_antigo):
+                                mais_antigo = quando
+                            cam = cameras.get(_id_camera(ev))
+                            if cam is None or not quando:
+                                continue
+                            # Sem ordenação garantida, fica o MAIS RECENTE
+                            # visto, não o primeiro que apareceu.
+                            atual = cam["ultima_interacao"]
+                            if atual and atual >= quando.isoformat():
+                                continue
+                            cam["ultima_interacao"] = quando.isoformat()
+                            cam["tipo"] = tipo
+                            cam["evento_id"] = ev.get("id")
+                            if tentativa == 0:
+                                faltam.discard(cam["id"])
+                        seguinte = dados.get("next") if isinstance(dados, dict) else None
+                        if not seguinte:
+                            break
+                        url, params = seguinte, None
+                    erros.pop(tipo, None)
+                    if tentativa == 1:
+                        sem_ordenacao.append(tipo)
+                    break
+                except FFApiError as exc:
+                    # Guarda o motivo. Tipo que não existe nesta instalação
+                    # não invalida os outros — mas o silêncio, sim, invalida
+                    # a resposta inteira.
+                    erros[tipo] = str(exc)[:200]
             por_tipo[tipo] = lidos_tipo
 
         # Truncada = ainda faltava câmera quando o teto chegou. Vira texto
@@ -1407,5 +1429,17 @@ class FFApiService:
                 "completa": not truncada,
                 "por_tipo": por_tipo,
                 "teto": max_eventos,
+                # Por que não deu, quando não deu. Sem isto, "nenhum evento
+                # lido" e "nenhum evento existe" ficam iguais na tela — e
+                # foi o que aconteceu: 200 câmeras marcadas como "sem
+                # evento" quando na verdade toda chamada de evento falhou.
+                "erros": erros,
+                # Verdadeiro quando NADA foi lido e houve erro: a tela não
+                # pode afirmar "sem evento" nesse caso.
+                "falhou": bool(erros) and lidos == 0,
+                # Tipos lidos sem `ordering` — a data continua sendo a mais
+                # recente vista, mas a varredura pode não ter alcançado
+                # todos os eventos recentes.
+                "sem_ordenacao": sem_ordenacao,
             },
         }
