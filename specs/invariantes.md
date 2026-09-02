@@ -239,11 +239,39 @@ não rastreável. Nenhum dos dois dá erro na hora.
 código de `backups.py` e das rotas que auditam) e
 `aviso mostra apelido e roteia por id`
 
+### INV-23 — Apuração não deduz o que não leu
+
+Uptime ilegível resulta em `reiniciou = None` e confiança `nenhuma` —
+nunca em "não reiniciou".
+
+*Por quê:* é a mesma família de "serviço travado", "câmera sem evento" e
+"não consegui ler a licença": apresentar falha de leitura como fato
+observado. Aqui o dano é maior, porque a conclusão decide para QUEM se
+abre chamado — provedor de VM ou provedor de rede.
+
+*Dano se quebrar:* verificado por injeção — o painel passou a afirmar que
+a máquina estava "de pé há 20697 dias" e mandou isso no Telegram.
+
+**Trava:** `apuracao distingue reboot de rede`
+
+### INV-24 — Apuração só lê
+
+O comando da apuração não altera estado no servidor: sem `rm`, sem
+`systemctl restart/stop/reboot`, sem `docker restart/stop/rm`, sem
+redirecionamento de escrita.
+
+*Por quê:* é um comando montado a partir de dados do incidente e rodado
+com sudo em servidor de produção, no pior momento possível — logo depois
+de uma queda.
+
+**Trava:** `apuracao distingue reboot de rede` (lista de formas que
+executam, mais a checagem positiva das fontes de leitura)
+
 ---
 
 ## Cobertura
 
-32 cenários em `backend/tests/verificar.py`. Rodam sem Postgres e sem
+44 cenários em `backend/tests/verificar.py`. Rodam sem Postgres e sem
 framework:
 
 ```bash

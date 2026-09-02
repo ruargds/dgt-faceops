@@ -62,7 +62,7 @@ def _gb(mb: float) -> str:
 class MonitorService:
     def __init__(
         self, metrics, stack, config=None, incidentes=None, limiares=None,
-        analise=None, notificacoes=None,
+        analise=None, notificacoes=None, apuracao=None,
     ) -> None:
         self.metrics = metrics
         self.stack = stack
@@ -74,6 +74,9 @@ class MonitorService:
         self.limiares = limiares
         self.analise = analise
         self.notificacoes = notificacoes
+        # Apura a causa quando o incidente FECHA — o único momento em que
+        # a máquina volta a poder ser perguntada.
+        self.apuracao = apuracao
         self._tarefa: asyncio.Task | None = None
         self._rodando = False
         # Último erro por host, para a tela não repetir a mesma queixa
@@ -195,7 +198,13 @@ class MonitorService:
         self._ultimo_ciclo = datetime.now(timezone.utc)
 
     async def _registrar_incidentes(
-        self, db, host, host_ok: bool, doentes: list[dict], reinicios: dict | None = None
+        self,
+        db,
+        host,
+        host_ok: bool,
+        doentes: list[dict],
+        reinicios: dict | None = None,
+        containers: dict | None = None,
     ) -> None:
         """
         Abre/fecha incidente a partir do que este ciclo já leu — sem SSH
@@ -211,6 +220,18 @@ class MonitorService:
         except Exception:
             log.exception("falha ao registrar incidente do host %s", host.id)
             return
+
+        # Apuração ANTES do aviso, e só quando a máquina está atendendo:
+        # é o que faz o aviso de retorno já sair com a causa, em vez de
+        # uma segunda mensagem depois dizendo o que caberia na primeira.
+        # Nunca levanta, e tem teto por passada.
+        if eventos and host_ok and self.apuracao is not None:
+            try:
+                await self.apuracao.apurar_fechados(
+                    db, host, eventos, containers=containers,
+                )
+            except Exception:
+                log.exception("falha ao apurar incidentes de %s", host.name)
 
         # Aviso externo é o último passo de propósito: se o Telegram
         # estiver fora, a amostra e o incidente já estão gravados. O
@@ -323,6 +344,11 @@ class MonitorService:
                 db, host, host_ok=True,
                 doentes=saude.get("servicos_doentes", []),
                 reinicios=saude.get("reinicios", {}),
+                # O mapa serviço->container: sem ele o `docker inspect` da
+                # apuração procuraria "findface-video-worker" em vez de
+                # "findface-multi-findface-video-worker-1", e falharia em
+                # silêncio. Mesma armadilha já corrigida na análise de log.
+                containers=saude.get("containers"),
             )
             await self._analisar_logs(db, host, containers=saude.get("containers"))
 

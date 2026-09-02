@@ -291,8 +291,16 @@ export const api = {
   // pelo ciclo do monitor.
   incidentesAbertos: (hostId) =>
     get(`/incidentes/abertos${hostId ? `?host_id=${hostId}` : ""}`),
-  incidentesRecentes: (dias = 3, hostId) =>
-    get(`/incidentes/recentes?dias=${dias}${hostId ? `&host_id=${hostId}` : ""}`),
+  incidentesRecentes: (dias = 3, hostId, servico) =>
+    get(
+      `/incidentes/recentes?dias=${dias}` +
+      (hostId ? `&host_id=${hostId}` : "") +
+      (servico ? `&servico=${encodeURIComponent(servico)}` : ""),
+    ),
+  // A apuração completa sai só quando alguém abre: a lista de 7 dias não
+  // carrega o log de cada queda junto.
+  apuracaoIncidente: (id) => get(`/incidentes/${id}/apuracao`),
+  apurarIncidente: (id) => post(`/incidentes/${id}/apurar`, {}),
 
   // Diagnóstico — reincidência, padrões de log e base de erros conhecidos.
   // Tudo leitura barata, menos `analisarLog`, que lê no servidor (por isso

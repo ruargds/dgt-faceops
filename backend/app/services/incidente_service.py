@@ -496,4 +496,10 @@ def _serializar(i: Incidente, aberto_ha_s: float | None) -> dict:
         "fim": i.fim.isoformat() if i.fim else None,
         "duracao_s": i.duracao_s if i.fim else aberto_ha_s,
         "aberto": i.fim is None,
+        # Só o resumo na listagem: os achados completos saem em
+        # `/incidentes/{id}/apuracao`, para uma tabela de 7 dias não
+        # carregar o log de cada queda junto.
+        "apuracao_veredito": (i.apuracao or {}).get("veredito") if i.apuracao else None,
+        "apuracao_confianca": (i.apuracao or {}).get("confianca") if i.apuracao else None,
+        "apurado": i.apuracao is not None,
     }

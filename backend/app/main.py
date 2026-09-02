@@ -47,6 +47,7 @@ from app.services.processos_service import ProcessosService
 from app.services.logs_service import LogManager
 from app.services.maintenance_service import MaintenanceService
 from app.services.metrics_service import MetricsService
+from app.services.apuracao_service import ApuracaoService
 from app.services.monitor_service import MonitorService
 from app.services.scheduler_service import SchedulerService
 from app.services.ssh_service import SSHService
@@ -102,6 +103,11 @@ COLUNAS_NOVAS = [
     # rótulo continua sendo o nome técnico, e nada muda de aparência
     # até alguém preencher.
     ("hosts", "alias", "VARCHAR(120) NOT NULL DEFAULT ''"),
+    # Apuração da causa no fechamento do incidente (02/09/2026). Entra
+    # NULA: incidente antigo fica sem apuração, e a tela oferece apurar
+    # sob demanda para os que ainda têm servidor de pé.
+    ("incidentes", "apuracao", "JSONB"),
+    ("incidentes", "apurado_em", "TIMESTAMPTZ"),
     ("notificacao_regras", "destino_id", "INTEGER"),
     ("notificacao_regras", "tipos",
      '''JSON NOT NULL DEFAULT '["servico_parado","host_sem_contato","retorno","metrica"]'::json'''),
@@ -350,10 +356,14 @@ async def iniciar() -> None:
     # Aviso por Telegram: um bot por cliente, mandando para o grupo
     # configurado. Só envio, sem laço de escuta — ver telegram_service.
     app.state.notificacoes = NotificacaoService(config)
+    # Apuração: quando o incidente FECHA, uma leitura no servidor para
+    # dizer o que causou — ou dizer que não achou. Ver apuracao_service.
+    app.state.apuracao = ApuracaoService(app.state.stack, config)
     app.state.monitor = MonitorService(
         app.state.metrics, app.state.stack, config,
         incidentes=app.state.incidentes, limiares=app.state.limiares,
         analise=app.state.analise, notificacoes=app.state.notificacoes,
+        apuracao=app.state.apuracao,
     )
     app.state.scheduler = SchedulerService(
         app.state.backups,

@@ -434,6 +434,25 @@ CATALOGO: list[ItemConfig] = [
                "Depois disso o texto do log é esvaziado, mas a linha do "
                "histórico permanece. O log é o que pesa; a linha, não.",
                minimo=0, maximo=3650),
+    ItemConfig("apuracao.ativa", "monitor",
+               "Apurar a causa quando o incidente fecha", "booleano",
+               True,
+               "Uma leitura no servidor no momento em que ele volta: se a "
+               "máquina reiniciou ou ficou ligada o tempo todo (a diferença "
+               "entre chamado de VM e chamado de rede), mais kernel, journal "
+               "e log do container. Um comando por incidente que fecha, no "
+               "máximo dois por passada."),
+    ItemConfig("apuracao.nivel", "monitor",
+               "Profundidade da apuração", "escolha",
+               "resumido",
+               "Resumido responde 'o que foi' em poucas linhas — é o que "
+               "cabe no aviso do celular. Completo guarda material de "
+               "investigação: systemd em falha, dmesg, estado das "
+               "interfaces, memória e disco, e mais linhas de journal e de "
+               "log. Completo lê mais do servidor e grava mais no banco; "
+               "vale quando se está investigando um caso, não em toda "
+               "queda de todo dia.",
+               opcoes=["resumido", "completo"]),
     ItemConfig("faxina.execucoes_dias", "faxina",
                "Guardar a linha das execuções de backup por (dias)", "numero",
                730,

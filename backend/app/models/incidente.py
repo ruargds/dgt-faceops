@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -61,3 +62,21 @@ class Incidente(Base):
     fim: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Carimbada no fechamento, para não recalcular em toda listagem.
     duracao_s: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # Apuração da causa, feita UMA vez quando o incidente fecha (ver
+    # `apuracao_service`). Mora aqui, e não em tabela própria, por dois
+    # motivos: é um-para-um com o incidente, e assim a retenção de
+    # incidentes já a recicla — nenhuma faxina nova.
+    #
+    # JSONB no Postgres, JSON simples em outro banco: o tipo do dialeto
+    # Postgres não compila no SQLite, e a decisão que interpreta esses
+    # dados precisa ser testável.
+    apuracao: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
+    # Nulo = nunca apurado. Diferente de apurado sem achar nada, que
+    # grava `apuracao` com veredito "não encontrei evidência" — a
+    # distinção existe para a tela não oferecer "apurar" de novo à toa.
+    apurado_em: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

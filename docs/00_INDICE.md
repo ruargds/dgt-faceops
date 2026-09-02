@@ -108,6 +108,11 @@
   e serviços receber, o formato da mensagem (o mesmo template do Zabbix, e
   por quê) e as travas contra virar spam.
 
+- **[30_APURACAO](30_APURACAO.md)** — o que causou a queda, apurado no
+  momento em que a máquina volta: se ela reiniciou ou ficou ligada o tempo
+  todo (a diferença entre chamado de VM e chamado de rede), com que custo
+  e por que "não encontrei" é uma resposta legítima.
+
 - **[29_AUDITORIA](29_AUDITORIA.md)** — busca e filtros da trilha, por que a
   busca varre o detalhe do registro e por que exportar tem de trazer
   exatamente o que está na tela.

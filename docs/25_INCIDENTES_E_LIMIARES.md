@@ -186,3 +186,10 @@ Roda sem Postgres e sem framework de teste, e cobre justamente o que
 | Faxina só apaga fechado | apagar incidente ainda em aberto |
 | Resumo do painel degrada sem quebrar | a tela inicial dar 500 por causa de uma consulta de backup |
 | Resumo não expõe backup indevido | trava a premissa de permissão do bloco `painel` |
+
+## E o que causou?
+
+A causa é apurada quando o incidente **fecha** — o único momento em que a
+máquina volta a poder ser perguntada. O resultado fica na própria linha do
+incidente (logo, some com ela na retenção) e entra no aviso de retorno.
+Ver [30_APURACAO](30_APURACAO.md).

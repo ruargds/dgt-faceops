@@ -224,6 +224,18 @@ def montar_mensagem(evento: dict, cliente: str = "") -> str:
         fora = _duracao(evento.get("duracao_s"))
         if fora:
             campos.append(_campo(CAMPO_DURACAO, "Duração", fora))
+
+        # A pergunta que o retorno sempre deixava no ar: "e o que foi?".
+        # A apuração roda no fechamento, então a resposta cabe nesta
+        # mesma mensagem — inclusive quando a resposta é "não achei".
+        apuracao = evento.get("apuracao") or {}
+        veredito = (apuracao.get("veredito") or "").strip()
+        if veredito:
+            campos.append(_campo(CAMPO_PROVAVEL, "Causa", _frase(veredito)))
+            primeiro = (apuracao.get("achados") or [{}])[0].get("texto", "")
+            if primeiro:
+                campos.append(_campo(CAMPO_SIGNIFICA, "Evidência", _frase(primeiro)))
+
         campos.append(_campo(CAMPO_HORARIO, "Horário",
                              _quando(datetime.now(timezone.utc))))
         return _juntar(cliente, campos)

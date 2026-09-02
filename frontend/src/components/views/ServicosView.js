@@ -37,7 +37,7 @@ import {
  * aqui seria um segundo lugar contando a mesma coisa, que divergiria.
  * O rodapé aponta para lá.
  */
-function HistoricoServico({ servico, dias, itens, onFechar }) {
+function HistoricoServico({ servico, dias, itens, onApuracao, onFechar }) {
   const fechadas = itens.filter((i) => !i.aberto);
   const totalFora = itens.reduce((acc, i) => acc + (i.duracao_s || 0), 0);
   const aberta = itens.find((i) => i.aberto);
@@ -99,6 +99,7 @@ function HistoricoServico({ servico, dias, itens, onFechar }) {
                       <th>{t("Voltou")}</th>
                       <th className="right">{t("Ficou fora")}</th>
                       <th>{t("O que foi")}</th>
+                      <th>{t("Causa apurada")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -121,6 +122,23 @@ function HistoricoServico({ servico, dias, itens, onFechar }) {
                             </div>
                           )}
                         </td>
+                        <td className="small">
+                          {/* Incidente aberto não tem causa apurada: a
+                              apuração só roda no fechamento, porque é
+                              quando a máquina volta a responder. */}
+                          {i.aberto ? (
+                            <span className="muted">{t("ainda aberto")}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="link-inline"
+                              onClick={() => onApuracao(i)}
+                              title={t("Ver o que foi lido no servidor")}
+                            >
+                              {i.apuracao_veredito || t("apurar…")}
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -132,6 +150,165 @@ function HistoricoServico({ servico, dias, itens, onFechar }) {
           <div className="small muted" style={{ marginTop: 12 }}>
             {t("Quem parou, subiu ou reiniciou este serviço pelo painel fica em Auditoria, com busca e filtro. Aqui só o que o monitor observou.")}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Cor da tarja pela confiança do veredito. "nenhuma" não é vermelho: não
+// achar evidência não é um erro, é um resultado — e pintar de vermelho
+// faria parecer que algo falhou.
+const COR_CONFIANCA = {
+  alta: ["var(--green-bg)", "var(--green-bd)", "var(--green-fg)"],
+  media: ["var(--amber-bg)", "var(--amber-bd)", "var(--amber-fg)"],
+  nenhuma: ["var(--bg-2)", "var(--border)", "var(--text-2)"],
+};
+
+/**
+ * O que causou aquela queda.
+ *
+ * A apuração roda sozinha quando o incidente fecha — é o único momento
+ * em que a máquina volta a poder ser perguntada. Este popup só mostra o
+ * que já foi apurado; o botão "apurar agora" existe para incidente
+ * antigo (anterior à função) ou para quando a apuração automática não
+ * conseguiu falar com o servidor.
+ */
+function ApuracaoIncidente({ incidente, onFechar }) {
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(true);
+  const [apurando, setApurando] = useState(false);
+
+  const buscar = useCallback(async () => {
+    setCarregando(true);
+    setErro("");
+    try {
+      setDados(await api.apuracaoIncidente(incidente.id));
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setCarregando(false);
+    }
+  }, [incidente.id]);
+
+  useEffect(() => {
+    buscar();
+  }, [buscar]);
+
+  async function apurarAgora() {
+    setApurando(true);
+    setErro("");
+    try {
+      const r = await api.apurarIncidente(incidente.id);
+      setDados({ ...dados, apuracao: r.apuracao });
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setApurando(false);
+    }
+  }
+
+  const a = dados && dados.apuracao;
+  const [fundo, borda, cor] = COR_CONFIANCA[(a && a.confianca) || "nenhuma"];
+
+  return (
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-title">{t("O que causou")}</div>
+            <div className="small muted mono">
+              {incidente.servico || t("máquina inteira")} ·{" "}
+              {formatData(incidente.inicio)}
+              {incidente.duracao_s ? ` · ${formatDuracao(incidente.duracao_s)} ${t("fora")}` : ""}
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onFechar}>{t("Fechar")}</button>
+        </div>
+
+        <div className="modal-body">
+          <Erro mensagem={erro} />
+
+          {carregando ? (
+            <Carregando texto={t("Buscando a apuração…")} />
+          ) : !a ? (
+            <Vazio titulo={t("Este incidente não foi apurado")}>
+              <div className="small muted" style={{ marginTop: 6, marginBottom: 12 }}>
+                {t("A apuração roda sozinha quando o incidente fecha. Este é anterior a isso, ou o servidor ainda não atendia naquele momento.")}
+              </div>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={apurarAgora}
+                disabled={apurando}
+              >
+                {apurando ? t("Lendo o servidor…") : t("Apurar agora")}
+              </button>
+            </Vazio>
+          ) : (
+            <>
+              <div
+                className="card card-tight"
+                style={{ background: fundo, borderColor: borda, marginBottom: 14 }}
+              >
+                <div style={{ color: cor, fontSize: 14, fontWeight: 600 }}>
+                  {a.veredito}
+                </div>
+                <div className="small muted" style={{ marginTop: 4 }}>
+                  {t("Confiança")}: {t(a.confianca)}
+                  {a.nivel && ` · ${t("nível")} ${a.nivel}`}
+                  {dados.apurado_em && ` · ${t("apurado em")} ${formatData(dados.apurado_em)}`}
+                </div>
+              </div>
+
+              {a.achados && a.achados.length > 0 && (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 150 }}>{t("Fonte")}</th>
+                        <th>{t("O que foi lido")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {a.achados.map((achado, i) => (
+                        <tr key={i}>
+                          <td className="small muted mono">{achado.fonte}</td>
+                          <td className="small mono" style={{ wordBreak: "break-word" }}>
+                            {achado.texto}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Dizer que cortou é o que separa "foi só isso" de "parei
+                  aqui" — sem o número, o fim da lista parece o fim da
+                  evidência. */}
+              {a.truncado > 0 && (
+                <div className="small muted" style={{ marginTop: 8 }}>
+                  {t("Mais")} {a.truncado} {t("linha(s) foram cortadas pelo limite de registro. Para guardar mais, mude a profundidade da apuração em Configurações → Monitoramento.")}
+                </div>
+              )}
+
+              <div className="small muted" style={{ marginTop: 12 }}>
+                {t("Leitura feita no servidor no momento em que ele voltou. O log completo continua na tela de Logs; aqui fica só o que aponta a causa.")}
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={apurarAgora}
+                  disabled={apurando}
+                  title={t("Ler o servidor de novo — útil se a apuração pegou pouca coisa")}
+                >
+                  {apurando ? t("Lendo o servidor…") : t("Apurar de novo")}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -157,6 +334,7 @@ export default function ServicosView({ alvo }) {
   const [verHistorico, setVerHistorico] = useState(null);
   const [parando, setParando] = useState(null);
   const [confirmarParada, setConfirmarParada] = useState(null);
+  const [verApuracao, setVerApuracao] = useState(null);
 
   const JANELA_DIAS = 7;
 
@@ -474,7 +652,15 @@ export default function ServicosView({ alvo }) {
           itens={historico.filter(
             (i) => i.tipo === "servico" && i.servico === verHistorico.servico,
           )}
+          onApuracao={setVerApuracao}
           onFechar={() => setVerHistorico(null)}
+        />
+      )}
+
+      {verApuracao && (
+        <ApuracaoIncidente
+          incidente={verApuracao}
+          onFechar={() => setVerApuracao(null)}
         />
       )}
 

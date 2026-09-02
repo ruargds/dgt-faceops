@@ -628,6 +628,199 @@ async def cenario_notificacao_espera_antes_de_avisar():
     assert len(NS.rotear([regra], destinos, volta)) == 1, "retorno não deveria esperar"
 
 
+async def cenario_apuracao_distingue_reboot_de_rede():
+    """
+    A conclusão que paga a apuração inteira, e a mais barata de obter.
+
+    Servidor sem comunicação tem duas explicações opostas: a máquina
+    reiniciou (chamado no provedor da VM) ou ficou ligada o tempo todo
+    (chamado no provedor de rede). Ler o uptime distingue as duas.
+
+    O cálculo usa `date +%s` e `/proc/uptime` de propósito: `uptime -s`
+    imprime hora LOCAL, e compará-la com a janela em UTC daria a conclusão
+    errada duas vezes por ano.
+    """
+    from datetime import timezone as tz
+
+    from app.services.apuracao_service import ApuracaoService
+
+    inicio = AGORA
+    fim = AGORA + timedelta(minutes=10)
+    ini_e = int(inicio.replace(tzinfo=tz.utc).timestamp())
+    fim_e = int(fim.replace(tzinfo=tz.utc).timestamp())
+
+    # 1) A máquina subiu DENTRO da janela: reiniciou.
+    reiniciou = ApuracaoService.interpretar(
+        {"tempo": f"{fim_e}\n120"},  # subiu 2 min antes de responder
+        "host", inicio, fim,
+    )
+    assert reiniciou["reiniciou"] is True, reiniciou
+    assert "reiniciou" in reiniciou["veredito"].lower(), reiniciou
+    assert reiniciou["confianca"] == "alta"
+
+    # 2) A máquina estava de pé há dias: NÃO reiniciou — foi o caminho
+    #    até ela. É a conclusão que mais economiza tempo de quem apura.
+    ficou = ApuracaoService.interpretar(
+        {"tempo": f"{fim_e}\n{86400 * 9}"},  # 9 dias de uptime
+        "host", inicio, fim,
+    )
+    assert ficou["reiniciou"] is False, ficou
+    assert "NÃO reiniciou" in ficou["veredito"], ficou
+    assert any("rede" in a["texto"] for a in ficou["achados"]), ficou
+
+    # 3) Sem leitura do uptime, "não sei" — nunca "não reiniciou". Deduzir
+    #    ausência de reboot a partir de leitura que falhou seria o mesmo
+    #    erro de "serviço travado" e "câmera sem evento".
+    sem = ApuracaoService.interpretar({"tempo": ""}, "host", inicio, fim)
+    assert sem["reiniciou"] is None, sem
+    assert sem["confianca"] == "nenhuma", sem
+    assert "não encontrei" in sem["veredito"].lower(), sem
+
+    # 4) Uptime absurdo não vira conclusão.
+    lixo = ApuracaoService.interpretar({"tempo": "isso nao e numero"}, "host", inicio, fim)
+    assert lixo["reiniciou"] is None, lixo
+
+    # A janela consultada tem folga: a causa acontece ANTES do painel ver
+    # a máquina responder.
+    from app.services.apuracao_service import FOLGA_ANTES_S, _comando
+
+    cmd = _comando(inicio, fim)
+    assert f"@{ini_e - FOLGA_ANTES_S}" in cmd, cmd
+    # E o comando não escreve nada no servidor. A lista é de formas que
+    # EXECUTAM a ação, não da palavra solta: `last -x reboot shutdown` LÊ
+    # o histórico de reinícios, e proibir a palavra proibiria a leitura
+    # mais útil da apuração.
+    for perigoso in ("rm ", "systemctl restart", "systemctl stop",
+                     "systemctl reboot", "docker restart", "docker stop",
+                     "docker rm", "kill ", "; reboot", "&& reboot",
+                     "shutdown -", "> /", "tee "):
+        assert perigoso not in cmd, f"apuração com comando que altera estado: {perigoso}"
+    # Positivo, para a trava não ser só uma lista de negativas: o comando
+    # é feito de leitura.
+    for leitura in ("date +%s", "/proc/uptime", "journalctl"):
+        assert leitura in cmd, f"apuração perdeu a fonte de leitura: {leitura}"
+
+
+async def cenario_apuracao_le_o_container_certo_e_aponta_oom():
+    """
+    Serviço do compose não é nome de container: o `docker inspect` da
+    apuração precisa de `findface-multi-...-1`, e a mesma armadilha já
+    tinha mordido a análise de log.
+
+    E OOM tem de vencer o código de saída: um container morto por falta
+    de memória também sai com código != 0, e dizer "saiu com erro 137"
+    manda a pessoa procurar bug onde o problema é memória.
+    """
+    from app.services.apuracao_service import ApuracaoService, _comando
+
+    cmd = _comando(AGORA, AGORA + timedelta(minutes=2),
+                   container="findface-multi-findface-video-worker-1")
+    assert "findface-multi-findface-video-worker-1" in cmd, cmd
+
+    # OOM ganha do exit code.
+    oom = ApuracaoService.interpretar(
+        {"tempo": "", "container": "137|true|2026-09-02T14:00:00Z|3"},
+        "servico", AGORA, AGORA + timedelta(minutes=2),
+    )
+    assert "memória" in oom["veredito"], oom
+    assert oom["confianca"] == "alta"
+    assert oom["achados"][0]["fonte"] == "docker", oom
+
+    # Sem OOM, o código de saída explica.
+    erro = ApuracaoService.interpretar(
+        {"tempo": "", "container": "1|false|2026-09-02T14:00:00Z|0"},
+        "servico", AGORA, AGORA + timedelta(minutes=2),
+    )
+    assert "código de erro 1" in erro["veredito"], erro
+    assert erro["confianca"] == "media"
+
+    # Saída limpa e nada no log: a resposta honesta, com o palpite certo.
+    limpo = ApuracaoService.interpretar(
+        {"tempo": "", "container": "0|false|2026-09-02T14:00:00Z|0"},
+        "servico", AGORA, AGORA + timedelta(minutes=2),
+    )
+    assert "não encontrei" in limpo["veredito"].lower(), limpo
+    assert any("manual" in a["texto"] for a in limpo["achados"]), limpo
+
+
+async def cenario_apuracao_respeita_o_nivel_e_os_tetos():
+    """
+    O nível completo existe para investigação; o resumido, para o dia a
+    dia. O que não pode acontecer é o completo virar padrão sem ninguém
+    escolher — ele lê mais do servidor e grava mais no banco, todo dia,
+    para sempre.
+    """
+    from app.services.apuracao_service import (
+        MAX_POR_CICLO, NIVEIS, NIVEL_PADRAO, TIMEOUT_S, _comando, limites,
+    )
+
+    assert NIVEL_PADRAO == "resumido", "o nível caro virou padrão"
+    assert NIVEIS["resumido"]["avancado"] is False
+    assert NIVEIS["completo"]["avancado"] is True
+    assert NIVEIS["completo"]["chars_total"] > NIVEIS["resumido"]["chars_total"]
+
+    # Valor desconhecido cai no padrão em vez de estourar.
+    assert limites("inventado") == NIVEIS[NIVEL_PADRAO]
+    assert limites("") == NIVEIS[NIVEL_PADRAO]
+    assert limites("COMPLETO") == NIVEIS["completo"], "o nível não aceita caixa alta"
+
+    resumido = _comando(AGORA, AGORA + timedelta(minutes=5))
+    completo = _comando(AGORA, AGORA + timedelta(minutes=5), nivel="completo")
+    # As fontes extras só existem no nível completo.
+    for extra in ("systemctl --failed", "dmesg", "ip -br link"):
+        assert extra not in resumido, f"'{extra}' no nível resumido"
+        assert extra in completo, f"'{extra}' faltando no nível completo"
+    assert len(completo) > len(resumido)
+
+    # Os tetos de custo continuam finitos — é o que separa isto de varrer
+    # log de produção por conta própria.
+    assert 0 < MAX_POR_CICLO <= 5, MAX_POR_CICLO
+    assert 0 < TIMEOUT_S <= 60, TIMEOUT_S
+
+    # E o corte é informado: sem o número, o fim da lista parece o fim da
+    # evidência.
+    from app.services.apuracao_service import ApuracaoService
+
+    muitas = "\n".join(f"linha de erro numero {i}" for i in range(200))
+    r = ApuracaoService.interpretar(
+        {"tempo": "", "sistema": muitas}, "host", AGORA, AGORA + timedelta(minutes=1),
+    )
+    assert r["truncado"] >= 0
+    assert len(r["achados"]) <= NIVEIS[NIVEL_PADRAO]["linhas_por_fonte"] + 3, r
+
+
+async def cenario_apuracao_entra_no_aviso_de_retorno():
+    """
+    "Voltou ao normal" sempre deixou a pergunta no ar: e o que foi? Como
+    a apuração roda no fechamento, a resposta cabe na MESMA mensagem —
+    uma segunda mensagem depois seria mais spam para dizer o que cabia na
+    primeira.
+    """
+    from app.services.notificacao_service import montar_mensagem
+
+    texto = montar_mensagem({
+        "tipo": "retorno", "host": "VM-APPSERVER-01", "papel": "appserver",
+        "servico": "", "duracao_s": 190,
+        "apuracao": {
+            "veredito": "A máquina NÃO reiniciou — ficou ligada durante toda a janela",
+            "confianca": "alta",
+            "achados": [{"fonte": "uptime", "texto": "o sistema já estava de pé há 9d"}],
+        },
+    }, cliente="PROCERGS")
+
+    assert "Causa:" in texto, texto
+    assert "NÃO reiniciou" in texto, texto
+    assert "Evidência:" in texto, texto
+    assert "9d" in texto, texto
+
+    # Sem apuração, o retorno continua exatamente como era — nada de
+    # "Causa: —", que ocuparia espaço para não dizer nada.
+    sem = montar_mensagem({
+        "tipo": "retorno", "host": "vm-x", "servico": "s", "duracao_s": 60,
+    })
+    assert "Causa" not in sem, sem
+
+
 async def cenario_parar_servico_tem_cerca_e_confirmacao():
     """
     Parar um container é diferente de reiniciar: reiniciar volta sozinho,
@@ -1867,6 +2060,10 @@ CENARIOS = [
     cenario_notificacao_roteia_para_os_destinos_certos,
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
+    cenario_apuracao_distingue_reboot_de_rede,
+    cenario_apuracao_le_o_container_certo_e_aponta_oom,
+    cenario_apuracao_respeita_o_nivel_e_os_tetos,
+    cenario_apuracao_entra_no_aviso_de_retorno,
     cenario_parar_servico_tem_cerca_e_confirmacao,
     cenario_historico_do_servico_nao_toca_no_servidor,
     cenario_faxina_nao_oferece_categoria_que_nao_age,
