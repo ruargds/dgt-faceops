@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,7 +33,14 @@ class AuditLog(Base):
     level: Mapped[str] = mapped_column(String(16), default="info", index=True)
     success: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    detail: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # JSONB no Postgres, JSON simples em qualquer outro banco. Não é
+    # concessão de produção: é o que permite a este modelo existir no
+    # SQLite dos testes, onde o tipo do dialeto Postgres não compila — e
+    # filtro de auditoria sem teste é filtro que ninguém garante. Mesma
+    # decisão de `hosts.servicos_conhecidos`.
+    detail: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), default=dict
+    )
 
 
 class TerminalSession(Base):

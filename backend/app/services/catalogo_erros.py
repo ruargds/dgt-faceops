@@ -157,7 +157,7 @@ CATALOGO: list[dict] = [
         "regex": re.compile(r"license (?:expired|invalid|limit|not found)|ntls|"
                             r"licen[cç]a|license server", re.I),
         "titulo": "Licença do FindFace / findface-ntls",
-        "causa": "Licença vencida, sem contato com o NTLS, ou limite de câmeras/faces "
+        "causa": "Licença vencida, sem comunicação com o NTLS, ou limite de câmeras/faces "
                  "atingido — o reconhecimento para sem o container cair, que é o que "
                  "torna esse caso difícil de perceber.",
         "acao": "No servidor do NTLS: `curl http://localhost:3185/v1/licenses.json -s | jq`. "

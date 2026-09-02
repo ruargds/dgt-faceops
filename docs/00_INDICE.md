@@ -104,8 +104,13 @@
   NtechLab). Inclui por que não há modelo de linguagem no meio.
 
 - **[28_AVISOS_TELEGRAM](28_AVISOS_TELEGRAM.md)** — um bot por cliente
-  mandando para o grupo de plantão: o que configurar, de quais servidores e
-  serviços receber, como a mensagem chega e as travas contra virar spam.
+  mandando para os destinos de plantão: o que configurar, de quais servidores
+  e serviços receber, o formato da mensagem (o mesmo template do Zabbix, e
+  por quê) e as travas contra virar spam.
+
+- **[29_AUDITORIA](29_AUDITORIA.md)** — busca e filtros da trilha, por que a
+  busca varre o detalhe do registro e por que exportar tem de trazer
+  exatamente o que está na tela.
 
 ### Segurança e acesso
 

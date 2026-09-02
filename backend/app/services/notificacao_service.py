@@ -46,7 +46,7 @@ TIPOS: list[dict] = [
     },
     {
         "chave": "host_sem_contato",
-        "rotulo": "Servidor sem contato",
+        "rotulo": "Servidor sem comunicação",
         "ajuda": "A máquina não respondeu ao coletor. Costuma ser rede ou VM "
                  "desligada — não o FindFace.",
         "icone": "⛔",
@@ -72,76 +72,210 @@ TIPOS_VALIDOS = frozenset(POR_TIPO)
 
 
 def _quando(dt: datetime) -> str:
-    return dt.astimezone().strftime("%d/%m %H:%M")
+    """
+    Com segundos, como no template do Zabbix: dois avisos no mesmo minuto
+    são indistinguíveis sem eles, e a ordem importa para reconstruir o que
+    aconteceu. Com a data, porque incidente atravessa o dia.
+    """
+    return dt.astimezone().strftime("%d/%m %H:%M:%S")
 
 
 def _duracao(segundos: float | None) -> str:
+    """
+    "4d 18h 50m 42s", no mesmo formato do Zabbix.
+
+    Da maior unidade não-zero até os segundos, sem omitir o meio: "12m 0s"
+    diz que a medição é exata, enquanto "12m" deixa a dúvida de estar
+    arredondado — e em janela de indisponibilidade essa dúvida importa.
+    """
     if not segundos or segundos < 0:
         return ""
     s = int(segundos)
-    if s < 60:
-        return f"{s}s"
-    m = s // 60
-    if m < 60:
-        return f"{m}min"
-    h = m // 60
-    if h < 24:
-        return f"{h}h{m % 60:02d}"
-    return f"{h // 24}d{h % 24}h"
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    partes = []
+    if d:
+        partes.append(f"{d}d")
+    if d or h:
+        partes.append(f"{h}h")
+    if d or h or m:
+        partes.append(f"{m}m")
+    partes.append(f"{s}s")
+    return " ".join(partes)
 
 
-def montar_mensagem(evento: dict) -> str:
+# ── A mensagem ─────────────────────────────────────────────────────────
+# O desenho é o do template de Telegram do Zabbix que a equipe já lê todo
+# dia — e é deliberado copiá-lo: quem está de plantão não devia ter de
+# aprender dois formatos para ler o mesmo grupo. Dele vêm três decisões
+# que parecem enfeite e não são:
+#
+# * `ícone - Rótulo: valor` — o ícone dá a varredura visual, o rótulo dá
+#   o significado. Só ícone obriga a decorar a legenda; só texto obriga a
+#   ler tudo.
+# * **linha em branco entre campos** — no cliente de Telegram as linhas
+#   ficam coladas, e sem o respiro a mensagem vira um parágrafo cinza.
+# * **ícone dobrado no cabeçalho de resolvido** (`✅✅`) — é o que deixa a
+#   boa notícia reconhecível na rolagem, sem ler.
+#
+# A PRIMEIRA linha é a assinatura, e não é enfeite nenhum: no mesmo grupo
+# caem avisos do Zabbix e do FaceOps, e o caminho de resolução é outro em
+# cada caso. O nome do cliente vem de `projeto.cliente` (Configurações →
+# Identidade do projeto) — o mesmo campo que já nomeia o painel, para não
+# haver dois lugares dizendo quem é o cliente.
+MARCA = "🎥 FaceOps"
+
+# Separador entre ícone e rótulo, como no template do Zabbix.
+SEP_CAMPO = " - "
+
+CAMPO_PROBLEMA = "⚠️"
+CAMPO_SIGNIFICA = "💬"
+CAMPO_PROVAVEL = "🔎"
+CAMPO_FAZER = "🛠"
+CAMPO_INICIO = "⏳"
+CAMPO_GRAVIDADE = "⚡"
+CAMPO_RESOLVIDO = "✅"
+CAMPO_DURACAO = "⏱"
+CAMPO_HORARIO = "🕐"
+CAMPO_DESTINO = "📨"
+CAMPO_AUTOR = "👤"
+
+GRAVIDADE = {"critico": "Crítico", "atencao": "Atenção"}
+
+# Papel do servidor em palavras, os mesmos rótulos da tela de Servidores.
+PAPEL = {
+    "appserver": "Aplicação",
+    "dbserver": "Banco de dados",
+    "extraction": "Extração / GPU",
+    "ftpserver": "FTP / arquivos",
+}
+
+# Teto de segurança. O Telegram corta em 4096 caracteres, e mensagem
+# cortada esconde justamente o fim — onde estão horário e gravidade.
+LIMITE_CARACTERES = 3500
+
+
+def _cabecalho(cliente: str) -> str:
+    cliente = (cliente or "").strip()
+    return f"{MARCA} · {cliente}" if cliente else MARCA
+
+
+def _faixa(icone: str, host: str, papel: str = "") -> str:
     """
-    Mensagem curta, legível no aviso do celular sem abrir o app.
+    Linha do servidor, com o ícone dos dois lados — como no Zabbix. O
+    papel entra entre parênteses quando conhecido: "vm-dbserver" já diz
+    para quem convive com os nomes, e não diz nada para quem não convive.
+    """
+    rotulo = PAPEL.get((papel or "").strip().lower(), "")
+    alvo = f"{host} ({rotulo})" if rotulo else host
+    return f"{icone} - {alvo} - {icone}"
 
-    Quatro linhas no máximo: o que, onde, por que (quando se sabe) e desde
-    quando. Mensagem longa no Telegram vira bloco cinza cortado — quem
-    está de plantão precisa decidir "levanto ou não" pela prévia.
+
+def _campo(icone: str, rotulo: str, valor: str) -> str:
+    return f"{icone}{SEP_CAMPO}{rotulo}: {valor}"
+
+
+def _frase(texto: str, limite: int = 240) -> str:
+    """
+    Uma frase, sem cortar palavra no meio.
+
+    A causa provável e a ação completas são longas e estão na tela; aqui
+    entra o suficiente para decidir se levanta da cama.
+    """
+    texto = " ".join((texto or "").split())
+    if not texto:
+        return ""
+    if len(texto) <= limite:
+        return texto
+    corte = texto[:limite]
+    espaco = corte.rfind(" ")
+    return (corte[:espaco] if espaco > 40 else corte).rstrip(" ,;.") + "…"
+
+
+def montar_mensagem(evento: dict, cliente: str = "") -> str:
+    """
+    A mensagem que chega no Telegram.
+
+    Campos rotulados em vez de texto corrido: quem recebe precisa achar
+    "o que fazer" sem ler o resto. Cada campo é opcional — evento sem
+    causa provável não ganha uma linha "Provável: —", que só ocuparia
+    espaço para não dizer nada.
+
+    Texto puro, sem Markdown: nome de container tem `_`, `-` e `.`, que
+    quebram o parser do Telegram e fariam a mensagem falhar justamente
+    durante um incidente. Sem endereço interno, também: IP de servidor
+    não vai para um grupo de mensagens.
     """
     tipo = evento.get("tipo", "servico_parado")
     host = evento.get("host") or "servidor"
+    papel = evento.get("papel") or ""
     servico = evento.get("servico") or ""
-    alvo = servico or "máquina inteira"
+    alvo = servico or "a máquina inteira"
     icone = (POR_TIPO.get(tipo) or {}).get("icone", "🟡")
 
+    campos: list[str] = []
+
     if tipo == "retorno":
-        linhas = [f"{icone} NORMALIZADO · {host}", f"{alvo} voltou"]
-        d = _duracao(evento.get("duracao_s"))
-        if d:
-            linhas.append(f"Ficou fora {d}")
-        return "\n".join(linhas)
+        # Ícone dobrado: é assim que a boa notícia se distingue na rolagem.
+        campos.append(_faixa(f"{CAMPO_RESOLVIDO}{CAMPO_RESOLVIDO}", host, papel))
+        campos.append(_campo(CAMPO_RESOLVIDO, "Resolvido",
+                             f"{alvo} voltou a funcionar"))
+        fora = _duracao(evento.get("duracao_s"))
+        if fora:
+            campos.append(_campo(CAMPO_DURACAO, "Duração", fora))
+        campos.append(_campo(CAMPO_HORARIO, "Horário",
+                             _quando(datetime.now(timezone.utc))))
+        return _juntar(cliente, campos)
+
+    campos.append(_faixa(icone, host, papel))
 
     if tipo == "host_sem_contato":
-        linhas = [f"{icone} SEM CONTATO · {host}", "A máquina não respondeu ao coletor"]
-        causa = (evento.get("causa_provavel") or "").strip()
-        if causa:
-            linhas.append(f"Provável: {causa.split('.')[0][:140]}")
-        inicio = evento.get("inicio")
-        if isinstance(inicio, datetime):
-            linhas.append(f"Desde {_quando(inicio)}")
-        return "\n".join(linhas)
+        problema = "o servidor não respondeu ao monitoramento"
+    elif tipo == "metrica":
+        problema = evento.get("texto") or "recurso acima do limite"
+    else:
+        problema = evento.get("texto") or f"{alvo} com problema"
+    campos.append(_campo(CAMPO_PROBLEMA, "Problema", _frase(problema)))
 
-    if tipo == "metrica":
-        linhas = [f"{icone} LIMITE · {host}", evento.get("texto") or "recurso acima do limite"]
-        acao = (evento.get("acao") or "").strip()
-        if acao:
-            linhas.append(acao.split(".")[0][:140])
-        return "\n".join(linhas)
+    # O que isso quer dizer na prática. É a linha que faltava: quem recebe
+    # o aviso não sabe o que é `findface-video-worker`, e sem ela a
+    # mensagem informa sem explicar.
+    significa = _frase(evento.get("significa") or "")
+    if significa:
+        campos.append(_campo(CAMPO_SIGNIFICA, "Significa", significa))
 
-    # servico_parado
-    grave = evento.get("nivel") == "critico"
-    rotulo = "PARADO" if grave else "ATENÇÃO"
-    linhas = [f"{icone} {rotulo} · {host}", evento.get("texto") or f"{alvo} com problema"]
+    provavel = _frase(evento.get("causa_provavel") or "")
+    if provavel:
+        campos.append(_campo(CAMPO_PROVAVEL, "Provável", provavel))
 
-    causa = (evento.get("causa_provavel") or "").strip()
-    if causa:
-        # Uma frase só: a causa provável completa é longa e está na tela.
-        linhas.append(f"Provável: {causa.split('.')[0][:140]}")
+    fazer = _frase(evento.get("acao") or "")
+    if fazer:
+        campos.append(_campo(CAMPO_FAZER, "Fazer", fazer))
 
     inicio = evento.get("inicio")
     if isinstance(inicio, datetime):
-        linhas.append(f"Desde {_quando(inicio)}")
-    return "\n".join(linhas)
+        desde = _duracao(evento.get("duracao_s"))
+        quanto = f" (há {desde})" if desde else ""
+        campos.append(_campo(CAMPO_INICIO, "Iniciado em",
+                             f"{_quando(inicio)}{quanto}"))
+
+    gravidade = GRAVIDADE.get(evento.get("nivel") or "")
+    if gravidade:
+        campos.append(_campo(CAMPO_GRAVIDADE, "Gravidade", gravidade))
+
+    return _juntar(cliente, campos)
+
+
+def _juntar(cliente: str, campos: list[str]) -> str:
+    """
+    Assinatura no topo e linha em branco entre os campos.
+
+    O respiro é o que separa uma mensagem legível de um parágrafo cinza no
+    celular — o template do Zabbix faz igual, e é por isso que aqueles
+    avisos se leem de relance.
+    """
+    return "\n\n".join([_cabecalho(cliente), *campos])[:LIMITE_CARACTERES]
 
 
 class NotificacaoService:
@@ -264,6 +398,9 @@ class NotificacaoService:
             return 0
 
         repetir_s = int(self._cfg("notificacao.repetir_apos_h", 0)) * 3600
+        # Reaproveita a identidade do projeto: quem já nomeou o cliente em
+        # Configurações não precisa nomear de novo aqui.
+        cliente = str(self._cfg("projeto.cliente", "") or "")
         enviados = 0
 
         for evento in eventos:
@@ -281,7 +418,7 @@ class NotificacaoService:
                 if await self._ja_enviado(db, chave, repetir_s):
                     continue
 
-                texto = montar_mensagem(evento)
+                texto = montar_mensagem(evento, cliente)
                 registro = NotificacaoEnvio(
                     chave=chave, texto=texto[:1000], destino=destino.nome[:120],
                 )
@@ -338,12 +475,24 @@ class NotificacaoService:
         agora = datetime.now(timezone.utc).timestamp()
         resultados = []
 
+        cliente = str(self._cfg("projeto.cliente", "") or "")
+        tipo_destino = {"grupo": "grupo", "individual": "conversa direta"}
+
         for destino in alvos:
-            texto = (
-                "✅ FaceOps conectado\n"
-                f"Destino: {destino.nome}\n"
-                f"Teste enviado por {usuario}"
-            )
+            # Mesmo cabeçalho do aviso de verdade: o teste tem de provar
+            # também que a mensagem chega no formato certo, e não só que o
+            # token funciona.
+            texto = _juntar(cliente, [
+                _faixa(f"{CAMPO_RESOLVIDO}{CAMPO_RESOLVIDO}", "Teste de envio"),
+                _campo(CAMPO_RESOLVIDO, "Comunicação",
+                       "o FaceOps consegue enviar para este destino"),
+                _campo(CAMPO_DESTINO, "Destino",
+                       f"{destino.nome} "
+                       f"({tipo_destino.get(destino.tipo, destino.tipo)})"),
+                _campo(CAMPO_AUTOR, "Enviado por", usuario),
+                _campo(CAMPO_HORARIO, "Horário",
+                       _quando(datetime.now(timezone.utc))),
+            ])
             registro = NotificacaoEnvio(
                 chave=f"teste:{destino.id}:{agora}", texto=texto,
                 destino=destino.nome[:120],

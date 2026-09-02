@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
 import { t } from "../../i18n";
 import { Carregando, Erro, Vazio } from "../Comuns";
+import { MARCA_PADRAO } from "../../marca";
+import { useSessao } from "../../usePermissions";
 import { IconAlerta, IconAtualizar, IconLixeira, IconMais, IconOk } from "../Icons";
 
 /**
@@ -46,6 +48,13 @@ const ESPERAS = [
 ];
 
 export default function NotificacoesView() {
+
+  // Mesma assinatura que o backend monta, para a prévia não mentir sobre
+  // o que vai chegar. O cliente vem da marca já carregada na sessão —
+  // `projeto.cliente`, o mesmo campo do título do painel.
+  const { marca } = useSessao();
+  const cliente = ((marca || MARCA_PADRAO).cliente || "").trim();
+  const assinatura = cliente ? `🎥 FaceOps · ${cliente}` : "🎥 FaceOps";
   const [conta, setConta] = useState(null);
   const [destinos, setDestinos] = useState([]);
   const [regras, setRegras] = useState([]);
@@ -519,24 +528,67 @@ export default function NotificacoesView() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="section-title" style={{ marginBottom: 4 }}>{t("Como a mensagem chega")}</div>
         <div className="small muted" style={{ marginBottom: 10 }}>
-          {t("Curta de propósito: quem está de plantão decide pela prévia do celular, sem abrir o app. Um formato por tipo, para distinguir no primeiro caractere.")}
+          {t("Mesmo desenho do template do Zabbix que a equipe já lê: um ícone e um rótulo por campo, linha em branco entre eles e o servidor entre ícones no cabeçalho — dobrado quando é boa notícia. A primeira linha assina a origem, porque no mesmo grupo caem avisos de mais de uma ferramenta e o caminho de resolução é diferente em cada caso.")}
+        </div>
+        <div className="small muted" style={{ marginBottom: 10 }}>
+          {t("O nome do cliente vem de Configurações → Identidade do projeto — o mesmo campo que já nomeia o painel.")}
+          {" "}
+          {cliente
+            ? <><strong>{t("Agora está como")}:</strong> {assinatura}</>
+            : <em>{t("Ainda não preenchido — a assinatura sai só como FaceOps.")}</em>}
         </div>
         <div className="row row-2">
           {[
-            `🔴 PARADO · vm-appserver
-findface-video-worker com problema
-Provável: reiniciou 7x nos últimos 30 min
-Desde 02/09 14:32`,
-            `🟢 NORMALIZADO · vm-appserver
-findface-video-worker voltou
-Ficou fora 6min`,
-            `⛔ SEM CONTATO · vm-dbserver
-A máquina não respondeu ao coletor
-Provável: rede fora, VM desligada ou parada
-Desde 02/09 03:10`,
-            `🟡 LIMITE · vm-appserver
-disco / em 94% — só 6 GB livres
-Em Manutenção, use Diagnosticar para ver o que ocupa`,
+            `${assinatura}
+
+🔴 - vm-appserver (Aplicação) - 🔴
+
+⚠️ - Problema: o serviço findface-video-worker parou de funcionar
+
+💬 - Significa: É ele que processa o vídeo das câmeras. Enquanto estiver fora, este servidor não reconhece ninguém.
+
+🔎 - Provável: reiniciou 7x nos últimos 30 min
+
+🛠 - Fazer: Em Serviços, abra o log deste container.
+
+⏳ - Iniciado em: 02/09 14:32:07 (há 6m 20s)
+
+⚡ - Gravidade: Crítico`,
+            `${assinatura}
+
+✅✅ - vm-appserver (Aplicação) - ✅✅
+
+✅ - Resolvido: findface-video-worker voltou a funcionar
+
+⏱ - Duração: 6m 20s
+
+🕐 - Horário: 02/09 14:38:27`,
+            `${assinatura}
+
+⛔ - vm-dbserver (Banco de dados) - ⛔
+
+⚠️ - Problema: o servidor não respondeu ao monitoramento
+
+💬 - Significa: Nada pode ser verificado nesta máquina agora — inclusive o FindFace, que pode estar rodando normal. Falha de rede dá este mesmo aviso.
+
+🔎 - Provável: rede fora, VM desligada ou parada
+
+🛠 - Fazer: Confira se a VM está ligada e a rede de pé antes de investigar o FindFace.
+
+⏳ - Iniciado em: 02/09 03:10:44 (há 12m 8s)
+
+⚡ - Gravidade: Crítico`,
+            `${assinatura}
+
+🟡 - vm-ftpserver (FTP / arquivos) - 🟡
+
+⚠️ - Problema: CPU sobrecarregada — 1.16 processo por núcleo (o normal é abaixo de 1,00)
+
+💬 - Significa: Há processo esperando a vez de usar o processador. Nada parou, mas tudo responde mais devagar, inclusive o reconhecimento.
+
+🛠 - Fazer: Em Recursos, veja quais containers estão consumindo mais CPU.
+
+⚡ - Gravidade: Atenção`,
           ].map((exemplo, i) => (
             <pre
               key={i}

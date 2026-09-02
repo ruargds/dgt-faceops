@@ -42,8 +42,8 @@ Regra de fechamento: se o mesmo serviço cair de novo nove segundos depois,
 é um **incidente novo**, com início próprio — juntar os dois mentiria
 sobre quanto tempo ficou fora.
 
-Host inteiro sem contato (`a.erro`) também vira incidente, `tipo="host"`.
-E quando o host está sem contato os incidentes de **serviço dele ficam
+Host inteiro sem comunicação (`a.erro`) também vira incidente, `tipo="host"`.
+E quando o host está sem comunicação os incidentes de **serviço dele ficam
 como estão**: sem alcançar a máquina não se sabe nada dos containers, e
 fechá-los ali registraria uma recuperação que ninguém observou — o
 serviço "voltando" no exato instante em que a máquina caiu.

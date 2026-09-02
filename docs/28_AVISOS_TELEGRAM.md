@@ -74,7 +74,11 @@ o dele. Cada uma manda para o seu destino.
 | Tipo | Quando |
 |---|---|
 | 🔴 **Serviço parado** | container fora do ar, unhealthy, morto por OOM ou reiniciando em laço |
-| ⛔ **Servidor sem contato** | a máquina não respondeu ao coletor — costuma ser rede, não FindFace |
+| ⛔ **Servidor sem comunicação** | a máquina não respondeu ao coletor — costuma ser rede, não FindFace |
+
+A chave interna do tipo continua `host_sem_contato`: é ela que está
+gravada nas regras já criadas, e renomeá-la faria toda regra existente
+parar de casar. O que mudou é o texto que se lê.
 | 🟢 **Voltou ao normal** | o que estava fora voltou |
 | 🟡 **Limite de recurso** | disco, memória, swap, carga, VRAM ou temperatura da GPU acima do limiar |
 
@@ -88,37 +92,126 @@ O **retorno ao normal nunca espera**: boa notícia não tem por que atrasar.
 
 ## Como a mensagem chega
 
-Curta de propósito — quem está de plantão decide pela prévia do celular.
-Um formato por tipo, para distinguir no primeiro caractere:
+O formato é **deliberadamente o mesmo do template de Telegram do
+Zabbix** que a equipe já lê todo dia. Copiar não é falta de ideia: quem
+está de plantão não devia ter de aprender dois formatos para ler o mesmo
+grupo, e três detalhes daquele template resolvem problemas reais:
+
+| Detalhe | Por que existe |
+|---|---|
+| `ícone - Rótulo: valor` | o ícone dá a varredura visual, o rótulo dá o significado. Só ícone obriga a decorar legenda; só texto obriga a ler tudo |
+| linha em branco entre campos | no cliente de Telegram as linhas ficam coladas; sem o respiro a mensagem vira um parágrafo cinza |
+| ícone dobrado no resolvido (`✅✅`) | deixa a boa notícia reconhecível na rolagem, sem ler |
+| segundos no horário e na duração | dois avisos no mesmo minuto são indistinguíveis sem eles, e "12m 0s" afirma o que "12min" deixa em dúvida |
+
+### A primeira linha assina a origem
 
 ```
-🔴 PARADO · vm-appserver
-findface-video-worker com problema
-Provável: reiniciou 7x nos últimos 30 min
-Desde 02/09 14:32
-
-🟢 NORMALIZADO · vm-appserver
-findface-video-worker voltou
-Ficou fora 6min
-
-⛔ SEM CONTATO · vm-dbserver
-A máquina não respondeu ao coletor
-Provável: rede fora, VM desligada ou parada
-Desde 02/09 03:10
-
-🟡 LIMITE · vm-appserver
-disco / em 94% — só 6 GB livres
-Em Manutenção, use Diagnosticar para ver o que ocupa
+🎥 FaceOps · DGT
 ```
 
-O nome do servidor na mensagem é o **apelido**, quando houver — quem
-recebe o aviso quer saber onde é, não como a VM se chama. Sem apelido, sai
-o nome técnico.
+Não é enfeite. **No mesmo grupo caem avisos do Zabbix e do FaceOps**, e o
+caminho de resolução é diferente em cada caso — quem lê precisa saber a
+origem antes de decidir o que fazer. O nome do cliente vem de
+`projeto.cliente` (Configurações → Identidade do projeto): o **mesmo
+campo** que já nomeia o painel e a aba do navegador, para não haver dois
+lugares dizendo quem é o cliente. Vazio, sai só `🎥 FaceOps`.
+
+### Serviço parado
+
+```
+🎥 FaceOps · DGT
+
+🔴 - vm-appserver (Aplicação) - 🔴
+
+⚠️ - Problema: o serviço findface-video-worker parou de funcionar
+
+💬 - Significa: É ele que processa o vídeo das câmeras. Enquanto estiver
+     fora, este servidor não reconhece ninguém.
+
+🔎 - Provável: reiniciou 7x nos últimos 30 min
+
+🛠 - Fazer: Em Serviços, abra o log deste container.
+
+⏳ - Iniciado em: 02/09 14:32:07 (há 6m 20s)
+
+⚡ - Gravidade: Crítico
+```
+
+### Voltou ao normal
+
+```
+🎥 FaceOps · DGT
+
+✅✅ - vm-appserver (Aplicação) - ✅✅
+
+✅ - Resolvido: findface-video-worker voltou a funcionar
+
+⏱ - Duração: 6m 20s
+
+🕐 - Horário: 02/09 14:38:27
+```
+
+### A linha "Significa" — o que faltava
+
+`findface-video-worker` não significa nada para quem recebe o aviso às 3h
+da manhã. "Serviço parado" informava sem explicar: não dizia **o que
+deixa de acontecer**, que é a única coisa que decide se alguém levanta da
+cama.
+
+A fonte é o catálogo do manual da NtechLab que
+`internos_service.COMPONENTES` já mantinha para sondar as portas — cada
+componente ganhou um campo `impacto`, e `descrever()` resolve o nome:
+
+| O que chega | O que a linha diz |
+|---|---|
+| `findface-video-worker` | processa o vídeo das câmeras; sem ele o servidor não reconhece ninguém |
+| `findface-ntls` | serviço de licença; em algumas horas o reconhecimento inteiro para |
+| `findface-multi-postgresql-1` | banco principal; sem ele não há login, consulta nem gravação |
+| `findface-multi-mongodb-1` | guarda as imagens; passagens continuam sendo detectadas, sem foto |
+
+**Um catálogo só, não dois.** Uma segunda lista de nomes amigáveis noutro
+módulo divergiria da primeira na próxima versão do FindFace. O nome do
+container também não é o nome do serviço no compose
+(`findface-multi-postgresql-1` contra `postgresql`), então a busca aceita
+as duas formas, do mais específico para o mais genérico. Serviço
+desconhecido **não** ganha descrição inventada: a linha simplesmente não
+aparece.
+
+### O apelido do servidor vai no aviso
+
+Quando o servidor tem apelido (Servidores → Identificação), é ele que
+aparece no cabeçalho — em todos os quatro tipos de evento. Quem recebe o
+aviso quer saber **onde é**, não como a VM se chama. O papel entra entre
+parênteses, porque "vm-dbserver" só diz algo para quem convive com os
+nomes.
+
+A regra continua casando por `host_id`, nunca por nome: casar por nome
+faria toda regra parar de valer no dia em que alguém trocasse o apelido.
+Há teste para isso.
+
+### Alertas de recurso, em vez de jargão
+
+Cada limite passou a dizer o número **e** o que ele significa:
+
+| Antes | Agora |
+|---|---|
+| `carga em 1.16 por núcleo` | `CPU sobrecarregada — 1.16 processo por núcleo (o normal é abaixo de 1,00)` + "há processo esperando a vez de usar o processador; nada parou, mas tudo responde mais devagar" |
+| `memória em 93%` | `memória em 93% — 14.9 GB de 16 GB em uso` + "o sistema começa a encerrar serviços para liberar memória" |
+| `swap em 60%` | `swap em 60% — a máquina está usando disco como se fosse memória` + "disco é muito mais lento; é sinal de VM pequena para a carga" |
+| `3 serviço(s) com problema` | um aviso por serviço, com o que aconteceu (`parou com erro`, `de pé mas respondendo com falha`, `reiniciando em laço`, `encerrado por falta de memória`) |
+
+"com problema" era verdadeiro e inútil: dava a mesma frase para container
+morto e para container de pé respondendo errado — dois problemas com
+urgência e solução diferentes.
+
+O campo `significa` **também aparece no Monitor**, acima da ação. Dado que
+só o Telegram vê seria dado que a tela deixou de explicar.
 
 Texto puro, sem Markdown: nome de container tem `_`, `-` e `.`, que
-quebram o parser do Telegram e fariam a mensagem falhar justamente durante
-um incidente. E **sem endereço interno** — IP de servidor não vai para um
-grupo de mensagens.
+quebram o parser do Telegram e fariam a mensagem falhar justamente
+durante um incidente. E **sem endereço interno** — IP de servidor não vai
+para um grupo de mensagens.
 
 ## Contra virar spam
 
@@ -190,7 +283,9 @@ duas regras, e confere que cada evento chegou em quem devia:
 | roteia para os destinos certos | regras somam em vez de se anular; destino desligado fica fora |
 | filtra por tipo e gravidade | tipo não marcado nunca passa, nem sendo crítico |
 | espera antes de avisar | piscada não avisa; retorno não espera |
-| mensagem curta e sem IP | ≤4 linhas, formato por tipo, sem endereço interno |
+| mensagem tem campos e assina a origem | assinatura no topo, campo por linha com respiro, sem endereço interno |
+| duração no formato do Zabbix | `4d 18h 50m 42s`; zero no meio não desaparece |
+| aviso explica o serviço | catálogo do manual alimenta a linha "Significa"; nome de container casa com nome de serviço |
 | não repete o mesmo evento | dedup por evento **e** destino |
 | manda para dois destinos | um evento, dois envios rastreados |
 | nunca derruba o ciclo | Telegram fora do ar registra falha e segue |

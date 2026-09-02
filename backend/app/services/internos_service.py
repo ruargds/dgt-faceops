@@ -45,75 +45,185 @@ COMPONENTES = [
         "nome": "findface-extraction-api",
         "porta": 18666,
         "papel": "Detecta objeto na imagem e extrai o vetor de características",
+        "impacto":
+            "Nenhuma foto nova é analisada: as câmeras gravam, mas ninguém "
+            "é identificado.",
         "camada": "núcleo",
     },
     {
         "nome": "findface-sf-api",
         "porta": 18411,
         "papel": "API interna de detecção e reconhecimento",
+        "impacto":
+            "As buscas e comparações de rosto param de responder.",
         "camada": "núcleo",
     },
     {
         "nome": "findface-video-manager",
         "porta": 18810,
         "papel": "Distribui o trabalho de vídeo e configura os detectores",
+        "impacto":
+            "Os processadores de vídeo ficam sem instrução e param de "
+            "receber câmeras.",
         "camada": "vídeo",
     },
     {
         "nome": "findface-video-worker",
         "porta": 18999,
         "papel": "Reconhece objeto no vídeo e detecta vivacidade",
+        "impacto":
+            "É ele que processa o vídeo das câmeras. Enquanto estiver fora, "
+            "este servidor não reconhece ninguém.",
         "camada": "vídeo",
     },
     {
         "nome": "findface-upload",
         "porta": 3333,
         "papel": "Armazena as imagens originais e normalizadas",
+        "impacto":
+            "As passagens continuam sendo detectadas, mas as fotos delas "
+            "deixam de ser guardadas.",
         "camada": "mídia",
     },
     {
         "nome": "findface-ntls",
         "porta": 3185,
         "papel": "Servidor de licença",
+        "impacto":
+            "É o serviço de licença. Sem ele, em algumas horas o "
+            "reconhecimento inteiro para de funcionar.",
         "camada": "licença",
     },
     {
         "nome": "findface-facerouter",
         "porta": 18820,
         "papel": "Define o que fazer com o objeto detectado",
+        "impacto":
+            "O rosto é reconhecido, mas nada acontece depois: sem alerta e "
+            "sem registro de evento.",
         "camada": "núcleo",
     },
     {
         "nome": "findface-deduplicator",
         "porta": 18310,
         "papel": "Compara vetores para deduplicação",
+        "impacto":
+            "A mesma pessoa passa a gerar cadastros repetidos.",
         "camada": "núcleo",
     },
     {
         "nome": "findface-liveness-api",
         "porta": 18301,
         "papel": "Detecção de vivacidade como serviço",
+        "impacto":
+            "Para de distinguir pessoa real de foto na frente da câmera.",
         "camada": "núcleo",
     },
     {
         "nome": "findface-video-storage",
         "porta": 18611,
         "papel": "Gerencia os trechos de vídeo gravados",
+        "impacto":
+            "Os trechos de vídeo gravados deixam de ser guardados.",
         "camada": "gravação",
     },
     {
         "nome": "findface-video-streamer",
         "porta": 9000,
         "papel": "Entrega vídeo para visualização e download",
+        "impacto":
+            "Ninguém consegue assistir nem baixar vídeo pela tela do "
+            "FindFace.",
         "camada": "gravação",
     },
     {
         "nome": "findface-tarantool-server",
         "porta": 32001,
         "papel": "Banco dos vetores faciais",
+        "impacto":
+            "É o banco dos rostos. Sem ele nenhuma comparação acontece: as "
+            "câmeras gravam, mas ninguém é identificado.",
         "camada": "dados",
     },
 ]
+
+# Peças de infraestrutura do compose. Ficam FORA de `COMPONENTES` de
+# propósito: a lista acima é sondada por porta HTTP, e banco de dados não
+# responde HTTP — entrar ali faria a sonda tentar falar HTTP com o
+# Postgres em toda passada. Aqui só existe descrição, para o aviso poder
+# dizer o que para de funcionar quando um deles cai.
+INFRAESTRUTURA = {
+    "findface-multi-legacy": (
+        "Interface web e API do FindFace",
+        "Ninguém consegue abrir o FindFace nem consultar eventos. As "
+        "câmeras continuam sendo processadas normalmente.",
+    ),
+    "postgresql": (
+        "Banco de dados principal",
+        "O FindFace para por inteiro: sem banco não há login, consulta "
+        "nem gravação de evento.",
+    ),
+    "mongodb": (
+        "Guarda as imagens dos eventos",
+        "As passagens continuam sendo detectadas, mas a foto de cada uma "
+        "deixa de ser salva.",
+    ),
+    "pgbouncer": (
+        "Intermediário das conexões com o banco",
+        "O FindFace perde o acesso ao banco mesmo com o Postgres de pé.",
+    ),
+    "etcd": (
+        "Coordena a configuração do vídeo entre os servidores",
+        "Os processadores de vídeo perdem a configuração das câmeras e "
+        "param de receber trabalho.",
+    ),
+    "memcached": (
+        "Cache de consultas",
+        "Só perda de velocidade nas telas — nada deixa de funcionar.",
+    ),
+    "findface-counter": (
+        "Conta pessoas nas áreas configuradas",
+        "As contagens param. O reconhecimento continua normal.",
+    ),
+    "nginx": (
+        "Porta de entrada das requisições web",
+        "Nada fica acessível pelo navegador, mesmo com todo o resto de pé.",
+    ),
+}
+
+
+def descrever(servico: str) -> tuple[str, str]:
+    """
+    O que este serviço faz, e o que para de funcionar sem ele.
+
+    Existe porque `findface-video-worker` não significa nada para quem
+    recebe o aviso às 3h. A fonte é o catálogo do manual que já estava
+    aqui — um segundo catálogo de nomes amigáveis em outro módulo
+    divergiria do primeiro na primeira versão nova do FindFace.
+
+    O nome do container não é igual ao do serviço no compose
+    (`findface-multi-postgresql-1` contra `postgresql`), então a busca
+    aceita o nome do catálogo como parte do nome recebido — do mais
+    específico para o mais genérico, senão "postgresql" casaria antes de
+    um nome mais preciso.
+    """
+    if not servico:
+        return ("", "")
+    alvo = servico.strip().lower()
+
+    tabela: dict[str, tuple[str, str]] = {
+        c["nome"]: (c.get("papel", ""), c.get("impacto", ""))
+        for c in COMPONENTES
+    }
+    tabela.update(INFRAESTRUTURA)
+
+    if alvo in tabela:
+        return tabela[alvo]
+    for chave in sorted(tabela, key=len, reverse=True):
+        if chave in alvo:
+            return tabela[chave]
+    return ("", "")
+
 
 # Caminhos de status tentados em ordem. `/health` e `/status` cobrem os
 # serviços em Go do núcleo; a raiz cobre o resto e serve como prova de vida.

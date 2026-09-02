@@ -19,6 +19,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, select
 
 from app.models.incidente import Incidente
+# O que cada serviço faz e o que para sem ele: catálogo único, o mesmo
+# que a sonda de componentes usa. Dois catálogos de nome amigável
+# divergiriam na primeira versão nova do FindFace.
+from app.services.internos_service import descrever
 
 log = logging.getLogger("faceops.incidentes")
 
@@ -58,6 +62,41 @@ def _causa_provavel(d: dict) -> str:
     if d.get("estado") and d["estado"] != "running":
         return "container parado — verifique se foi manual ou por falta de memória/disco."
     return ""
+
+
+def _texto_doente(nome: str, d: dict) -> str:
+    """
+    O que aconteceu, em palavras que significam algo para quem não opera
+    o FindFace todo dia.
+
+    "com problema" era verdadeiro e inútil: dava a mesma frase para
+    container morto e para container de pé respondendo errado — dois
+    problemas com urgência e solução diferentes.
+    """
+    if d.get("motivo") == "loop":
+        return f"o serviço {nome} está reiniciando sozinho, em laço"
+    if d.get("oom_killed"):
+        return f"o serviço {nome} foi encerrado por falta de memória"
+    if d.get("saude") == "unhealthy":
+        return f"o serviço {nome} está de pé, mas respondendo com falha"
+    if (d.get("exit_code") or 0) != 0:
+        return f"o serviço {nome} parou com erro"
+    if d.get("estado") and d["estado"] != "running":
+        return f"o serviço {nome} está parado"
+    return f"o serviço {nome} não está funcionando como deveria"
+
+
+def _acao_sugerida(tipo: str) -> str:
+    """
+    O primeiro passo, para quem recebe o aviso e nunca abriu este
+    sistema. Curto de propósito: o detalhe está na tela, e aviso que
+    vira manual ninguém lê no celular.
+    """
+    if tipo == "host":
+        return ("Confira se a VM está ligada e a rede de pé antes de "
+                "investigar o FindFace.")
+    return ("Em Serviços, abra o log deste container. 'Reiniciar' resolve "
+            "a maioria dos casos sem afetar o resto.")
 
 
 class IncidenteService:
@@ -157,8 +196,16 @@ class IncidenteService:
         if not host_ok:
             atuais[("host", "")] = {
                 "nivel": "critico",
-                "texto": f"sem contato com {host.rotulo}",
+                # Sem o nome do host no texto: quem exibe já diz de qual
+                # servidor se trata, e repetir dava "vm-x — sem comunicação
+                # com vm-x" na tela e no aviso.
+                "texto": "o servidor não respondeu ao monitoramento",
                 "causa": "rede fora, VM desligada ou parada — confira o provedor antes de investigar o painel.",
+                "significa": (
+                    "Nada pode ser verificado nesta máquina agora — "
+                    "inclusive o FindFace, que pode estar rodando normal. "
+                    "Falha de rede dá este mesmo aviso."
+                ),
             }
         else:
             # Laço de reinício primeiro: se o mesmo serviço também estiver
@@ -166,8 +213,9 @@ class IncidenteService:
             for d in self._flapping(host.id, reinicios or {}, agora, limites):
                 atuais[("servico", d["servico"])] = {
                     "nivel": "atencao",
-                    "texto": f"{d['servico']} reiniciando em laço",
+                    "texto": _texto_doente(d["servico"], d),
                     "causa": _causa_provavel(d),
+                    "significa": descrever(d["servico"])[1],
                 }
             for d in doentes or []:
                 nome = d.get("servico") or ""
@@ -176,8 +224,11 @@ class IncidenteService:
                 grave = bool(d.get("oom_killed")) or (d.get("exit_code") or 0) != 0
                 atuais[("servico", nome)] = {
                     "nivel": "critico" if grave else "atencao",
-                    "texto": f"{nome} com problema",
+                    "texto": _texto_doente(nome, d),
                     "causa": _causa_provavel(d),
+                    # O que para de funcionar sem ele, do catálogo do
+                    # manual que `internos_service` já mantém.
+                    "significa": descrever(nome)[1],
                 }
 
         eventos: list[dict] = []
@@ -186,7 +237,7 @@ class IncidenteService:
         for chave, incidente in abertos.items():
             if chave in atuais:
                 continue
-            # Máquina sem contato: NÃO sabemos nada dos serviços dela. Fechar
+            # Máquina sem comunicação: NÃO sabemos nada dos serviços dela. Fechar
             # aqui registraria uma recuperação que ninguém observou — o
             # serviço "voltou" no exato instante em que o host caiu.
             if not host_ok and chave[0] == "servico":
@@ -200,6 +251,7 @@ class IncidenteService:
                 "tipo": "retorno",
                 "host_id": host.id,
                 "host": host.rotulo,
+                "papel": host.role,
                 "servico": incidente.servico,
                 "nivel": incidente.nivel,
                 "duracao_s": incidente.duracao_s,
@@ -233,15 +285,18 @@ class IncidenteService:
                 idade = max(0.0, (agora - inicio).total_seconds())
 
             eventos.append({
-                # "host" inteiro sem contato é outro tipo de aviso que
+                # "host" inteiro sem comunicação é outro tipo de aviso que
                 # "serviço parado": a causa e quem precisa agir são outros.
                 "tipo": "host_sem_contato" if tipo == "host" else "servico_parado",
                 "host_id": host.id,
                 "host": host.rotulo,
+                "papel": host.role,
                 "servico": servico,
                 "nivel": info["nivel"],
                 "texto": info["texto"],
                 "causa_provavel": info["causa"],
+                "significa": info.get("significa", ""),
+                "acao": _acao_sugerida(tipo),
                 "inicio": inicio,
                 "duracao_s": idade,
                 "chave": f"ini:{host.id}:{tipo}:{servico}:{inicio.isoformat()}",

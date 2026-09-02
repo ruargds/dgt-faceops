@@ -43,48 +43,184 @@ export default function AuditoriaView() {
   );
 }
 
+// Períodos oferecidos. Não é campo de data livre de propósito: a
+// pergunta real é quase sempre "hoje", "esta semana" ou "este mês", e
+// dois calendários para responder isso é atrito sem retorno.
+const PERIODOS = [
+  { dias: 1, rotulo: "24 horas" },
+  { dias: 7, rotulo: "7 dias" },
+  { dias: 30, rotulo: "30 dias" },
+  { dias: 90, rotulo: "90 dias" },
+];
+
 function Acoes() {
   const [lista, setLista] = useState([]);
+  const [opcoes, setOpcoes] = useState({ usuarios: [], acoes: [] });
+  const [busca, setBusca] = useState("");
+  // A busca aplicada é separada da digitada: sem isso, cada tecla vira
+  // uma consulta ao banco de auditoria.
+  const [buscaAtiva, setBuscaAtiva] = useState("");
   const [nivel, setNivel] = useState("");
+  const [usuario, setUsuario] = useState("");
+  const [acao, setAcao] = useState("");
+  const [dias, setDias] = useState(30);
+  const [soFalhas, setSoFalhas] = useState(false);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
+
+  const LIMITE = 300;
+
+  // Espera a digitação parar antes de consultar.
+  useEffect(() => {
+    const id = setTimeout(() => setBuscaAtiva(busca.trim()), 350);
+    return () => clearTimeout(id);
+  }, [busca]);
+
+  // Monta a query uma vez e usa nos dois lugares — tela e exportação —
+  // para não haver dois entendimentos do mesmo filtro.
+  const filtros = useCallback((incluirLimite) => {
+    const p = new URLSearchParams();
+    if (buscaAtiva) p.set("busca", buscaAtiva);
+    if (nivel) p.set("level", nivel);
+    if (usuario) p.set("usuario", usuario);
+    if (acao) p.set("action", acao);
+    if (soFalhas) p.set("so_falhas", "true");
+    if (incluirLimite) {
+      p.set("desde", new Date(Date.now() - dias * 86400000).toISOString());
+      p.set("limite", String(LIMITE));
+    }
+    const q = p.toString();
+    return q ? `?${q}` : "";
+  }, [buscaAtiva, nivel, usuario, acao, soFalhas, dias]);
 
   const carregar = useCallback(async () => {
     setErro("");
     setCarregando(true);
     try {
-      setLista(await api.auditoria(nivel ? `?level=${nivel}` : ""));
+      setLista(await api.auditoria(filtros(true)));
     } catch (ex) {
       setErro(ex.message);
     } finally {
       setCarregando(false);
     }
-  }, [nivel]);
+  }, [filtros]);
 
   useEffect(() => {
     carregar();
   }, [carregar]);
 
+  // Quem e o quê existem no log — carregado uma vez, não a cada filtro.
+  useEffect(() => {
+    api.filtrosAuditoria(90).then(setOpcoes).catch(() => {});
+  }, []);
+
+  const filtrando = Boolean(buscaAtiva || nivel || usuario || acao || soFalhas);
+
+  function limpar() {
+    setBusca("");
+    setBuscaAtiva("");
+    setNivel("");
+    setUsuario("");
+    setAcao("");
+    setSoFalhas(false);
+    setDias(30);
+  }
+
   return (
     <>
-      <div className="stack-h" style={{ marginBottom: 14 }}>
-        <select value={nivel} onChange={(e) => setNivel(e.target.value)} style={{ width: "auto" }}>
-          <option value="">{t("Todos os níveis")}</option>
-          <option value="critical">{t("Só críticos")}</option>
-          <option value="warning">{t("Só atenção")}</option>
-          <option value="info">{t("Só info")}</option>
-        </select>
-        <button className="btn btn-secondary" onClick={carregar}>
-          <IconAtualizar size={15} /> {t("Atualizar")}</button>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() =>
-            api.baixar(api.urlExportarAuditoria(90), "auditoria-90d.csv").catch(() => {})
-          }
-          title={t("Baixar 90 dias de auditoria em CSV")}
-        >
-          <IconDownload size={15} /> {t("Exportar 90 dias")}</button>
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="filtros">
+          <div className="filtro-busca">
+            <input
+              type="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder={t("Buscar por usuário, ação, alvo ou detalhe…")}
+              aria-label={t("Buscar na auditoria")}
+            />
+          </div>
+
+          <select value={dias} onChange={(e) => setDias(Number(e.target.value))}>
+            {PERIODOS.map((p) => (
+              <option key={p.dias} value={p.dias}>{t("Últimos")} {t(p.rotulo)}</option>
+            ))}
+          </select>
+
+          <select value={nivel} onChange={(e) => setNivel(e.target.value)}>
+            <option value="">{t("Todos os níveis")}</option>
+            <option value="critical">{t("Só críticos")}</option>
+            <option value="warning">{t("Só atenção")}</option>
+            <option value="info">{t("Só info")}</option>
+          </select>
+
+          <select value={usuario} onChange={(e) => setUsuario(e.target.value)}>
+            <option value="">{t("Todos os usuários")}</option>
+            {opcoes.usuarios.map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+
+          <select value={acao} onChange={(e) => setAcao(e.target.value)}>
+            <option value="">{t("Todas as ações")}</option>
+            {opcoes.acoes.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+
+          <label className="check" style={{ margin: 0, whiteSpace: "nowrap" }}>
+            <input
+              type="checkbox"
+              checked={soFalhas}
+              onChange={(e) => setSoFalhas(e.target.checked)}
+            />
+            <span>{t("Só o que falhou")}</span>
+          </label>
+
+          <div className="filtro-acoes">
+            {filtrando && (
+              <button className="btn btn-secondary btn-sm" onClick={limpar}>
+                {t("Limpar filtros")}
+              </button>
+            )}
+            <button className="btn btn-secondary btn-sm" onClick={carregar}>
+              <IconAtualizar size={14} /> {t("Atualizar")}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() =>
+                api
+                  .baixar(
+                    api.urlExportarAuditoria(dias, filtros(false).replace("?", "&")),
+                    `auditoria-${dias}d.csv`,
+                  )
+                  .catch(() => {})
+              }
+              title={t("Baixar em CSV exatamente o que está filtrado aqui")}
+            >
+              <IconDownload size={14} /> {t("Exportar")}
+            </button>
+          </div>
+        </div>
+
+        {/* Quantos registros, e o aviso de teto. Lista que para em 300
+            sem dizer isso faz a pessoa concluir que não há mais nada. */}
+        {!carregando && (
+          <div className="small muted" style={{ marginTop: 10 }}>
+            {lista.length === 0
+              ? t("Nenhum registro com esses filtros.")
+              : `${lista.length} ${t("registro(s)")}`}
+            {lista.length >= LIMITE && (
+              <>
+                {" — "}
+                <strong>{t("teto de")} {LIMITE} {t("atingido")}</strong>
+                {": "}
+                {t("refine a busca ou o período; a exportação traz mais.")}
+              </>
+            )}
+            {filtrando && ` · ${t("filtros ativos")}`}
+          </div>
+        )}
       </div>
 
       <Erro mensagem={erro} onTentar={carregar} />
@@ -92,7 +228,13 @@ function Acoes() {
       {carregando ? (
         <Carregando />
       ) : lista.length === 0 ? (
-        <Vazio titulo={t("Nenhum registro")} />
+        <Vazio titulo={filtrando ? t("Nada encontrado") : t("Nenhum registro")}>
+          {filtrando && (
+            <div className="small muted" style={{ marginTop: 6 }}>
+              {t("Nenhuma ação registrada corresponde a esses filtros. Tente limpar algum deles ou ampliar o período.")}
+            </div>
+          )}
+        </Vazio>
       ) : (
         <div className="table-wrap">
           <table>

@@ -38,7 +38,7 @@ export default function ServidoresView({ alvo }) {
     carregar();
   }, [carregar]);
 
-  // Chegou de um alerta de "sem contato" — rola até o servidor certo em
+  // Chegou de um alerta de "sem comunicação" — rola até o servidor certo em
   // vez de deixar a pessoa procurar na lista.
   useEffect(() => {
     if (!alvo || !alvo.hostId || carregando) return;

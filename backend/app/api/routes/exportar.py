@@ -64,21 +64,22 @@ async def auditoria(
     dias: int = Query(default=30, ge=1, le=3650),
     nivel: str | None = Query(default=None),
     usuario: str | None = Query(default=None),
+    # Os mesmos filtros da tela: exportar tem de trazer o que está à
+    # vista. CSV que discorda da tela ninguém desconfia — e auditoria é
+    # justamente onde discordar em silêncio é mais caro.
+    busca: str | None = Query(default=None, max_length=120),
+    action: str | None = Query(default=None),
+    so_falhas: bool = Query(default=False),
     autor: User = Depends(require_permission("audit.view")),
     db: AsyncSession = Depends(get_db),
 ):
     """Trilha de auditoria. O que foi feito, por quem, quando e de onde."""
     desde = datetime.now(timezone.utc) - timedelta(days=dias)
-    consulta = (
-        select(AuditLog)
-        .where(AuditLog.ts >= desde)
-        .order_by(AuditLog.ts.desc())
-        .limit(MAX_LINHAS)
+    consulta = audit_service.aplicar_filtros(
+        select(AuditLog).order_by(AuditLog.ts.desc()).limit(MAX_LINHAS),
+        busca=busca, usuario=usuario, action=action, level=nivel,
+        desde=desde, so_falhas=so_falhas,
     )
-    if nivel:
-        consulta = consulta.where(AuditLog.level == nivel)
-    if usuario:
-        consulta = consulta.where(AuditLog.usuario == usuario)
 
     registros = list((await db.execute(consulta)).scalars().all())
 
@@ -88,7 +89,13 @@ async def auditoria(
         action="exportar",
         target="auditoria",
         ip=client_ip(request),
-        detail={"dias": dias, "linhas": len(registros), "nivel": nivel or "todos"},
+        detail={
+            "dias": dias, "linhas": len(registros), "nivel": nivel or "todos",
+            # Que filtro gerou este CSV também é fato auditável: sem isso,
+            # dois arquivos com contagens diferentes ficam sem explicação.
+            "busca": (busca or "")[:60], "acao": action or "todas",
+            "so_falhas": so_falhas,
+        },
     )
 
     return _csv(

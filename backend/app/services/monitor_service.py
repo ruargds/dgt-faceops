@@ -31,6 +31,9 @@ from app.models.amostra import Amostra
 from app.models.host import Host
 from app.services.ssh_service import SSHError
 
+# Catálogo único do que cada serviço faz (ver internos_service).
+from app.services.internos_service import descrever
+
 log = logging.getLogger("faceops.monitor")
 
 
@@ -45,6 +48,15 @@ def _pior_disco(discos: list[dict]) -> tuple[float, str, float, float]:
         round(pior.get("livre_bytes", 0) / (1024 ** 3), 2),
         round(pior.get("total_bytes", 0) / (1024 ** 3), 2),
     )
+
+
+def _gb(mb: float) -> str:
+    """
+    MB para GB legível. "16384 MB" faz a pessoa dividir de cabeça no meio
+    de um incidente; "16 GB" não.
+    """
+    gb = (mb or 0) / 1024
+    return f"{gb:.1f} GB" if gb < 10 else f"{gb:.0f} GB"
 
 
 class MonitorService:
@@ -156,10 +168,14 @@ class MonitorService:
                         {
                             "tipo": "metrica",
                             "host_id": a["host_id"],
-                            "host": a["host"],
+                            # Rótulo, não nome técnico: é texto lido por
+                            # gente no celular.
+                            "host": a.get("rotulo") or a["host"],
+                            "papel": a.get("papel", ""),
                             "servico": "",
                             "nivel": a["nivel"],
                             "texto": a["texto"],
+                            "significa": a.get("significa", ""),
                             "acao": a.get("acao", ""),
                             # Limite não tem "início" observado como um
                             # incidente tem; a chave é a condição em si, e a
@@ -437,7 +453,8 @@ class MonitorService:
             overrides = await self.limiares.resolver_lote(db, host.id) if self.limiares else {}
             limites = {k: overrides.get(f"::{k}", v) for k, v in padrao.items()}
 
-            def add(chave, nivel, texto, valor, limite, acao="", onde="", onde_aba="", extra=None):
+            def add(chave, nivel, texto, valor, limite, acao="", onde="",
+                    onde_aba="", significa="", extra=None):
                 # `acao` e `onde` existem para quem está de plantão às 3h
                 # e nunca viu este sistema. Alerta que só diz o que está
                 # errado obriga a pessoa a descobrir o que fazer — e é
@@ -448,11 +465,16 @@ class MonitorService:
                     "host_id": host.id,
                     "host": host.name,
                     "rotulo": host.rotulo,
+                    "papel": host.role,
                     "chave": chave,
                     "nivel": nivel,
                     "texto": texto,
                     "valor": valor,
                     "limite": limite,
+                    # O que o número quer dizer na prática. Separado da
+                    # `acao` porque são perguntas diferentes: "isso é
+                    # grave?" e "o que eu faço?".
+                    "significa": significa,
                     "acao": acao,
                     "onde": onde,
                     "onde_aba": onde_aba,
@@ -464,7 +486,11 @@ class MonitorService:
 
             if a.erro:
                 add("conexao", "critico",
-                    f"sem contato com {host.rotulo}", 0, 0,
+                    "não respondeu ao monitoramento", 0, 0,
+                    significa="Nada pode ser verificado nesta máquina agora "
+                              "— inclusive o FindFace, que pode estar "
+                              "rodando normal. Falha de rede dá este mesmo "
+                              "aviso.",
                     acao="Confira se a máquina está ligada e se a rede está "
                          "de pé. Em Servidores, use 'Testar conexão' para "
                          "ver o erro exato.",
@@ -473,9 +499,13 @@ class MonitorService:
 
             if a.disco_pct >= limites["disco_pct"]:
                 add("disco", "critico" if a.disco_pct >= 95 else "atencao",
-                    f"disco {a.disco_ponto} em {a.disco_pct}% "
-                    f"— só {a.disco_livre_gb} GB livres",
+                    f"disco {a.disco_ponto} em {a.disco_pct}% — restam "
+                    f"{a.disco_livre_gb} GB"
+                    + (f" de {a.disco_total_gb} GB" if a.disco_total_gb else ""),
                     a.disco_pct, limites["disco_pct"],
+                    significa="Quando o disco encher, o banco de dados para "
+                              "de gravar e as passagens deixam de ser "
+                              "registradas.",
                     acao="Disco cheio para o banco de dados e o "
                          "reconhecimento para de gravar. Em Manutenção, use "
                          "'Diagnosticar' para ver o que está ocupando, e "
@@ -484,7 +514,13 @@ class MonitorService:
 
             if a.mem_pct >= limites["mem_pct"]:
                 add("memoria", "critico" if a.mem_pct >= 95 else "atencao",
-                    f"memória em {a.mem_pct}%", a.mem_pct, limites["mem_pct"],
+                    f"memória em {a.mem_pct}%"
+                    + (f" — {_gb(a.mem_usado_mb)} de {_gb(a.mem_total_mb)} em uso"
+                       if a.mem_total_mb else ""),
+                    a.mem_pct, limites["mem_pct"],
+                    significa="Perto do limite, o sistema começa a encerrar "
+                              "serviços para liberar memória — e o serviço "
+                              "encerrado para sem avisar.",
                     acao="Perto do limite, o sistema mata containers por "
                          "falta de memória. Em Serviços, procure algum com "
                          "'morto por falta de memória'.",
@@ -492,8 +528,12 @@ class MonitorService:
 
             if a.swap_pct >= limites["swap_pct"]:
                 add("swap", "atencao",
-                    f"swap em {a.swap_pct}%",
+                    f"swap em {a.swap_pct}% — a máquina está usando disco "
+                    "como se fosse memória",
                     a.swap_pct, limites["swap_pct"],
+                    significa="Disco é muito mais lento que memória: nada "
+                              "para de funcionar, mas o reconhecimento fica "
+                              "lento. É sinal de VM pequena para a carga.",
                     acao="Swap em uso significa que a máquina está usando "
                          "disco como se fosse memória — o reconhecimento "
                          "fica lento. Não é urgente, mas indica que a VM "
@@ -502,17 +542,25 @@ class MonitorService:
 
             if a.cpu_pct >= limites["cpu_pct"]:
                 add("cpu", "atencao",
-                    f"carga em {a.carga_por_nucleo} por núcleo",
+                    f"CPU sobrecarregada — {a.carga_por_nucleo} processo por "
+                    "núcleo (o normal é abaixo de 1,00)",
                     a.cpu_pct, limites["cpu_pct"],
-                    acao="Acima de 1,00 há processo esperando CPU. Em "
-                         "Recursos, veja quais containers estão consumindo "
-                         "mais.",
+                    significa="Há processo esperando a vez de usar o "
+                              "processador. Nada parou, mas tudo responde "
+                              "mais devagar, inclusive o reconhecimento.",
+                    acao="Em Recursos, veja quais containers estão "
+                         "consumindo mais CPU.",
                     onde="Recursos", onde_aba="recursos")
 
             if a.gpu_mem_pct >= limites["gpu_mem_pct"]:
                 add("gpu_mem", "critico",
-                    f"memória de vídeo em {a.gpu_mem_pct}%",
+                    f"memória de vídeo em {a.gpu_mem_pct}%"
+                    + (f" — {a.gpu_mem_usado_mb:.0f} de {a.gpu_mem_total_mb:.0f} MB"
+                       if a.gpu_mem_total_mb else ""),
                     a.gpu_mem_pct, limites["gpu_mem_pct"],
+                    significa="Sem memória de vídeo sobrando, a próxima "
+                              "câmera a conectar falha e o serviço de vídeo "
+                              "entra em ciclo de reinício.",
                     acao="Perto do limite, a próxima câmera causa falha e o "
                          "findface-video-worker entra em ciclo de reinício. "
                          "Em Serviços, confira a contagem de reinícios dele.",
@@ -521,6 +569,9 @@ class MonitorService:
             if a.gpu_temp >= limites["gpu_temp"]:
                 add("gpu_temp", "atencao",
                     f"GPU a {a.gpu_temp} °C", a.gpu_temp, limites["gpu_temp"],
+                    significa="A partir de 85 °C a placa reduz a própria "
+                              "velocidade para não queimar, e o "
+                              "reconhecimento fica lento.",
                     acao="Acima de 85 °C a GPU reduz a própria velocidade "
                          "para não queimar, e o reconhecimento fica lento. "
                          "Costuma ser refrigeração do datacenter.",
@@ -538,8 +589,9 @@ class MonitorService:
                     min_host = overrides.get(f"{inc['servico']}::servico_indisponivel_min", indisponivel_min)
                     grave = inc["nivel"] == "critico" or (inc["duracao_s"] or 0) >= min_host * 60
                     add("servico", "critico" if grave else "atencao",
-                        f"{inc['servico']} — {inc['texto']}",
+                        inc["texto"],
                         inc["duracao_s"], min_host * 60,
+                        significa=descrever(inc["servico"])[1],
                         acao=inc["causa_provavel"] or (
                             "Em Serviços, veja o log do container para o motivo. "
                             "'Reiniciar' resolve a maioria dos casos."

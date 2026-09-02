@@ -302,8 +302,16 @@ export default function MonitorView({ alvo, nav }) {
                           </span>
                         )}
                       </div>
-                      {a.acao && (
+                      {/* O que o número quer dizer, antes do que fazer:
+                          é a pergunta que vem primeiro para quem não
+                          opera o FindFace todo dia. */}
+                      {a.significa && (
                         <div className="small" style={{ marginTop: 4, opacity: 0.92 }}>
+                          {a.significa}
+                        </div>
+                      )}
+                      {a.acao && (
+                        <div className="small" style={{ marginTop: 4, opacity: 0.78 }}>
                           {a.acao}
                         </div>
                       )}
@@ -697,7 +705,7 @@ function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar }) {
   let estado = "sem dados ainda";
   if (!s.ativo) estado = "desativado";
   else if (!s.monitorado) estado = "não monitorado";
-  else if (a && a.erro) { dot = "dot-err"; estado = "sem contato"; }
+  else if (a && a.erro) { dot = "dot-err"; estado = "sem comunicação"; }
   else if (grave) { dot = "dot-err"; estado = "problema grave"; }
   else if (aviso) { dot = "dot-warn"; estado = "atenção"; }
   else if (a) { dot = "dot-ok"; estado = "normal"; }

@@ -226,6 +226,24 @@ input[type="checkbox"] { width: auto; }
 .form-ajuda {
   font-size: 12px; color: var(--text-3); margin-top: 8px; line-height: 1.5;
 }
+/* Barra de filtros. Envolve em várias linhas no notebook e no tablet em
+   vez de espremer os campos, e a busca cresce para ocupar o que sobra —
+   é ela que recebe texto longo. */
+.filtros {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+}
+.filtros > select, .filtros > label { flex: 0 0 auto; width: auto; }
+.filtro-busca { flex: 1 1 240px; min-width: 200px; }
+.filtro-busca input { width: 100%; }
+.filtro-acoes {
+  display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap;
+}
+@media (max-width: 720px) {
+  /* No telefone o rodapé de ações vira linha própria: empurrado para a
+     direita, ele ficaria cortado. */
+  .filtro-acoes { margin-left: 0; width: 100%; }
+}
+
 /* Nome técnico ao lado do apelido: menor, sem competir com o rótulo. */
 .nome-tecnico {
   font-size: 11px; color: var(--text-3); font-family: var(--mono, monospace);

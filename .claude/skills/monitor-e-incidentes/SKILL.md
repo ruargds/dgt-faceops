@@ -27,7 +27,7 @@ virando tela inicial, abrir o painel passaria a bater nas VMs o tempo todo.
 `IncidenteService.registrar_ciclo` compara o que o ciclo viu com o que está
 aberto. Regras aprendidas na marra:
 
-- **Host sem contato NÃO fecha incidente de serviço dele.** Sem alcançar a
+- **Host sem comunicação NÃO fecha incidente de serviço dele.** Sem alcançar a
   máquina não se sabe nada dos containers; fechar ali registraria uma
   recuperação que ninguém observou.
 - **Reinício em laço é variação, não total.** `RestartCount` é acumulado

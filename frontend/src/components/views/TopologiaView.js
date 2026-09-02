@@ -252,7 +252,7 @@ function Legenda({ dados, corDe }) {
                 <td>
                   {s.erro ? (
                     <span className="small" style={{ color: "var(--red)" }}>
-                      sem contato: {s.erro}
+                      sem comunicação: {s.erro}
                     </span>
                   ) : s.camadas.length === 0 ? (
                     <span className="small muted">{t("nenhuma do FindFace")}</span>

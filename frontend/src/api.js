@@ -345,7 +345,10 @@ export const api = {
   processos: (id, limite = 25) => get(`/processos/${id}?limite=${limite}`),
 
   // Exportações (CSV) — URLs para <a href>
-  urlExportarAuditoria: (dias = 30) => `/api/exportar/auditoria?dias=${dias}`,
+  // Exportação com os MESMOS filtros da tela: um CSV que discorda do que
+  // está à vista é pior que nenhum, porque ninguém desconfia dele.
+  urlExportarAuditoria: (dias = 30, filtros = "") =>
+    `/api/exportar/auditoria?dias=${dias}${filtros}`,
   urlExportarBackups: (dias = 90) => `/api/exportar/backups?dias=${dias}`,
   urlExportarAgendamentos: () => "/api/exportar/agendamentos",
   urlExportarSessoes: (dias = 90) => `/api/exportar/sessoes?dias=${dias}`,
@@ -366,6 +369,7 @@ export const api = {
 
   // Auditoria
   auditoria: (params = "") => get(`/auditoria${params}`),
+  filtrosAuditoria: (dias = 90) => get(`/auditoria/filtros?dias=${dias}`),
   resumoAuditoria: () => get("/auditoria/resumo"),
 };
 

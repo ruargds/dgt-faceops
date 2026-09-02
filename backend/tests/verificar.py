@@ -32,6 +32,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from app.db.database import Base  # noqa: E402
 from app.models.amostra import Amostra  # noqa: E402
 from app.models.host import Host  # noqa: E402
+from app.models.audit import AuditLog
 from app.models.incidente import Incidente  # noqa: E402
 from app.models.limiar_override import LimiarOverride  # noqa: E402
 from app.models.log_padrao import LogPadrao  # noqa: E402
@@ -46,6 +47,7 @@ TABELAS = [
     LimiarOverride.__table__, LogPadrao.__table__,
     NotificacaoConta.__table__, NotificacaoDestino.__table__,
     NotificacaoRegra.__table__, NotificacaoEnvio.__table__,
+    AuditLog.__table__,
 ]
 
 AGORA = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
@@ -150,7 +152,7 @@ async def cenario_abre_e_fecha_incidente():
 
 async def cenario_host_fora_nao_fecha_servico():
     """
-    Se a máquina fica sem contato, não sabemos nada dos serviços dela.
+    Se a máquina fica sem comunicação, não sabemos nada dos serviços dela.
     Fechar o incidente ali registraria uma recuperação que ninguém viu —
     o serviço "voltou" no exato instante em que o host caiu.
     """
@@ -623,56 +625,250 @@ async def cenario_notificacao_espera_antes_de_avisar():
     assert len(NS.rotear([regra], destinos, volta)) == 1, "retorno não deveria esperar"
 
 
-async def cenario_notificacao_mensagem_curta_e_sem_ip():
+async def cenario_auditoria_busca_acha_e_filtra():
     """
-    A mensagem tem que caber na prévia do celular — e não pode levar
-    endereço interno para um grupo de Telegram. Um tipo por formato: quem
-    lê precisa distinguir "parou" de "voltou" de "limite" no primeiro
-    caractere.
+    Auditoria sem busca é arquivo morto: a pergunta real é "quem mexeu
+    naquele servidor" ou "por que aquele restore falhou", e nenhuma das
+    duas se responde rolando uma lista.
+
+    A busca livre tem de varrer também o DETALHE — é lá que está o
+    parâmetro que explica a ação — e o filtro tem de ser o MESMO da
+    exportação, senão o CSV discorda da tela sem ninguém desconfiar.
+    """
+    import sqlalchemy as sa
+
+    from app.models.audit import AuditLog
+    from app.services import audit_service
+
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        db.add_all([
+            AuditLog(usuario="admin", action="services.restart",
+                     target="vm-appserver", level="warning", success=True,
+                     detail={"servico": "findface-video-worker"}),
+            AuditLog(usuario="joao", action="backups.restore",
+                     target="vm-dbserver", level="critical", success=False,
+                     detail={"perfil": "essencial", "erro": "timeout"}),
+            AuditLog(usuario="maria", action="hosts.manage",
+                     target="vm-ftpserver", level="info", success=True,
+                     detail={}),
+        ])
+        await db.commit()
+
+        async def buscar(**kw):
+            consulta = audit_service.aplicar_filtros(
+                sa.select(AuditLog).order_by(AuditLog.ts.desc()), **kw
+            )
+            r = await db.execute(consulta)
+            return list(r.scalars().all())
+
+        # Sem filtro, tudo.
+        assert len(await buscar()) == 3
+
+        # Busca por alvo — o caso mais comum: "quem mexeu nesse servidor".
+        achados = await buscar(busca="appserver")
+        assert [a.usuario for a in achados] == ["admin"], achados
+
+        # Busca por ação, mesmo parcial.
+        assert len(await buscar(busca="restore")) == 1
+
+        # Busca por usuário.
+        assert len(await buscar(busca="maria")) == 1
+
+        # E DENTRO do detalhe: é onde está o motivo da falha, e sem isto a
+        # pessoa teria de saber de cor qual ação registrou o erro.
+        achados = await buscar(busca="timeout")
+        assert [a.usuario for a in achados] == ["joao"], achados
+        assert len(await buscar(busca="findface-video-worker")) == 1
+
+        # Maiúscula/minúscula não pode importar: ninguém digita o nome do
+        # container com o mesmo caixa que o log gravou.
+        assert len(await buscar(busca="APPSERVER")) == 1
+
+        # Só o que falhou — a pergunta "o que deu errado ontem".
+        falhas = await buscar(so_falhas=True)
+        assert [a.usuario for a in falhas] == ["joao"], falhas
+
+        # Filtros somam em vez de se anular.
+        assert len(await buscar(busca="vm-", level="critical")) == 1
+        assert len(await buscar(busca="vm-", level="critical", usuario="admin")) == 0
+
+        # Termo que não existe devolve vazio, não a lista inteira: filtro
+        # que "falha aberto" faria a pessoa concluir o contrário do certo.
+        assert await buscar(busca="nao-existe-isso") == []
+
+        # Busca vazia ou só espaço não filtra nada.
+        assert len(await buscar(busca="")) == 3
+        assert len(await buscar(busca="   ")) == 3
+
+    await engine.dispose()
+
+    # A exportação tem de usar o MESMO filtro, e não uma cópia. Cópia
+    # divergiria no primeiro filtro novo — e CSV que discorda da tela é
+    # pior que CSV nenhum, porque ninguém o confere.
+    fonte = (pathlib.Path(__file__).resolve().parents[1]
+             / "app" / "api" / "routes" / "exportar.py").read_text(encoding="utf-8")
+    trecho = fonte[fonte.index("async def auditoria("):]
+    trecho = trecho[:trecho.index("return _csv")]
+    assert "aplicar_filtros" in trecho, "exportação não usa o filtro compartilhado"
+    assert "AuditLog.level ==" not in trecho, "exportação voltou a filtrar por conta"
+    assert "AuditLog.usuario ==" not in trecho, "exportação voltou a filtrar por conta"
+
+
+async def cenario_notificacao_mensagem_tem_campos_e_assina_a_origem():
+    """
+    A mensagem segue o modelo de campos rotulados que a equipe já lê no
+    Zabbix, e a PRIMEIRA linha assina a origem: no mesmo grupo caem
+    avisos do Zabbix e do FaceOps, e o caminho de resolução é outro em
+    cada caso. Sem a assinatura, quem lê tem de deduzir pelo texto.
+
+    O que não pode mudar nunca: endereço interno não vai para um grupo de
+    mensagens, e a mensagem tem teto — mensagem cortada pelo Telegram
+    esconde justamente o fim, onde estão horário e gravidade.
     """
     from app.services.notificacao_service import montar_mensagem
 
     texto = montar_mensagem({
-        "tipo": "servico_parado", "host": "vm-appserver", "servico": "findface-video-worker",
-        "nivel": "critico", "texto": "findface-video-worker com problema",
-        "causa_provavel": "reiniciou 7x nos últimos 30 min — sinal de câmera problemática.",
-        "inicio": AGORA,
-    })
-    linhas = texto.splitlines()
-    assert len(linhas) <= 4, texto
-    assert "PARADO" in linhas[0] and "vm-appserver" in linhas[0], texto
-    assert "10.0" not in texto and "192.168" not in texto, "vazou endereço interno"
-    assert len(texto) <= 220, f"mensagem longa demais ({len(texto)}): {texto}"
+        "tipo": "servico_parado", "host": "vm-appserver",
+        "papel": "appserver",
+        "servico": "findface-video-worker", "nivel": "critico",
+        "texto": "o serviço findface-video-worker parou de funcionar",
+        "significa": "É ele que processa o vídeo das câmeras.",
+        "causa_provavel": "reiniciou 7x nos últimos 30 min.",
+        "acao": "Em Serviços, abra o log deste container.",
+        "inicio": AGORA, "duracao_s": 360,
+    }, cliente="DGT")
+    # Campos separados por linha em branco, como no template do Zabbix:
+    # sem o respiro a mensagem vira um parágrafo cinza no celular.
+    campos = [b for b in texto.split("\n\n") if b.strip()]
+    assert "\n\n" in texto, "campos colados, sem respiro entre eles"
 
-    # A causa entra cortada na primeira frase e limitada a 140 caracteres.
-    longa = montar_mensagem({
-        "tipo": "servico_parado", "host": "vm-appserver", "servico": "x", "nivel": "critico",
-        "texto": "x com problema", "inicio": AGORA,
-        "causa_provavel": "primeira frase curta. " + ("detalhe " * 40),
+    # Assinatura e cliente no topo, antes de qualquer detalhe.
+    assert campos[0].startswith("🎥 FaceOps"), texto
+    assert "DGT" in campos[0], texto
+    # Servidor no campo seguinte, com o papel em palavras.
+    assert "vm-appserver" in campos[1] and "Aplicação" in campos[1], texto
+    # Ícone dos dois lados, como no modelo que a equipe já lê.
+    assert campos[1].count("🔴") == 2, campos[1]
+
+    # Os campos que um leigo precisa: o que é, o que significa, o que fazer.
+    for rotulo in ("Problema:", "Significa:", "Provável:", "Fazer:",
+                   "Iniciado em:", "Gravidade: Crítico"):
+        assert rotulo in texto, f"faltou {rotulo}: {texto}"
+    # Todo campo é "ícone - Rótulo: valor".
+    for campo in campos[2:]:
+        assert " - " in campo.split(":")[0], f"campo fora do padrão: {campo}"
+    # Duração no formato do Zabbix, até os segundos.
+    assert "há 6m 0s" in texto, texto
+
+    assert "10.0" not in texto and "192.168" not in texto, "vazou endereço interno"
+    assert len(campos) <= 9, f"{len(campos)} campos: {texto}"
+    assert len(texto) <= 900, f"mensagem longa demais ({len(texto)})"
+
+    # Sem cliente configurado, a assinatura não fica com separador solto.
+    sem_cliente = montar_mensagem({
+        "tipo": "servico_parado", "host": "vm-x", "servico": "s",
+        "nivel": "atencao", "texto": "o serviço s está parado",
     })
-    assert "detalhe" not in longa, longa
+    assert sem_cliente.split("\n\n")[0] == "🎥 FaceOps", sem_cliente
+
+    # Texto longo é cortado sem partir palavra, e avisa que foi cortado.
+    longa = montar_mensagem({
+        "tipo": "servico_parado", "host": "vm-appserver", "servico": "x",
+        "nivel": "critico", "texto": "o serviço x parou", "inicio": AGORA,
+        "causa_provavel": "detalhe " * 80,
+    })
+    linha_causa = [l for l in longa.splitlines() if "Provável:" in l][0]
+    assert linha_causa.endswith("…"), linha_causa
+    assert len(linha_causa) < 300, linha_causa
+    assert "detalh…" not in linha_causa, "cortou no meio da palavra"
 
     volta = montar_mensagem({
-        "tipo": "retorno", "host": "vm-appserver", "servico": "findface-video-worker",
-        "duracao_s": 360,
-    })
-    assert "NORMALIZADO" in volta and "6min" in volta, volta
+        "tipo": "retorno", "host": "vm-appserver",
+        "servico": "findface-video-worker", "duracao_s": 360,
+    }, cliente="DGT")
+    assert "Resolvido:" in volta and "Duração: 6m 0s" in volta, volta
+    assert "Horário:" in volta, volta
+    # Ícone dobrado no cabeçalho: é o que deixa a boa notícia
+    # reconhecível na rolagem, sem ler.
+    assert "✅✅" in volta.split("\n\n")[1], volta
+    # Retorno não anuncia gravidade: já passou.
+    assert "Gravidade" not in volta, volta
 
-    # Cada tipo tem cabeçalho próprio.
     sem_contato = montar_mensagem({
         "tipo": "host_sem_contato", "host": "vm-dbserver", "servico": "",
         "nivel": "critico", "inicio": AGORA,
+        "significa": "Nada pode ser verificado nesta máquina agora.",
         "causa_provavel": "rede fora, VM desligada ou parada.",
     })
-    assert "SEM CONTATO" in sem_contato, sem_contato
+    assert "não respondeu ao monitoramento" in sem_contato, sem_contato
+    # E o nome do host não aparece duas vezes na mesma mensagem por
+    # descuido de montagem — era o que dava "vm-x — sem comunicação com vm-x".
+    assert sem_contato.count("vm-dbserver") == 1, sem_contato
 
     limite = montar_mensagem({
-        "tipo": "metrica", "host": "vm-appserver", "servico": "", "nivel": "atencao",
-        "texto": "disco / em 94% — só 6 GB livres",
-        "acao": "Em Manutenção, use Diagnosticar. Outra frase que não deve entrar.",
+        "tipo": "metrica", "host": "vm-appserver", "servico": "",
+        "nivel": "atencao",
+        "texto": "CPU sobrecarregada — 1.16 processo por núcleo (o normal é abaixo de 1,00)",
+        "significa": "Há processo esperando a vez de usar o processador.",
+        "acao": "Em Recursos, veja quais containers consomem mais CPU.",
     })
-    assert "LIMITE" in limite and "94%" in limite, limite
-    assert "Outra frase" not in limite, limite
+    assert "1.16" in limite and "Significa:" in limite, limite
+    assert "Gravidade: Atenção" in limite, limite
+
+
+async def cenario_duracao_no_formato_do_zabbix():
+    """
+    "12m 0s" e não "12min": mostrar os segundos diz que a medição é
+    exata, enquanto "12min" deixa a dúvida de estar arredondado — e em
+    janela de indisponibilidade essa dúvida é justamente o que se quer
+    tirar. Da maior unidade não-zero até os segundos, sem omitir o meio.
+    """
+    from app.services.notificacao_service import _duracao
+
+    assert _duracao(0) == ""
+    assert _duracao(None) == ""
+    assert _duracao(-5) == ""
+    assert _duracao(53) == "53s"
+    assert _duracao(113) == "1m 53s"
+    assert _duracao(720) == "12m 0s"
+    assert _duracao(3600) == "1h 0m 0s"
+    # O exemplo real do grupo do cliente: 4d 18h 50m 42s.
+    assert _duracao(4 * 86400 + 18 * 3600 + 50 * 60 + 42) == "4d 18h 50m 42s"
+    # Zero no meio não desaparece: some 1h 0m 12s e ninguém entende.
+    assert _duracao(3612) == "1h 0m 12s"
+
+
+async def cenario_aviso_explica_o_servico_para_quem_nao_conhece():
+    """
+    `findface-video-worker` não significa nada para quem recebe o aviso às
+    3h da manhã. O catálogo do manual, que a sonda de componentes já
+    mantinha, passa a alimentar a linha "Significa" — e o nome do
+    container não é igual ao nome do serviço no compose, então a busca
+    precisa aceitar as duas formas.
+    """
+    from app.services.internos_service import descrever
+
+    papel, impacto = descrever("findface-video-worker")
+    assert papel and impacto, "serviço do núcleo sem descrição"
+    assert "câmera" in impacto.lower(), impacto
+
+    # Nome de container do compose ainda tem de casar.
+    _, impacto_pg = descrever("findface-multi-postgresql-1")
+    assert "banco" in impacto_pg.lower(), impacto_pg
+
+    # A busca vai do mais específico para o mais genérico.
+    assert descrever("findface-video-storage")[0] != descrever("findface-video-worker")[0]
+
+    # Serviço desconhecido não inventa descrição: linha some da mensagem.
+    assert descrever("coisa-que-nao-existe") == ("", "")
+    assert descrever("") == ("", "")
+
+    # Todo componente do catálogo tem o que dizer — a lista serve de
+    # fonte para o aviso, e entrada sem impacto viraria linha vazia.
+    from app.services.internos_service import COMPONENTES
+    faltando = [c["nome"] for c in COMPONENTES if not c.get("impacto")]
+    assert not faltando, f"componentes sem impacto: {faltando}"
 
 
 async def cenario_notificacao_nao_repete_o_mesmo_evento():
@@ -933,7 +1129,11 @@ async def cenario_telegram_ponta_a_ponta():
                 por_destino.setdefault(x.destino, []).append(x.texto)
             assert len(por_destino["Plantão NOC"]) == 3, por_destino
             assert len(por_destino["João"]) == 1, por_destino
-            assert "PARADO" in por_destino["João"][0], por_destino["João"]
+            # João recebeu a queda no formato novo: assinatura, servidor
+            # e o campo que diz o problema.
+            so_dele = por_destino["João"][0]
+            assert so_dele.startswith("🎥 FaceOps"), so_dele
+            assert "Problema:" in so_dele and "Gravidade: Crítico" in so_dele, so_dele
 
             # E o token nunca apareceu em nenhuma mensagem.
             assert all("TOKEN-SECRETO" not in e["texto"] for e in entregas)
@@ -1295,7 +1495,10 @@ async def cenario_aviso_mostra_apelido_e_roteia_por_id():
 
     texto = ns.montar_mensagem(evento)
     assert "Servidor da portaria" in texto, "aviso não mostrou o apelido"
-    assert len(texto.splitlines()) <= 4, "aviso passou de quatro linhas"
+    # O apelido é o nome do servidor no cabeçalho, não uma linha extra.
+    assert "Servidor da portaria" in texto.split("\n\n")[1], texto
+    # E o nome técnico não vaza junto: quem recebe pediu o apelido.
+    assert "vm-appserver" not in texto, texto
 
     destino = NotificacaoDestino(id=1, nome="Plantão", tipo="grupo",
                                  chat_id="-100123", ativo=True)
@@ -1342,7 +1545,10 @@ CENARIOS = [
     cenario_notificacao_roteia_para_os_destinos_certos,
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
-    cenario_notificacao_mensagem_curta_e_sem_ip,
+    cenario_auditoria_busca_acha_e_filtra,
+    cenario_notificacao_mensagem_tem_campos_e_assina_a_origem,
+    cenario_duracao_no_formato_do_zabbix,
+    cenario_aviso_explica_o_servico_para_quem_nao_conhece,
     cenario_notificacao_nao_repete_o_mesmo_evento,
     cenario_notificacao_manda_para_dois_destinos,
     cenario_notificacao_nunca_derruba_o_ciclo,
