@@ -354,6 +354,13 @@ CATALOGO: list[ItemConfig] = [
                "Registro de quem foi avisado e quando. É log operacional, "
                "não histórico: passado o prazo, sai.",
                minimo=1, maximo=180),
+    ItemConfig("notificacao.repetir_apos_h", "monitor",
+               "Repetir aviso de problema que persiste depois de (horas)", "numero", 0,
+               "0 = nunca repete (padrão). Com 6, um problema que dura dias "
+               "volta a avisar a cada 6h — é o repeat_interval do "
+               "Alertmanager. Repetir sem pedido é o caminho mais curto para "
+               "o aviso ser ignorado.",
+               minimo=0, maximo=168),
     ItemConfig("incidentes.retencao_dias", "monitor",
                "Guardar histórico de indisponibilidade por (dias)", "numero",
                30,

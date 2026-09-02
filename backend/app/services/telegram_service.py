@@ -101,6 +101,55 @@ async def quem_sou(token: str) -> dict:
     return _resultado(await _chamar("getMe", token, {}), token)
 
 
+async def descobrir_chats(token: str) -> list[dict]:
+    """
+    Quais chats já falaram com o bot — grupos e pessoas.
+
+    Resolve o único passo chato da configuração: descobrir o `chat_id`. O
+    `getUpdates` devolve as mensagens recentes, e delas sai o id de cada
+    grupo e de cada pessoa que mandou algo.
+
+    Duas condições da plataforma, não do painel:
+
+    * **Grupo** — alguém precisa ter adicionado o bot e mandado uma
+      mensagem lá. O Telegram não deixa o bot entrar sozinho.
+    * **Pessoa** — ela precisa ter mandado `/start` para o bot. Antes
+      disso, o Telegram recusa qualquer envio com "bot can't initiate
+      conversation with a user".
+
+    E o `getUpdates` só guarda o histórico recente (~24h): quem falou com o
+    bot na semana passada e não voltou a falar não aparece aqui.
+    """
+    resultado = _resultado(await _chamar("getUpdates", token, {"limit": 100}), token)
+    vistos: dict[str, dict] = {}
+    for atualizacao in resultado if isinstance(resultado, list) else []:
+        msg = (
+            atualizacao.get("message")
+            or atualizacao.get("channel_post")
+            or atualizacao.get("my_chat_member")
+            or {}
+        )
+        chat = msg.get("chat") or {}
+        cid = chat.get("id")
+        if cid is None:
+            continue
+        bruto = chat.get("type", "")
+        nome = (
+            chat.get("title")
+            or " ".join(x for x in (chat.get("first_name"), chat.get("last_name")) if x)
+            or chat.get("username")
+            or str(cid)
+        )
+        vistos[str(cid)] = {
+            "chat_id": str(cid),
+            "nome": nome,
+            # "private" é conversa com uma pessoa; o resto é grupo/canal.
+            "tipo": "individual" if bruto == "private" else "grupo",
+            "tipo_telegram": bruto,
+        }
+    return sorted(vistos.values(), key=lambda c: (c["tipo"], c["nome"]))
+
+
 async def enviar(token: str, chat_id: str, texto: str) -> dict:
     """
     Manda a mensagem. Texto puro, sem Markdown/HTML de propósito: nome de

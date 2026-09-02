@@ -35,7 +35,7 @@ from app.models.incidente import Incidente  # noqa: E402
 from app.models.limiar_override import LimiarOverride  # noqa: E402
 from app.models.log_padrao import LogPadrao  # noqa: E402
 from app.models.notificacao import (  # noqa: E402
-    NotificacaoConta, NotificacaoEnvio, NotificacaoRegra,
+    NotificacaoConta, NotificacaoDestino, NotificacaoEnvio, NotificacaoRegra,
 )
 from app.services.incidente_service import JANELA_REINICIO_S, IncidenteService  # noqa: E402
 from app.services.limiar_service import LimiarService  # noqa: E402
@@ -43,7 +43,8 @@ from app.services.limiar_service import LimiarService  # noqa: E402
 TABELAS = [
     Host.__table__, Amostra.__table__, Incidente.__table__,
     LimiarOverride.__table__, LogPadrao.__table__,
-    NotificacaoConta.__table__, NotificacaoRegra.__table__, NotificacaoEnvio.__table__,
+    NotificacaoConta.__table__, NotificacaoDestino.__table__,
+    NotificacaoRegra.__table__, NotificacaoEnvio.__table__,
 ]
 
 AGORA = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
@@ -509,54 +510,129 @@ async def cenario_sonda_404_405_nao_e_servico_travado():
     assert not vivo_de(""), "vazio é ausência de resposta"
 
 
-async def cenario_notificacao_regra_do_mais_especifico_ao_geral():
+async def cenario_notificacao_roteia_para_os_destinos_certos():
     """
-    Ordem de precedência: (host+serviço) > (host) > (serviço em todo host)
-    > (geral). E sem regra nenhuma, nada é enviado — silêncio por omissão.
+    Com destino separado da regra, a resposta deixou de ser sim/não e virou
+    "quem recebe". Duas regras podem valer ao mesmo tempo, cada uma para o
+    seu destino — é o que permite "o plantão recebe tudo, o dono do serviço
+    recebe só o dele".
+
+    E sem regra que cubra, ninguém recebe: o silêncio por omissão continua.
     """
-    from app.models.notificacao import NotificacaoRegra
-    from app.services.notificacao_service import NotificacaoService
+    from app.models.notificacao import NotificacaoDestino, NotificacaoRegra
+    from app.services.notificacao_service import NotificacaoService as NS
 
-    queda_critica = {"tipo": "queda", "host_id": 1, "servico": "pgbouncer", "nivel": "critico"}
-    queda_atencao = {"tipo": "queda", "host_id": 1, "servico": "pgbouncer", "nivel": "atencao"}
+    plantao = NotificacaoDestino(id=1, nome="Plantão", tipo="grupo", chat_id="-100", ativo=True)
+    dono = NotificacaoDestino(id=2, nome="João", tipo="individual", chat_id="55", ativo=True)
+    desligado = NotificacaoDestino(id=3, nome="Antigo", tipo="grupo", chat_id="-999", ativo=False)
+    destinos = [plantao, dono, desligado]
 
-    assert NotificacaoService.decidir([], queda_critica) is False, "sem regra, não manda"
+    queda = {"tipo": "servico_parado", "host_id": 1, "servico": "pgbouncer",
+             "nivel": "critico", "duracao_s": 0}
 
-    geral = NotificacaoRegra(host_id=None, servico="", nivel_minimo="critico",
-                             avisar_retorno=True, ativo=True)
-    assert NotificacaoService.decidir([geral], queda_critica) is True
-    # A regra geral é "só quando parar": atenção não passa.
-    assert NotificacaoService.decidir([geral], queda_atencao) is False
+    assert NS.rotear([], destinos, queda) == [], "sem regra, ninguém recebe"
 
-    # Regra do host, mais específica, abre para atenção.
-    do_host = NotificacaoRegra(host_id=1, servico="", nivel_minimo="atencao",
-                               avisar_retorno=True, ativo=True)
-    assert NotificacaoService.decidir([geral, do_host], queda_atencao) is True
+    # Regra geral, sem destino = todos os destinos ATIVOS (o desligado fica fora).
+    geral = NotificacaoRegra(
+        destino_id=None, host_id=None, servico="", ativo=True,
+        tipos=["servico_parado"], nivel_minimo="critico", atraso_s=0,
+    )
+    nomes = sorted(d.nome for d in NS.rotear([geral], destinos, queda))
+    assert nomes == ["João", "Plantão"], nomes
 
-    # Regra do serviço no host vence a do host.
-    do_servico = NotificacaoRegra(host_id=1, servico="pgbouncer", nivel_minimo="critico",
-                                  avisar_retorno=False, ativo=True)
-    assert NotificacaoService.decidir([geral, do_host, do_servico], queda_atencao) is False
+    # Regra específica de um serviço para um destino só.
+    do_dono = NotificacaoRegra(
+        destino_id=2, host_id=1, servico="pgbouncer", ativo=True,
+        tipos=["servico_parado"], nivel_minimo="critico", atraso_s=0,
+    )
+    nomes = sorted(d.nome for d in NS.rotear([do_dono], destinos, queda))
+    assert nomes == ["João"], nomes
 
-    # Outro host não é afetado pela regra do host 1.
-    outro = {"tipo": "queda", "host_id": 2, "servico": "pgbouncer", "nivel": "atencao"}
-    assert NotificacaoService.decidir([do_host], outro) is False
+    # As duas juntas não se anulam — somam, sem duplicar destino.
+    escolhidos = NS.rotear([geral, do_dono], destinos, queda)
+    assert sorted(d.nome for d in escolhidos) == ["João", "Plantão"], escolhidos
+    assert len({d.id for d in escolhidos}) == len(escolhidos), "destino duplicado"
 
-    # Retorno respeita o "avisar quando voltar" da regra vencedora.
-    retorno = {"tipo": "retorno", "host_id": 1, "servico": "pgbouncer", "duracao_s": 90}
-    assert NotificacaoService.decidir([geral, do_host, do_servico], retorno) is False
-    assert NotificacaoService.decidir([geral, do_host], retorno) is True
+    # Outro host não é alcançado pela regra do host 1.
+    outro = dict(queda, host_id=2)
+    assert NS.rotear([do_dono], destinos, outro) == []
+
+
+async def cenario_notificacao_filtra_por_tipo_e_gravidade():
+    from app.models.notificacao import NotificacaoDestino, NotificacaoRegra
+    from app.services.notificacao_service import NotificacaoService as NS
+
+    destinos = [NotificacaoDestino(id=1, nome="Plantão", tipo="grupo", chat_id="-100", ativo=True)]
+
+    # Só quer saber de retorno: queda não passa, retorno passa.
+    so_retorno = NotificacaoRegra(
+        destino_id=None, host_id=None, servico="", ativo=True,
+        tipos=["retorno"], nivel_minimo="critico", atraso_s=0,
+    )
+    queda = {"tipo": "servico_parado", "host_id": 1, "servico": "x", "nivel": "critico", "duracao_s": 0}
+    volta = {"tipo": "retorno", "host_id": 1, "servico": "x", "duracao_s": 90}
+    assert NS.rotear([so_retorno], destinos, queda) == []
+    assert len(NS.rotear([so_retorno], destinos, volta)) == 1
+
+    # Gravidade: "só quando parar" não deixa passar atenção.
+    so_critico = NotificacaoRegra(
+        destino_id=None, host_id=None, servico="", ativo=True,
+        tipos=["servico_parado", "metrica"], nivel_minimo="critico", atraso_s=0,
+    )
+    assert len(NS.rotear([so_critico], destinos, queda)) == 1
+    assert NS.rotear([so_critico], destinos, dict(queda, nivel="atencao")) == []
+
+    # Tipo não marcado nunca passa, nem sendo crítico.
+    metrica = {"tipo": "metrica", "host_id": 1, "servico": "", "nivel": "critico"}
+    sem_metrica = NotificacaoRegra(
+        destino_id=None, host_id=None, servico="", ativo=True,
+        tipos=["servico_parado"], nivel_minimo="atencao", atraso_s=0,
+    )
+    assert NS.rotear([sem_metrica], destinos, metrica) == []
+
+    # Regra desligada não manda nada.
+    so_critico.ativo = False
+    assert NS.rotear([so_critico], destinos, queda) == []
+
+
+async def cenario_notificacao_espera_antes_de_avisar():
+    """
+    O `for:` do Prometheus: só avisa se o problema PERSISTIR. Serve para
+    não acordar ninguém por uma piscada de 20 segundos.
+
+    O retorno não espera — boa notícia não tem por que atrasar.
+    """
+    from app.models.notificacao import NotificacaoDestino, NotificacaoRegra
+    from app.services.notificacao_service import NotificacaoService as NS
+
+    destinos = [NotificacaoDestino(id=1, nome="Plantão", tipo="grupo", chat_id="-100", ativo=True)]
+    regra = NotificacaoRegra(
+        destino_id=None, host_id=None, servico="", ativo=True,
+        tipos=["servico_parado", "retorno"], nivel_minimo="critico", atraso_s=300,
+    )
+
+    novinho = {"tipo": "servico_parado", "host_id": 1, "servico": "x",
+               "nivel": "critico", "duracao_s": 20}
+    assert NS.rotear([regra], destinos, novinho) == [], "avisou antes da espera"
+
+    persistindo = dict(novinho, duracao_s=301)
+    assert len(NS.rotear([regra], destinos, persistindo)) == 1, "não avisou depois da espera"
+
+    volta = {"tipo": "retorno", "host_id": 1, "servico": "x", "duracao_s": 30}
+    assert len(NS.rotear([regra], destinos, volta)) == 1, "retorno não deveria esperar"
 
 
 async def cenario_notificacao_mensagem_curta_e_sem_ip():
     """
     A mensagem tem que caber na prévia do celular — e não pode levar
-    endereço interno para um grupo de Telegram.
+    endereço interno para um grupo de Telegram. Um tipo por formato: quem
+    lê precisa distinguir "parou" de "voltou" de "limite" no primeiro
+    caractere.
     """
     from app.services.notificacao_service import montar_mensagem
 
     texto = montar_mensagem({
-        "tipo": "queda", "host": "vm-appserver", "servico": "findface-video-worker",
+        "tipo": "servico_parado", "host": "vm-appserver", "servico": "findface-video-worker",
         "nivel": "critico", "texto": "findface-video-worker com problema",
         "causa_provavel": "reiniciou 7x nos últimos 30 min — sinal de câmera problemática.",
         "inicio": AGORA,
@@ -565,11 +641,11 @@ async def cenario_notificacao_mensagem_curta_e_sem_ip():
     assert len(linhas) <= 4, texto
     assert "PARADO" in linhas[0] and "vm-appserver" in linhas[0], texto
     assert "10.0" not in texto and "192.168" not in texto, "vazou endereço interno"
-    # Curta o suficiente para a prévia do celular.
     assert len(texto) <= 220, f"mensagem longa demais ({len(texto)}): {texto}"
+
     # A causa entra cortada na primeira frase e limitada a 140 caracteres.
     longa = montar_mensagem({
-        "tipo": "queda", "host": "vm-appserver", "servico": "x", "nivel": "critico",
+        "tipo": "servico_parado", "host": "vm-appserver", "servico": "x", "nivel": "critico",
         "texto": "x com problema", "inicio": AGORA,
         "causa_provavel": "primeira frase curta. " + ("detalhe " * 40),
     })
@@ -581,21 +657,40 @@ async def cenario_notificacao_mensagem_curta_e_sem_ip():
     })
     assert "NORMALIZADO" in volta and "6min" in volta, volta
 
+    # Cada tipo tem cabeçalho próprio.
+    sem_contato = montar_mensagem({
+        "tipo": "host_sem_contato", "host": "vm-dbserver", "servico": "",
+        "nivel": "critico", "inicio": AGORA,
+        "causa_provavel": "rede fora, VM desligada ou parada.",
+    })
+    assert "SEM CONTATO" in sem_contato, sem_contato
+
+    limite = montar_mensagem({
+        "tipo": "metrica", "host": "vm-appserver", "servico": "", "nivel": "atencao",
+        "texto": "disco / em 94% — só 6 GB livres",
+        "acao": "Em Manutenção, use Diagnosticar. Outra frase que não deve entrar.",
+    })
+    assert "LIMITE" in limite and "94%" in limite, limite
+    assert "Outra frase" not in limite, limite
+
 
 async def cenario_notificacao_nao_repete_o_mesmo_evento():
     """
-    Aviso que repete vira aviso que se ignora. O mesmo evento não pode ser
-    mandado duas vezes, mesmo que o ciclo o veja de novo.
+    Aviso que repete vira aviso que se ignora. O mesmo evento, para o mesmo
+    destino, não pode ser mandado duas vezes — mesmo que o ciclo o veja de
+    novo (e agora ele vê, a cada passada, para a espera funcionar).
     """
     from app.core.vault import encrypt_secret
-    from app.models.notificacao import NotificacaoConta, NotificacaoEnvio, NotificacaoRegra
+    from app.models.notificacao import (
+        NotificacaoConta, NotificacaoDestino, NotificacaoEnvio, NotificacaoRegra,
+    )
     from app.services import notificacao_service as ns
 
     engine, fabrica = await nova_sessao()
     enviados = []
 
     async def enviar_falso(token, chat_id, texto):
-        enviados.append(texto)
+        enviados.append((chat_id, texto))
         return {"ok": True}
 
     original = ns.telegram_service.enviar
@@ -604,27 +699,81 @@ async def cenario_notificacao_nao_repete_o_mesmo_evento():
         async with fabrica() as db:
             host = await com_host(db)
             db.add(NotificacaoConta(
-                bot_nome="bot", bot_token_enc=encrypt_secret("123:abc"),
-                chat_id="-100123", ativo=True,
+                bot_nome="bot", bot_token_enc=encrypt_secret("123:abc"), ativo=True,
             ))
-            db.add(NotificacaoRegra(host_id=None, servico="", nivel_minimo="critico", ativo=True))
+            db.add(NotificacaoDestino(nome="Plantão", tipo="grupo", chat_id="-100", ativo=True))
+            db.add(NotificacaoRegra(
+                destino_id=None, host_id=None, servico="", ativo=True,
+                tipos=["servico_parado"], nivel_minimo="critico", atraso_s=0,
+            ))
             await db.flush()
 
             evento = {
-                "tipo": "queda", "chave": "ini:1:servico:pgbouncer:x",
+                "tipo": "servico_parado", "chave": "ini:1:servico:pgbouncer:x",
                 "host_id": host.id, "host": host.name, "servico": "pgbouncer",
-                "nivel": "critico", "texto": "pgbouncer com problema", "inicio": AGORA,
+                "nivel": "critico", "texto": "pgbouncer com problema",
+                "inicio": AGORA, "duracao_s": 0,
             }
             serv = ns.NotificacaoService()
             assert await serv.despachar(db, [evento]) == 1
             await db.flush()
-            # Mesmo evento de novo: não manda.
-            assert await serv.despachar(db, [evento]) == 0
+            # O ciclo vê de novo: não manda de novo.
+            assert await serv.despachar(db, [dict(evento, duracao_s=60)]) == 0
             await db.flush()
             assert len(enviados) == 1, enviados
 
             r = await db.execute(sa.select(NotificacaoEnvio))
-            assert len(list(r.scalars().all())) == 1
+            registros = list(r.scalars().all())
+            assert len(registros) == 1, registros
+            assert registros[0].destino == "Plantão", registros[0].destino
+    finally:
+        ns.telegram_service.enviar = original
+    await engine.dispose()
+
+
+async def cenario_notificacao_manda_para_dois_destinos():
+    """Um evento, dois destinos: dois envios, cada um rastreado."""
+    from app.core.vault import encrypt_secret
+    from app.models.notificacao import (
+        NotificacaoConta, NotificacaoDestino, NotificacaoEnvio, NotificacaoRegra,
+    )
+    from app.services import notificacao_service as ns
+
+    engine, fabrica = await nova_sessao()
+    destinos_usados = []
+
+    async def enviar_falso(token, chat_id, texto):
+        destinos_usados.append(chat_id)
+        return {"ok": True}
+
+    original = ns.telegram_service.enviar
+    ns.telegram_service.enviar = enviar_falso
+    try:
+        async with fabrica() as db:
+            host = await com_host(db)
+            db.add(NotificacaoConta(
+                bot_nome="bot", bot_token_enc=encrypt_secret("123:abc"), ativo=True,
+            ))
+            db.add(NotificacaoDestino(nome="Grupo", tipo="grupo", chat_id="-100", ativo=True))
+            db.add(NotificacaoDestino(nome="Pessoa", tipo="individual", chat_id="55", ativo=True))
+            db.add(NotificacaoRegra(
+                destino_id=None, host_id=None, servico="", ativo=True,
+                tipos=["servico_parado"], nivel_minimo="critico", atraso_s=0,
+            ))
+            await db.flush()
+
+            serv = ns.NotificacaoService()
+            n = await serv.despachar(db, [{
+                "tipo": "servico_parado", "chave": "k1", "host_id": host.id,
+                "host": host.name, "servico": "x", "nivel": "critico",
+                "texto": "x com problema", "inicio": AGORA, "duracao_s": 0,
+            }])
+            await db.flush()
+            assert n == 2, n
+            assert sorted(destinos_usados) == ["-100", "55"], destinos_usados
+
+            r = await db.execute(sa.select(NotificacaoEnvio))
+            assert len(list(r.scalars().all())) == 2
     finally:
         ns.telegram_service.enviar = original
     await engine.dispose()
@@ -636,7 +785,9 @@ async def cenario_notificacao_nunca_derruba_o_ciclo():
     incidente já estão gravados quando o aviso é tentado.
     """
     from app.core.vault import encrypt_secret
-    from app.models.notificacao import NotificacaoConta, NotificacaoEnvio, NotificacaoRegra
+    from app.models.notificacao import (
+        NotificacaoConta, NotificacaoDestino, NotificacaoEnvio, NotificacaoRegra,
+    )
     from app.services import notificacao_service as ns
 
     engine, fabrica = await nova_sessao()
@@ -650,16 +801,20 @@ async def cenario_notificacao_nunca_derruba_o_ciclo():
         async with fabrica() as db:
             host = await com_host(db)
             db.add(NotificacaoConta(
-                bot_nome="bot", bot_token_enc=encrypt_secret("123:abc"),
-                chat_id="-100123", ativo=True,
+                bot_nome="bot", bot_token_enc=encrypt_secret("123:abc"), ativo=True,
             ))
-            db.add(NotificacaoRegra(host_id=None, servico="", nivel_minimo="critico", ativo=True))
+            db.add(NotificacaoDestino(nome="Plantão", tipo="grupo", chat_id="-100", ativo=True))
+            db.add(NotificacaoRegra(
+                destino_id=None, host_id=None, servico="", ativo=True,
+                tipos=["servico_parado"], nivel_minimo="critico", atraso_s=0,
+            ))
             await db.flush()
 
             serv = ns.NotificacaoService()
             enviados = await serv.despachar(db, [{
-                "tipo": "queda", "chave": "k1", "host_id": host.id, "host": host.name,
-                "servico": "x", "nivel": "critico", "texto": "x", "inicio": AGORA,
+                "tipo": "servico_parado", "chave": "k1", "host_id": host.id,
+                "host": host.name, "servico": "x", "nivel": "critico",
+                "texto": "x", "inicio": AGORA, "duracao_s": 0,
             }])
             assert enviados == 0
             await db.flush()
@@ -668,6 +823,122 @@ async def cenario_notificacao_nunca_derruba_o_ciclo():
             r = await db.execute(sa.select(NotificacaoEnvio))
             registro = r.scalars().one()
             assert registro.status == "falha" and "timeout falso" in registro.erro
+            assert registro.destino == "Plantão", registro.destino
+    finally:
+        ns.telegram_service.enviar = original
+    await engine.dispose()
+
+
+async def cenario_telegram_ponta_a_ponta():
+    """
+    O caminho inteiro, do jeito que a pessoa configura: salva o bot,
+    cadastra dois destinos (um grupo e uma pessoa), cria duas regras
+    diferentes, e confere que cada evento chega em quem devia — usando as
+    MESMAS funções que as rotas usam.
+
+    É o que o botão "testar" prova em produção; aqui prova sem rede.
+    """
+    from app.core.vault import decrypt_secret, encrypt_secret
+    from app.models.notificacao import (
+        NotificacaoConta, NotificacaoDestino, NotificacaoEnvio, NotificacaoRegra,
+    )
+    from app.services import notificacao_service as ns
+
+    engine, fabrica = await nova_sessao()
+    entregas = []
+
+    async def enviar_falso(token, chat_id, texto):
+        entregas.append({"chat": chat_id, "texto": texto})
+        return {"ok": True}
+
+    original = ns.telegram_service.enviar
+    ns.telegram_service.enviar = enviar_falso
+    try:
+        async with fabrica() as db:
+            app_host = await com_host(db, 1, "vm-appserver")
+            db_host = await com_host(db, 2, "vm-dbserver")
+
+            # 1. O bot
+            db.add(NotificacaoConta(
+                bot_nome="faceops_bot",
+                bot_token_enc=encrypt_secret("999:TOKEN-SECRETO"),
+                token_fingerprint="ff00", ativo=True,
+            ))
+            # 2. Destinos: um grupo e uma pessoa
+            grupo = NotificacaoDestino(nome="Plantão NOC", tipo="grupo", chat_id="-1001", ativo=True)
+            pessoa = NotificacaoDestino(nome="João", tipo="individual", chat_id="777", ativo=True)
+            db.add_all([grupo, pessoa])
+            await db.flush()
+
+            # 3. Regras: plantão recebe tudo dos dois hosts; João só o
+            #    pgbouncer do dbserver, e só depois de 5 min de queda.
+            db.add(NotificacaoRegra(
+                destino_id=grupo.id, host_id=None, servico="", ativo=True,
+                tipos=["servico_parado", "host_sem_contato", "retorno", "metrica"],
+                nivel_minimo="atencao", atraso_s=0,
+            ))
+            db.add(NotificacaoRegra(
+                destino_id=pessoa.id, host_id=db_host.id, servico="pgbouncer", ativo=True,
+                tipos=["servico_parado"], nivel_minimo="critico", atraso_s=300,
+            ))
+            await db.flush()
+
+            serv = ns.NotificacaoService()
+
+            # Queda do pgbouncer no dbserver, recém-detectada: o plantão
+            # recebe na hora; o João espera os 5 minutos.
+            queda = {
+                "tipo": "servico_parado", "chave": "ini:2:servico:pgbouncer:t0",
+                "host_id": db_host.id, "host": db_host.name, "servico": "pgbouncer",
+                "nivel": "critico", "texto": "pgbouncer com problema",
+                "causa_provavel": "container parado.", "inicio": AGORA, "duracao_s": 30,
+            }
+            assert await serv.despachar(db, [queda]) == 1, entregas
+            await db.flush()
+            assert [e["chat"] for e in entregas] == ["-1001"], entregas
+
+            # Cinco minutos depois, ainda caído: agora o João recebe — e o
+            # plantão NÃO recebe de novo (deduplicação).
+            assert await serv.despachar(db, [dict(queda, duracao_s=330)]) == 1
+            await db.flush()
+            assert sorted(e["chat"] for e in entregas) == ["-1001", "777"], entregas
+
+            # Limite de recurso no appserver: regra do João não cobre.
+            metrica = {
+                "tipo": "metrica", "chave": "met:1:disco", "host_id": app_host.id,
+                "host": app_host.name, "servico": "", "nivel": "atencao",
+                "texto": "disco / em 94%", "acao": "Em Manutenção, use Diagnosticar.",
+            }
+            assert await serv.despachar(db, [metrica]) == 1
+            await db.flush()
+
+            # Voltou ao normal: plantão sim (tem "retorno"), João não.
+            volta = {
+                "tipo": "retorno", "chave": "fim:2:servico:pgbouncer:t0",
+                "host_id": db_host.id, "host": db_host.name, "servico": "pgbouncer",
+                "nivel": "critico", "duracao_s": 400,
+            }
+            assert await serv.despachar(db, [volta]) == 1
+            await db.flush()
+
+            # Conferência final: quem recebeu o quê.
+            r = await db.execute(sa.select(NotificacaoEnvio))
+            registros = list(r.scalars().all())
+            assert len(registros) == 4, [(x.destino, x.texto[:20]) for x in registros]
+            assert all(x.status == "enviado" for x in registros), registros
+
+            por_destino = {}
+            for x in registros:
+                por_destino.setdefault(x.destino, []).append(x.texto)
+            assert len(por_destino["Plantão NOC"]) == 3, por_destino
+            assert len(por_destino["João"]) == 1, por_destino
+            assert "PARADO" in por_destino["João"][0], por_destino["João"]
+
+            # E o token nunca apareceu em nenhuma mensagem.
+            assert all("TOKEN-SECRETO" not in e["texto"] for e in entregas)
+            # ...mas continua legível para quem tem a SECRET_KEY.
+            conta = await serv.conta(db)
+            assert decrypt_secret(conta.bot_token_enc) == "999:TOKEN-SECRETO"
     finally:
         ns.telegram_service.enviar = original
     await engine.dispose()
@@ -978,10 +1249,14 @@ CENARIOS = [
     cenario_reincidencia_conta_e_datilha_horario,
     cenario_reincidencia_nao_inventa_horario,
     cenario_sonda_404_405_nao_e_servico_travado,
-    cenario_notificacao_regra_do_mais_especifico_ao_geral,
+    cenario_notificacao_roteia_para_os_destinos_certos,
+    cenario_notificacao_filtra_por_tipo_e_gravidade,
+    cenario_notificacao_espera_antes_de_avisar,
     cenario_notificacao_mensagem_curta_e_sem_ip,
     cenario_notificacao_nao_repete_o_mesmo_evento,
+    cenario_notificacao_manda_para_dois_destinos,
     cenario_notificacao_nunca_derruba_o_ciclo,
+    cenario_telegram_ponta_a_ponta,
     cenario_token_do_telegram_nunca_aparece,
     cenario_camera_sem_evento_nao_mente_quando_a_leitura_falha,
     cenario_camera_tenta_de_novo_sem_ordering,

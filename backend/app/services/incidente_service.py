@@ -208,26 +208,43 @@ class IncidenteService:
                 "chave": f"fim:{host.id}:{incidente.tipo}:{incidente.servico}:{inicio.isoformat()}",
             })
 
-        # Abre quem é novo.
+        # Abre quem é novo, e emite evento para TODA queda ainda aberta.
+        #
+        # Emitir a cada ciclo (não só na transição) é o que faz a espera
+        # antes de avisar funcionar: uma regra com `atraso_s` de 5 min só
+        # deixa passar quando a idade do incidente chega lá, e a
+        # deduplicação por chave garante um envio só. A chave carrega o
+        # início, então a mesma queda amanhã é outro evento.
         for chave, info in atuais.items():
-            if chave in abertos:
-                continue
             tipo, servico = chave
-            db.add(Incidente(
-                host_id=host.id, tipo=tipo, servico=servico,
-                nivel=info["nivel"], texto=info["texto"],
-                causa_provavel=info["causa"], inicio=agora,
-            ))
+            existente = abertos.get(chave)
+            if existente is None:
+                db.add(Incidente(
+                    host_id=host.id, tipo=tipo, servico=servico,
+                    nivel=info["nivel"], texto=info["texto"],
+                    causa_provavel=info["causa"], inicio=agora,
+                ))
+                inicio = agora
+                idade = 0.0
+            else:
+                inicio = existente.inicio
+                if inicio.tzinfo is None:
+                    inicio = inicio.replace(tzinfo=timezone.utc)
+                idade = max(0.0, (agora - inicio).total_seconds())
+
             eventos.append({
-                "tipo": "queda",
+                # "host" inteiro sem contato é outro tipo de aviso que
+                # "serviço parado": a causa e quem precisa agir são outros.
+                "tipo": "host_sem_contato" if tipo == "host" else "servico_parado",
                 "host_id": host.id,
                 "host": host.name,
                 "servico": servico,
                 "nivel": info["nivel"],
                 "texto": info["texto"],
                 "causa_provavel": info["causa"],
-                "inicio": agora,
-                "chave": f"ini:{host.id}:{tipo}:{servico}:{agora.isoformat()}",
+                "inicio": inicio,
+                "duracao_s": idade,
+                "chave": f"ini:{host.id}:{tipo}:{servico}:{inicio.isoformat()}",
             })
 
         return eventos

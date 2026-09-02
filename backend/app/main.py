@@ -23,7 +23,8 @@ from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
 from app.models import (  # noqa: F401 — registra todos os modelos
     Amostra, Destino, Incidente, LicencaAmostra, LimiarOverride, LogPadrao,
-    NotificacaoConta, NotificacaoEnvio, NotificacaoRegra, User, VisaoLog,
+    NotificacaoConta, NotificacaoDestino, NotificacaoEnvio, NotificacaoRegra,
+    User, VisaoLog,
 )
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
@@ -93,6 +94,15 @@ COLUNAS_NOVAS = [
     # nunca consultada por dentro, e JSON funciona igual no SQLite dos
     # testes.
     ("hosts", "servicos_conhecidos", "JSON NOT NULL DEFAULT '[]'::json"),
+    # Destinos e tipos de evento (02/09/2026). `destino_id` entra NULA de
+    # propósito: nula significa "todos os destinos ativos", então regra que
+    # já existia continua valendo sem backfill. O padrão de `tipos` cobre o
+    # comportamento anterior (queda + retorno + métrica).
+    ("notificacao_regras", "destino_id", "INTEGER"),
+    ("notificacao_regras", "tipos",
+     '''JSON NOT NULL DEFAULT '["servico_parado","host_sem_contato","retorno","metrica"]'::json'''),
+    ("notificacao_regras", "atraso_s", "INTEGER NOT NULL DEFAULT 0"),
+    ("notificacao_envios", "destino", "VARCHAR(120) NOT NULL DEFAULT ''"),
 ]
 
 # Alterações que não são "coluna nova". Escritas para serem idempotentes:
@@ -101,6 +111,12 @@ ALTERACOES = [
     # O backup do painel não tem servidor de origem
     "ALTER TABLE backup_runs ALTER COLUMN host_id DROP NOT NULL",
     "ALTER TABLE schedules ALTER COLUMN host_id DROP NOT NULL",
+    # O índice único antigo era (host_id, servico) — impedia a mesma regra
+    # para dois destinos diferentes, que é justamente o ponto de haver
+    # destino. `create_all` não mexe em índice de tabela existente.
+    "DROP INDEX IF EXISTS ix_notif_regra_unica",
+    "CREATE INDEX IF NOT EXISTS ix_notif_regra_escopo "
+    "ON notificacao_regras (destino_id, host_id, servico)",
 ]
 
 

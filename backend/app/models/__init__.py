@@ -17,7 +17,7 @@ from app.models.incidente import Incidente
 from app.models.limiar_override import LimiarOverride
 from app.models.log_padrao import LogPadrao
 from app.models.notificacao import (
-    NotificacaoConta, NotificacaoEnvio, NotificacaoRegra,
+    NotificacaoConta, NotificacaoDestino, NotificacaoEnvio, NotificacaoRegra,
 )
 from app.models.user import User
 from app.models.visao_log import VisaoLog
@@ -37,6 +37,7 @@ __all__ = [
     "LimiarOverride",
     "LogPadrao",
     "NotificacaoConta",
+    "NotificacaoDestino",
     "NotificacaoRegra",
     "NotificacaoEnvio",
     "VisaoLog",

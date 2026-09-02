@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Index, Integer, String, Text,
+    JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -44,33 +44,93 @@ class NotificacaoConta(Base):
     )
 
 
+class NotificacaoDestino(Base):
+    """
+    Para onde vai o aviso. Um grupo, ou uma pessoa.
+
+    Desenho emprestado de quem já resolveu isso: Zabbix separa *media type*
+    de *action*, Grafana separa *contact point* de *notification policy*,
+    Alertmanager separa *receiver* de *route*. Aqui é a mesma divisão —
+    **destino** é para onde, **regra** é o que mandar para lá. Sem essa
+    separação, cada destino novo exigiria duplicar todas as regras.
+
+    `tipo`:
+
+    * `grupo` — grupo/canal do Telegram, id negativo (`-100…`). Alguém
+      precisa adicionar o bot ao grupo; o Telegram não deixa o bot entrar
+      sozinho.
+    * `individual` — conversa direta com uma pessoa. O `chat_id` é o id
+      numérico dela, e ela precisa ter falado com o bot pelo menos uma vez
+      (mandar `/start`) — antes disso o Telegram recusa a mensagem com
+      "bot can't initiate conversation with a user". É limite da
+      plataforma, não do painel.
+    """
+
+    __tablename__ = "notificacao_destinos"
+    __table_args__ = (
+        Index("ix_notif_destino_chat", "chat_id", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Como aparece na tela: "Plantão NOC", "João (celular)".
+    nome: Mapped[str] = mapped_column(String(120), default="")
+    # grupo | individual
+    tipo: Mapped[str] = mapped_column(String(16), default="grupo")
+    chat_id: Mapped[str] = mapped_column(String(64))
+    ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    observacao: Mapped[str] = mapped_column(String(255), default="")
+
+    created_by: Mapped[str] = mapped_column(String(120), default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
+
+
 class NotificacaoRegra(Base):
     """
-    O que se quer receber: de qual servidor, de qual serviço, a partir de
-    qual gravidade.
+    O que mandar, de onde, com que gravidade — e para qual destino.
 
     Mesma ideia dos limiares: `host_id` nulo vale para todos os
     servidores, `servico` vazio vale para todos os serviços daquele
-    servidor. "Permitir todos" é uma regra só, com os dois em branco.
+    servidor. `destino_id` nulo vale para **todos os destinos ativos** —
+    é o que mantém simples o caso simples ("avisar todo mundo de tudo").
     """
 
     __tablename__ = "notificacao_regras"
     __table_args__ = (
-        Index("ix_notif_regra_unica", "host_id", "servico", unique=True),
+        Index("ix_notif_regra_escopo", "destino_id", "host_id", "servico"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Nulo = todos os destinos ativos.
+    destino_id: Mapped[int | None] = mapped_column(
+        ForeignKey("notificacao_destinos.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
     host_id: Mapped[int | None] = mapped_column(
         ForeignKey("hosts.id", ondelete="CASCADE"), nullable=True, index=True
     )
     servico: Mapped[str] = mapped_column(String(160), default="")
 
+    # Quais tipos de evento esta regra deixa passar. Ver TIPOS em
+    # `notificacao_service` — vazio significa "nenhum", não "todos": regra
+    # sem tipo marcado não manda nada, e isso é explícito na tela.
+    tipos: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+
     # atencao = manda tudo; critico = só o que parou de fato.
     nivel_minimo: Mapped[str] = mapped_column(String(16), default="critico")
-    # Avisar também quando volta. Ligado por padrão: saber que normalizou
-    # evita alguém sair de casa às 3h por um problema que já passou.
-    avisar_retorno: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Só avisa se o problema PERSISTIR por estes segundos — o `for:` do
+    # Prometheus. Zero manda na hora. Serve para não acordar ninguém por
+    # uma piscada de 20 segundos que já se resolveu.
+    atraso_s: Mapped[int] = mapped_column(Integer, default=0)
+
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Legado da primeira versão, quando o retorno era um booleano em vez de
+    # um tipo de evento. Mantido para não exigir migração destrutiva; quem
+    # decide hoje é `tipos` conter "retorno".
+    avisar_retorno: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     created_by: Mapped[str] = mapped_column(String(120), default="")
     updated_at: Mapped[datetime] = mapped_column(
@@ -101,6 +161,9 @@ class NotificacaoEnvio(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     chave: Mapped[str] = mapped_column(String(200), default="")
+    # Nome do destino, para "não recebi" ter resposta por destino e não só
+    # por evento.
+    destino: Mapped[str] = mapped_column(String(120), default="")
     texto: Mapped[str] = mapped_column(String(1000), default="")
     # enviado | falha
     status: Mapped[str] = mapped_column(String(16), default="enviado")

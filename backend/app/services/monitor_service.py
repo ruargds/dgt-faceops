@@ -147,6 +147,32 @@ class MonitorService:
                 # mesmo tempo dariam um pico que não precisa existir.
                 await asyncio.sleep(1)
 
+            # Aviso de limite de recurso: uma leitura por CICLO (não por
+            # host) sobre o que `alertas()` já sabe calcular — sem
+            # duplicar a lógica de limiar em dois lugares.
+            if self.notificacoes is not None:
+                try:
+                    metricas = [
+                        {
+                            "tipo": "metrica",
+                            "host_id": a["host_id"],
+                            "host": a["host"],
+                            "servico": "",
+                            "nivel": a["nivel"],
+                            "texto": a["texto"],
+                            "acao": a.get("acao", ""),
+                            # Limite não tem "início" observado como um
+                            # incidente tem; a chave é a condição em si, e a
+                            # janela de repetição decide se lembra de novo.
+                            "chave": f"met:{a['host_id']}:{a['chave']}",
+                        }
+                        for a in await self.alertas(db)
+                        if a["chave"] not in ("conexao", "servico", "servicos")
+                    ]
+                    await self.notificacoes.despachar(db, metricas)
+                except Exception:
+                    log.exception("falha ao notificar limites de recurso")
+
             await db.commit()
 
         self._ciclos += 1

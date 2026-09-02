@@ -306,7 +306,14 @@ export const api = {
   // trazem só o nome do bot e a impressão digital.
   notifConta: () => get("/notificacoes/conta"),
   salvarNotifConta: (d) => request("/notificacoes/conta", { method: "PUT", body: JSON.stringify(d) }),
-  testarNotif: () => post("/notificacoes/testar"),
+  // Descobre os chats que já falaram com o bot — evita digitar chat_id.
+  notifChats: () => get("/notificacoes/chats"),
+  notifDestinos: () => get("/notificacoes/destinos"),
+  salvarNotifDestino: (d) => request("/notificacoes/destinos", { method: "PUT", body: JSON.stringify(d) }),
+  removerNotifDestino: (id) => del(`/notificacoes/destinos/${id}`),
+  // Sem destino = testa todos. É o botão que prova o caminho inteiro.
+  testarNotif: (destinoId) =>
+    post(`/notificacoes/testar${destinoId ? `?destino_id=${destinoId}` : ""}`),
   notifRegras: () => get("/notificacoes/regras"),
   salvarNotifRegra: (d) => request("/notificacoes/regras", { method: "PUT", body: JSON.stringify(d) }),
   removerNotifRegra: (id) => del(`/notificacoes/regras/${id}`),

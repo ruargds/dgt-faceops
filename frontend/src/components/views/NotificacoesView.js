@@ -2,44 +2,62 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api, formatData } from "../../api";
 import { t } from "../../i18n";
 import { Carregando, Erro, Vazio } from "../Comuns";
-import { IconAlerta, IconAtualizar, IconLixeira, IconOk } from "../Icons";
+import { IconAlerta, IconAtualizar, IconLixeira, IconMais, IconOk } from "../Icons";
 
 /**
- * Aviso por Telegram — um bot por cliente, um grupo de destino.
+ * Avisos no Telegram — bot, destinos e regras.
  *
- * Mesmo fluxo que a equipe já usa no Zabbix: cria-se um bot para o
- * cliente, adiciona-se ao grupo de quem precisa receber, e configura-se
- * aqui de quais servidores e serviços vêm os avisos.
+ * Três blocos, na ordem em que se configura, e o desenho é o de quem já
+ * resolveu isso: Zabbix separa media type de action, Grafana separa
+ * contact point de notification policy, Alertmanager separa receiver de
+ * route. Aqui é **destino** (para onde) e **regra** (o que mandar para lá).
  *
- * O token é escrito, nunca lido: depois de salvo, a tela mostra o nome do
- * bot e a impressão digital. Para trocar de conta, basta colar um token
- * novo — o antigo é substituído.
+ * Sem essa separação, cada destino novo exigiria duplicar todas as regras.
  */
 const NIVEL_ROTULO = {
   critico: "Só quando parar",
   atencao: "Atenção e parada",
 };
 
+const ESPERAS = [
+  { s: 0, rotulo: "na hora" },
+  { s: 120, rotulo: "2 min" },
+  { s: 300, rotulo: "5 min" },
+  { s: 900, rotulo: "15 min" },
+  { s: 1800, rotulo: "30 min" },
+];
+
 export default function NotificacoesView() {
   const [conta, setConta] = useState(null);
-  const [regras, setRegras] = useState(null);
+  const [destinos, setDestinos] = useState([]);
+  const [regras, setRegras] = useState([]);
   const [hosts, setHosts] = useState([]);
+  const [tiposEvento, setTiposEvento] = useState([]);
   const [envios, setEnvios] = useState(null);
+  const [chats, setChats] = useState(null);
+
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [expandido, setExpandido] = useState({});
+  const [ocupado, setOcupado] = useState("");
 
-  const [form, setForm] = useState({ bot_token: "", chat_id: "", ativo: true });
+  const [form, setForm] = useState({ bot_token: "", ativo: true });
+  const [novoDestino, setNovoDestino] = useState({
+    nome: "", tipo: "grupo", chat_id: "", observacao: "",
+  });
+  const [novaRegra, setNovaRegra] = useState(null);
 
   const carregar = useCallback(async () => {
     setErro("");
     try {
-      const [c, r] = await Promise.all([api.notifConta(), api.notifRegras()]);
+      const [c, d, r] = await Promise.all([
+        api.notifConta(), api.notifDestinos(), api.notifRegras(),
+      ]);
       setConta(c);
+      setDestinos(d.destinos);
       setRegras(r.regras);
       setHosts(r.hosts);
-      setForm((f) => ({ ...f, chat_id: c.chat_id || "", ativo: c.ativo }));
+      setTiposEvento(r.tipos_evento);
+      setForm((f) => ({ ...f, ativo: c.ativo }));
     } catch (ex) {
       setErro(ex.message);
     }
@@ -49,82 +67,54 @@ export default function NotificacoesView() {
     carregar();
   }, [carregar]);
 
-  async function salvarConta(e) {
-    e.preventDefault();
-    setSalvando(true);
+  async function acao(nome, fn, mensagem) {
+    setOcupado(nome);
     setErro("");
     setAviso("");
     try {
-      const c = await api.salvarNotifConta(form);
-      setConta(c);
-      setForm((f) => ({ ...f, bot_token: "" }));
-      setAviso(t("Conta salva."));
+      await fn();
+      if (mensagem) setAviso(mensagem);
+      await carregar();
     } catch (ex) {
       setErro(ex.message);
     } finally {
-      setSalvando(false);
+      setOcupado("");
     }
   }
 
-  async function testar() {
+  async function testar(destinoId, nomeDestino) {
+    setOcupado(`teste-${destinoId || "todos"}`);
     setErro("");
     setAviso("");
     try {
-      await api.testarNotif();
-      setAviso(t("Mensagem de teste enviada — confira o grupo."));
-    } catch (ex) {
-      setErro(ex.message);
-    }
-  }
-
-  // Uma regra por (host, serviço). Serviço vazio = todos daquele host.
-  function regraDe(hostId, servico = "") {
-    return (regras || []).find(
-      (r) => r.host_id === hostId && r.servico === servico
-    );
-  }
-
-  async function alternarRegra(hostId, servico, ligar, extras = {}) {
-    setErro("");
-    try {
-      if (!ligar) {
-        const atual = regraDe(hostId, servico);
-        if (atual) await api.removerNotifRegra(atual.id);
+      const r = await api.testarNotif(destinoId);
+      const falhas = (r.resultados || []).filter((x) => !x.ok);
+      if (falhas.length === 0) {
+        setAviso(
+          destinoId
+            ? `Mensagem de teste entregue em "${nomeDestino}". Confira o Telegram.`
+            : "Mensagem de teste entregue em todos os destinos."
+        );
       } else {
-        const atual = regraDe(hostId, servico);
-        await api.salvarNotifRegra({
-          host_id: hostId,
-          servico,
-          nivel_minimo: extras.nivel_minimo || (atual && atual.nivel_minimo) || "critico",
-          avisar_retorno:
-            extras.avisar_retorno !== undefined
-              ? extras.avisar_retorno
-              : atual
-              ? atual.avisar_retorno
-              : true,
-          ativo: true,
-        });
+        setErro(
+          falhas.map((f) => `${f.destino}: ${f.erro}`).join(" · ")
+        );
       }
-      const r = await api.notifRegras();
-      setRegras(r.regras);
-      setHosts(r.hosts);
+      setEnvios(null);
     } catch (ex) {
       setErro(ex.message);
-    }
-  }
-
-  async function verEnvios() {
-    try {
-      const r = await api.notifEnvios(20);
-      setEnvios(r.envios);
-    } catch (ex) {
-      setErro(ex.message);
+    } finally {
+      setOcupado("");
     }
   }
 
   if (!conta && !erro) return <Carregando />;
 
-  const regraGeral = regraDe(null, "");
+  const semDestino = destinos.length === 0;
+  const semRegra = regras.length === 0;
+  const nomeHost = (id) => (id ? (hosts.find((h) => h.id === id) || {}).nome || `#${id}` : "todos os servidores");
+  const nomeDestino = (id) =>
+    id ? (destinos.find((d) => d.id === id) || {}).nome || `#${id}` : "todos os destinos ativos";
 
   return (
     <>
@@ -132,10 +122,19 @@ export default function NotificacoesView() {
         <div>
           <div className="page-title">{t("Avisos no Telegram")}</div>
           <div className="page-sub">
-            {t("Um bot para este cliente, mandando para o grupo de quem precisa receber")}
+            {t("Um bot, quantos destinos precisar — grupo ou pessoa — e regras por tipo de evento")}
           </div>
         </div>
         <div className="page-actions">
+          {!semDestino && conta.configurado && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => testar(null, null)}
+              disabled={ocupado === "teste-todos"}
+            >
+              {ocupado === "teste-todos" ? t("enviando…") : t("Testar todos os destinos")}
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={carregar}>
             <IconAtualizar size={15} /> {t("Recarregar")}
           </button>
@@ -155,21 +154,21 @@ export default function NotificacoesView() {
         </div>
       )}
 
-      {/* ── Conta ──────────────────────────────────────────────────── */}
+      {/* ── 1. O bot ────────────────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="section-title" style={{ marginBottom: 4 }}>{t("Conta de envio")}</div>
+        <div className="section-title" style={{ marginBottom: 4 }}>
+          {t("1. O bot")}
+        </div>
         <div className="small muted" style={{ marginBottom: 14 }}>
-          {t("Crie o bot no @BotFather, adicione ao grupo e cole aqui o token. O id do grupo começa com hífen. O token é guardado cifrado e nunca é exibido de volta.")}
+          {t("Crie no @BotFather e cole o token. Ele é validado no Telegram antes de salvar, guardado cifrado, e nunca é exibido de volta.")}
         </div>
 
-        {conta && conta.configurado && (
+        {conta.configurado && (
           <div className="stack-h small" style={{ gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
             <span className={`pill ${conta.ativo ? "pill-ok" : "pill-idle"}`}>
-              {conta.ativo ? t("ativo") : t("desligado")}
+              {conta.ativo ? t("envio habilitado") : t("envio desligado")}
             </span>
-            <span>
-              <strong>{conta.bot_nome ? `@${conta.bot_nome}` : t("bot")}</strong>
-            </span>
+            <strong>{conta.bot_nome ? `@${conta.bot_nome}` : t("bot")}</strong>
             <span className="muted mono">{t("token")} {conta.token_fingerprint}</span>
             <span className="muted">
               {t("por")} {conta.atualizado_por} · {formatData(conta.atualizado_em)}
@@ -177,47 +176,42 @@ export default function NotificacoesView() {
           </div>
         )}
 
-        <form onSubmit={salvarConta}>
-          {/* Dois campos de mesma altura, lado a lado. O que ficava torto
-              antes era o checkbox e o botão dividindo coluna com campo de
-              texto — cada um com altura própria. */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            acao("conta", async () => {
+              await api.salvarNotifConta(form);
+              setForm((f) => ({ ...f, bot_token: "" }));
+            }, t("Bot salvo."));
+          }}
+        >
           <div className="row row-2">
             <div className="field">
               <label className="label">
-                {conta && conta.configurado ? t("Trocar token do bot") : t("Token do bot")}
+                {conta.configurado ? t("Trocar token do bot") : t("Token do bot")}
               </label>
               <input
                 type="password"
                 className="mono"
                 autoComplete="new-password"
-                placeholder={conta && conta.configurado ? t("deixe vazio para manter") : "123456:ABC-DEF..."}
+                placeholder={conta.configurado ? t("deixe vazio para manter") : "123456:ABC-DEF..."}
                 value={form.bot_token}
                 onChange={(e) => setForm({ ...form, bot_token: e.target.value })}
               />
-              <div className="field-help">{t("Validado no Telegram antes de salvar.")}</div>
             </div>
-            <div className="field">
-              <label className="label label-required">{t("Id do grupo")}</label>
-              <input
-                className="mono"
-                placeholder="-1001234567890"
-                value={form.chat_id}
-                onChange={(e) => setForm({ ...form, chat_id: e.target.value })}
-                required
-              />
-              <div className="field-help">
-                {t("Grupo do Telegram tem id negativo, começando por -100.")}
-              </div>
+            <div className="field" style={{ display: "flex", alignItems: "flex-end" }}>
+              <button className="btn btn-primary" disabled={ocupado === "conta"}>
+                {ocupado === "conta" ? t("Salvando…") : t("Salvar bot")}
+              </button>
             </div>
           </div>
 
-          {/* Habilitar o envio é decisão própria, não um checkbox perdido ao
-              lado de um botão: enquanto estiver desligado, nada sai daqui. */}
+          {/* Habilitar é decisão própria, não um checkbox perdido. */}
           <div
             className="card card-tight"
             style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
-              gap: 16, flexWrap: "wrap", marginBottom: 14,
+              gap: 16, flexWrap: "wrap",
               borderColor: form.ativo ? "var(--green-bd)" : "var(--border)",
               background: form.ativo ? "var(--green-bg)" : "var(--bg-2)",
             }}
@@ -226,7 +220,12 @@ export default function NotificacoesView() {
               <input
                 type="checkbox"
                 checked={form.ativo}
-                onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
+                onChange={(e) => {
+                  const ativo = e.target.checked;
+                  setForm((f) => ({ ...f, ativo }));
+                  acao("conta", () => api.salvarNotifConta({ bot_token: "", ativo }),
+                    ativo ? t("Envio de eventos habilitado.") : t("Envio de eventos desligado."));
+                }}
               />
               <span>
                 <strong style={{ color: form.ativo ? "var(--green-fg)" : "var(--text-2)" }}>
@@ -235,204 +234,298 @@ export default function NotificacoesView() {
                 <br />
                 <span className="muted">
                   {form.ativo
-                    ? t("Quedas e retornos ao normal são enviados conforme as regras abaixo.")
-                    : t("Nada é enviado enquanto estiver desligado — as regras ficam guardadas.")}
+                    ? t("Os eventos marcados nas regras abaixo são enviados aos destinos.")
+                    : t("Nada sai daqui enquanto estiver desligado — destinos e regras ficam guardados.")}
                 </span>
               </span>
             </label>
-
-            <div className="stack-h" style={{ gap: 6 }}>
-              {conta && conta.configurado && (
-                <button type="button" className="btn btn-secondary" onClick={testar}>
-                  {t("Enviar teste")}
-                </button>
-              )}
-              <button className="btn btn-primary" disabled={salvando}>
-                {salvando ? t("Salvando…") : t("Salvar conta")}
-              </button>
-            </div>
           </div>
         </form>
       </div>
 
-      {/* ── O que receber ──────────────────────────────────────────── */}
+      {/* ── 2. Destinos ─────────────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="section-title" style={{ marginBottom: 4 }}>{t("O que receber")}</div>
-        <div className="small muted" style={{ marginBottom: 14 }}>
-          {t("Sem nenhuma regra ligada, nada é enviado — silêncio é o padrão. A regra mais específica vence: serviço, depois servidor, depois a regra geral.")}
+        <div className="stack-h" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div className="section-title" style={{ marginBottom: 4 }}>
+              {t("2. Destinos")}
+            </div>
+            <div className="small muted">
+              {t("Para onde os avisos vão. Pode ser grupo ou pessoa, e pode ser mais de um.")}
+            </div>
+          </div>
+          {conta.configurado && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => acao("chats", async () => {
+                const r = await api.notifChats();
+                setChats(r.chats);
+              })}
+              disabled={ocupado === "chats"}
+              title={t("Lista os chats que já falaram com o bot, para escolher em vez de digitar o id")}
+            >
+              {ocupado === "chats" ? t("procurando…") : t("descobrir chats")}
+            </button>
+          )}
         </div>
 
-        {/* Permitir todos */}
-        <div
-          className="card card-tight"
-          style={{ marginBottom: 14, borderColor: regraGeral ? "var(--blue)" : "var(--border)" }}
-        >
-          <div className="stack-h" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <label className="check" style={{ margin: 0 }}>
-              <input
-                type="checkbox"
-                checked={Boolean(regraGeral)}
-                onChange={(e) => alternarRegra(null, "", e.target.checked)}
-              />
-              <span>
-                <strong>{t("Todos os servidores e serviços")}</strong>
+        {/* Descoberta: resolve o passo mais chato, que é achar o chat_id */}
+        {chats && (
+          <div className="card card-tight" style={{ marginTop: 12, background: "var(--bg-2)" }}>
+            {chats.length === 0 ? (
+              <div className="small muted">
+                {t("Nenhum chat recente. Para aparecer aqui:")}
                 <br />
-                <span className="muted">{t("Vale para o que não tiver regra própria abaixo")}</span>
-              </span>
-            </label>
-            {regraGeral && (
-              <div className="stack-h" style={{ gap: 8 }}>
-                <select
-                  value={regraGeral.nivel_minimo}
-                  onChange={(e) => alternarRegra(null, "", true, { nivel_minimo: e.target.value })}
-                  style={{ width: "auto" }}
-                >
-                  {Object.entries(NIVEL_ROTULO).map(([v, r]) => (
-                    <option key={v} value={v}>{t(r)}</option>
-                  ))}
-                </select>
-                <label className="check" style={{ margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={regraGeral.avisar_retorno}
-                    onChange={(e) =>
-                      alternarRegra(null, "", true, { avisar_retorno: e.target.checked })
-                    }
-                  />
-                  <span>{t("avisar quando voltar")}</span>
-                </label>
+                <strong>{t("grupo")}</strong> — {t("adicione o bot ao grupo e mande qualquer mensagem lá.")}
+                <br />
+                <strong>{t("pessoa")}</strong> — {t("ela precisa abrir conversa com o bot e mandar /start.")}
+                <br />
+                {t("O Telegram não deixa o bot iniciar conversa nem entrar em grupo sozinho — isso é limite da plataforma. Ele também só guarda as mensagens recentes (~24h).")}
+              </div>
+            ) : (
+              <div className="stack-v" style={{ gap: 6 }}>
+                <div className="small muted">{t("Clique para cadastrar como destino:")}</div>
+                {chats.map((c) => (
+                  <div key={c.chat_id} className="stack-h" style={{ justifyContent: "space-between", gap: 8 }}>
+                    <span className="small">
+                      <span className={`pill ${c.tipo === "grupo" ? "pill-info" : "pill-idle"}`}>
+                        {c.tipo === "grupo" ? t("grupo") : t("pessoa")}
+                      </span>{" "}
+                      <strong>{c.nome}</strong> <span className="mono muted">{c.chat_id}</span>
+                    </span>
+                    {c.ja_cadastrado ? (
+                      <span className="small muted">{t("já cadastrado")}</span>
+                    ) : (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => acao(`add-${c.chat_id}`, () => api.salvarNotifDestino({
+                          nome: c.nome, tipo: c.tipo, chat_id: c.chat_id, ativo: true, observacao: "",
+                        }), `"${c.nome}" cadastrado como destino.`)}
+                      >
+                        <IconMais size={12} /> {t("usar")}
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
-        </div>
+        )}
 
-        {/* Por servidor */}
-        {hosts.length === 0 ? (
-          <Vazio titulo={t("Nenhum servidor ativo")}>
-            {t("Cadastre servidores para escolher de quais receber aviso.")}
-          </Vazio>
+        {semDestino ? (
+          <div style={{ marginTop: 12 }}>
+            <Vazio titulo={t("Nenhum destino cadastrado")}>
+              {t("Sem destino, nada é enviado. Use")} <strong>{t("descobrir chats")}</strong>{" "}
+              {t("ou cadastre abaixo.")}
+            </Vazio>
+          </div>
         ) : (
-          <div className="stack-v" style={{ gap: 10 }}>
-            {hosts.map((h) => {
-              const regraHost = regraDe(h.id, "");
-              const aberto = expandido[h.id];
-              const servicosComRegra = (regras || []).filter(
-                (r) => r.host_id === h.id && r.servico
-              );
-              return (
-                <div key={h.id} className="card card-tight">
-                  <div className="stack-h" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                    <label className="check" style={{ margin: 0 }}>
+          <div className="table-wrap" style={{ marginTop: 12 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t("Destino")}</th>
+                  <th>{t("Tipo")}</th>
+                  <th>{t("Chat")}</th>
+                  <th>{t("Ativo")}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {destinos.map((d) => (
+                  <tr key={d.id}>
+                    <td>
+                      <strong>{d.nome}</strong>
+                      {d.observacao && <div className="small muted">{d.observacao}</div>}
+                    </td>
+                    <td>
+                      <span className={`pill ${d.tipo === "grupo" ? "pill-info" : "pill-idle"}`}>
+                        {d.tipo === "grupo" ? t("grupo") : t("pessoa")}
+                      </span>
+                    </td>
+                    <td className="mono small">{d.chat_id}</td>
+                    <td>
                       <input
                         type="checkbox"
-                        checked={Boolean(regraHost)}
-                        onChange={(e) => alternarRegra(h.id, "", e.target.checked)}
+                        checked={d.ativo}
+                        onChange={(e) => acao(`d-${d.id}`, () => api.salvarNotifDestino({
+                          nome: d.nome, tipo: d.tipo, chat_id: d.chat_id,
+                          observacao: d.observacao, ativo: e.target.checked,
+                        }))}
                       />
-                      <span>
-                        <strong>{h.nome}</strong>
-                        <span className="muted"> · {h.servicos.length} {t("serviços conhecidos")}</span>
-                        {servicosComRegra.length > 0 && (
-                          <span className="pill pill-info" style={{ marginLeft: 8 }}>
-                            {servicosComRegra.length} {t("regra(s) por serviço")}
-                          </span>
-                        )}
-                      </span>
-                    </label>
+                    </td>
+                    <td>
+                      <div className="stack-h" style={{ gap: 4 }}>
+                        {/* O botão que prova que funciona. */}
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          disabled={!conta.configurado || ocupado === `teste-${d.id}`}
+                          onClick={() => testar(d.id, d.nome)}
+                          title={t("Manda uma mensagem agora para este destino")}
+                        >
+                          {ocupado === `teste-${d.id}` ? t("enviando…") : t("testar")}
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => {
+                            if (!window.confirm(`Remover o destino "${d.nome}"? As regras que apontam só para ele saem junto.`)) return;
+                            acao(`rm-${d.id}`, () => api.removerNotifDestino(d.id), t("Destino removido."));
+                          }}
+                        >
+                          <IconLixeira size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-                    <div className="stack-h" style={{ gap: 8 }}>
-                      {regraHost && (
-                        <>
-                          <select
-                            value={regraHost.nivel_minimo}
-                            onChange={(e) =>
-                              alternarRegra(h.id, "", true, { nivel_minimo: e.target.value })
-                            }
-                            style={{ width: "auto" }}
-                          >
-                            {Object.entries(NIVEL_ROTULO).map(([v, r]) => (
-                              <option key={v} value={v}>{t(r)}</option>
-                            ))}
-                          </select>
-                          <label className="check" style={{ margin: 0 }}>
-                            <input
-                              type="checkbox"
-                              checked={regraHost.avisar_retorno}
-                              onChange={(e) =>
-                                alternarRegra(h.id, "", true, { avisar_retorno: e.target.checked })
-                              }
-                            />
-                            <span>{t("retorno")}</span>
-                          </label>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setExpandido((x) => ({ ...x, [h.id]: !x[h.id] }))}
-                        disabled={h.servicos.length === 0}
-                        title={h.servicos.length === 0 ? t("O coletor ainda não viu os serviços deste servidor") : ""}
-                      >
-                        {aberto ? t("esconder serviços") : t("escolher serviço a serviço")}
-                      </button>
-                    </div>
-                  </div>
+        <form
+          className="row row-4"
+          style={{ marginTop: 14, alignItems: "flex-end" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            acao("novo-destino", async () => {
+              await api.salvarNotifDestino({ ...novoDestino, ativo: true });
+              setNovoDestino({ nome: "", tipo: "grupo", chat_id: "", observacao: "" });
+            }, t("Destino cadastrado."));
+          }}
+        >
+          <div className="field">
+            <label className="label label-required">{t("Nome")}</label>
+            <input
+              placeholder="Plantão NOC"
+              value={novoDestino.nome}
+              onChange={(e) => setNovoDestino({ ...novoDestino, nome: e.target.value })}
+              required
+            />
+          </div>
+          <div className="field">
+            <label className="label">{t("Tipo")}</label>
+            <select
+              value={novoDestino.tipo}
+              onChange={(e) => setNovoDestino({ ...novoDestino, tipo: e.target.value })}
+            >
+              <option value="grupo">{t("Grupo")}</option>
+              <option value="individual">{t("Pessoa (conversa direta)")}</option>
+            </select>
+          </div>
+          <div className="field">
+            <label className="label label-required">{t("Id do chat")}</label>
+            <input
+              className="mono"
+              placeholder={novoDestino.tipo === "grupo" ? "-1001234567890" : "123456789"}
+              value={novoDestino.chat_id}
+              onChange={(e) => setNovoDestino({ ...novoDestino, chat_id: e.target.value })}
+              required
+            />
+            <div className="field-help">
+              {novoDestino.tipo === "grupo"
+                ? t("Grupo tem id negativo. O bot precisa ter sido adicionado lá.")
+                : t("Id numérico da pessoa. Ela precisa ter mandado /start para o bot.")}
+            </div>
+          </div>
+          <div className="field">
+            <button className="btn btn-primary" disabled={ocupado === "novo-destino"}>
+              <IconMais size={14} /> {t("Adicionar destino")}
+            </button>
+          </div>
+        </form>
+      </div>
 
-                  {aberto && (
-                    <div
-                      style={{
-                        marginTop: 12, paddingTop: 12,
-                        borderTop: "1px solid var(--border)",
-                        display: "grid",
-                        gap: 6,
-                        gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-                      }}
-                    >
-                      {h.servicos.map((s) => {
-                        const r = regraDe(h.id, s);
-                        return (
-                          <label key={s} className="check" style={{ margin: 0 }}>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(r)}
-                              onChange={(e) => alternarRegra(h.id, s, e.target.checked)}
-                            />
-                            <span className="mono" style={{ fontSize: 12.5 }}>{s}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
+      {/* ── 3. Regras ───────────────────────────────────────────────── */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="stack-h" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div className="section-title" style={{ marginBottom: 4 }}>
+              {t("3. Regras — o que mandar, e para quem")}
+            </div>
+            <div className="small muted">
+              {t("Sem regra ligada, nada é enviado. Regras diferentes valem ao mesmo tempo: o plantão pode receber tudo e o dono de um serviço só o dele.")}
+            </div>
+          </div>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled={semDestino}
+            onClick={() => setNovaRegra({
+              destino_id: null, host_id: null, servico: "",
+              tipos: ["servico_parado", "host_sem_contato", "retorno"],
+              nivel_minimo: "critico", atraso_s: 0, ativo: true,
             })}
+          >
+            <IconMais size={13} /> {t("nova regra")}
+          </button>
+        </div>
+
+        {semRegra && !novaRegra ? (
+          <div style={{ marginTop: 12 }}>
+            <Vazio titulo={t("Nenhuma regra")}>
+              {t("Nada é enviado até existir uma regra. Comece com uma regra geral: todos os destinos, todos os servidores, os tipos que interessam.")}
+            </Vazio>
+          </div>
+        ) : (
+          <div className="stack-v" style={{ gap: 10, marginTop: 12 }}>
+            {[...regras, ...(novaRegra ? [novaRegra] : [])].map((r, i) => (
+              <FormRegra
+                key={r.id || `nova-${i}`}
+                regra={r}
+                hosts={hosts}
+                destinos={destinos}
+                tiposEvento={tiposEvento}
+                nomeHost={nomeHost}
+                nomeDestino={nomeDestino}
+                ocupado={ocupado}
+                onSalvar={(dados) => acao(`r-${r.id || "nova"}`, async () => {
+                  await api.salvarNotifRegra(dados);
+                  setNovaRegra(null);
+                }, t("Regra salva."))}
+                onRemover={r.id ? () => {
+                  if (!window.confirm("Remover esta regra?")) return;
+                  acao(`rr-${r.id}`, () => api.removerNotifRegra(r.id), t("Regra removida."));
+                } : () => setNovaRegra(null)}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {/* ── Como chega ─────────────────────────────────────────────── */}
+      {/* ── Como chega ──────────────────────────────────────────────── */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="section-title" style={{ marginBottom: 4 }}>{t("Como a mensagem chega")}</div>
         <div className="small muted" style={{ marginBottom: 10 }}>
-          {t("Curta de propósito: quem está de plantão decide pela prévia do celular, sem abrir o app.")}
+          {t("Curta de propósito: quem está de plantão decide pela prévia do celular, sem abrir o app. Um formato por tipo, para distinguir no primeiro caractere.")}
         </div>
         <div className="row row-2">
-          <pre className="mono small" style={{
-            background: "var(--bg-2)", padding: 12, borderRadius: "var(--radius)",
-            margin: 0, whiteSpace: "pre-wrap",
-          }}>
-{`🔴 PARADO · vm-appserver
+          {[
+            `🔴 PARADO · vm-appserver
 findface-video-worker com problema
 Provável: reiniciou 7x nos últimos 30 min
-Desde 01/09 14:32`}
-          </pre>
-          <pre className="mono small" style={{
-            background: "var(--bg-2)", padding: 12, borderRadius: "var(--radius)",
-            margin: 0, whiteSpace: "pre-wrap",
-          }}>
-{`🟢 NORMALIZADO · vm-appserver
+Desde 02/09 14:32`,
+            `🟢 NORMALIZADO · vm-appserver
 findface-video-worker voltou
-Ficou fora 6min`}
-          </pre>
+Ficou fora 6min`,
+            `⛔ SEM CONTATO · vm-dbserver
+A máquina não respondeu ao coletor
+Provável: rede fora, VM desligada ou parada
+Desde 02/09 03:10`,
+            `🟡 LIMITE · vm-appserver
+disco / em 94% — só 6 GB livres
+Em Manutenção, use Diagnosticar para ver o que ocupa`,
+          ].map((exemplo, i) => (
+            <pre
+              key={i}
+              className="mono small"
+              style={{
+                background: "var(--bg-2)", padding: 12, borderRadius: "var(--radius)",
+                margin: 0, whiteSpace: "pre-wrap",
+              }}
+            >
+              {exemplo}
+            </pre>
+          ))}
         </div>
       </div>
 
@@ -445,22 +538,27 @@ Ficou fora 6min`}
               {t("É a resposta para 'não recebi'. Guardado por 14 dias e apagado pela faxina.")}
             </div>
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={verEnvios}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => acao("envios", async () => {
+              const r = await api.notifEnvios(20);
+              setEnvios(r.envios);
+            })}
+          >
             {t("ver envios")}
           </button>
         </div>
 
         {envios && (
           envios.length === 0 ? (
-            <div className="small muted" style={{ marginTop: 12 }}>
-              {t("Nada enviado ainda.")}
-            </div>
+            <div className="small muted" style={{ marginTop: 12 }}>{t("Nada enviado ainda.")}</div>
           ) : (
             <div className="table-wrap" style={{ marginTop: 12 }}>
               <table>
                 <thead>
                   <tr>
                     <th>{t("Quando")}</th>
+                    <th>{t("Destino")}</th>
                     <th>{t("Mensagem")}</th>
                     <th>{t("Situação")}</th>
                   </tr>
@@ -469,6 +567,7 @@ Ficou fora 6min`}
                   {envios.map((e) => (
                     <tr key={e.id}>
                       <td className="small">{formatData(e.ts)}</td>
+                      <td className="small">{e.destino || "—"}</td>
                       <td className="small mono" style={{ whiteSpace: "pre-wrap" }}>{e.texto}</td>
                       <td>
                         {e.status === "enviado" ? (
@@ -488,5 +587,168 @@ Ficou fora 6min`}
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Uma regra. Editada no lugar — abrir modal para trocar uma caixa de
+ * seleção é passo a mais sem ganho.
+ */
+function FormRegra({
+  regra, hosts, destinos, tiposEvento, nomeHost, nomeDestino, ocupado,
+  onSalvar, onRemover,
+}) {
+  const [r, setR] = useState(regra);
+  const nova = !regra.id;
+  const host = hosts.find((h) => h.id === r.host_id);
+
+  const alternarTipo = (chave) =>
+    setR((atual) => ({
+      ...atual,
+      tipos: atual.tipos.includes(chave)
+        ? atual.tipos.filter((x) => x !== chave)
+        : [...atual.tipos, chave],
+    }));
+
+  const mudou = JSON.stringify(r) !== JSON.stringify(regra);
+
+  return (
+    <div
+      className="card card-tight"
+      style={{
+        borderLeftWidth: 4,
+        borderLeftColor: r.ativo ? "var(--blue)" : "var(--border-2)",
+        opacity: r.ativo ? 1 : 0.75,
+      }}
+    >
+      <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
+        <div className="small">
+          <strong>
+            {nova ? "Nova regra" : `${nomeDestino(r.destino_id)} ← ${nomeHost(r.host_id)}`}
+          </strong>
+          {!nova && r.servico && <span className="mono"> · {r.servico}</span>}
+        </div>
+        <div className="stack-h" style={{ gap: 6 }}>
+          <label className="check" style={{ margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={r.ativo}
+              onChange={(e) => setR({ ...r, ativo: e.target.checked })}
+            />
+            <span>{t("ativa")}</span>
+          </label>
+          {mudou && (
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={ocupado.startsWith("r-")}
+              onClick={() => onSalvar(r)}
+            >
+              {t("salvar")}
+            </button>
+          )}
+          <button className="btn btn-danger btn-sm" onClick={onRemover}>
+            <IconLixeira size={13} />
+          </button>
+        </div>
+      </div>
+
+      <div className="row row-4">
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label className="label">{t("Enviar para")}</label>
+          <select
+            value={r.destino_id ?? ""}
+            onChange={(e) => setR({ ...r, destino_id: e.target.value === "" ? null : Number(e.target.value) })}
+          >
+            <option value="">{t("todos os destinos ativos")}</option>
+            {destinos.map((d) => (
+              <option key={d.id} value={d.id}>{d.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label className="label">{t("Servidor")}</label>
+          <select
+            value={r.host_id ?? ""}
+            onChange={(e) => setR({
+              ...r,
+              host_id: e.target.value === "" ? null : Number(e.target.value),
+              servico: "",
+            })}
+          >
+            <option value="">{t("todos")}</option>
+            {hosts.map((h) => (
+              <option key={h.id} value={h.id}>{h.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label className="label">{t("Serviço")}</label>
+          <select
+            value={r.servico}
+            onChange={(e) => setR({ ...r, servico: e.target.value })}
+            disabled={!host || (host.servicos || []).length === 0}
+          >
+            <option value="">{t("todos")}</option>
+            {(host ? host.servicos : []).map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          {!host && <div className="field-help">{t("escolha um servidor primeiro")}</div>}
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label className="label">{t("Gravidade mínima")}</label>
+          <select
+            value={r.nivel_minimo}
+            onChange={(e) => setR({ ...r, nivel_minimo: e.target.value })}
+          >
+            {Object.entries(NIVEL_ROTULO).map(([v, rot]) => (
+              <option key={v} value={v}>{t(rot)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+        <div className="label" style={{ marginBottom: 8 }}>{t("Tipos de evento")}</div>
+        <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+          {tiposEvento.map((tp) => (
+            <label key={tp.chave} className="check" style={{ margin: 0 }}>
+              <input
+                type="checkbox"
+                checked={r.tipos.includes(tp.chave)}
+                onChange={() => alternarTipo(tp.chave)}
+              />
+              <span>
+                {tp.icone} <strong>{tp.rotulo}</strong>
+                <br />
+                <span className="muted" style={{ fontSize: 12 }}>{tp.ajuda}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {r.tipos.length === 0 && (
+          <div className="small" style={{ color: "var(--amber-fg)", marginTop: 6 }}>
+            {t("Nenhum tipo marcado — esta regra não vai mandar nada.")}
+          </div>
+        )}
+
+        <div className="row row-2" style={{ marginTop: 12 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label className="label">{t("Avisar depois de")}</label>
+            <select
+              value={r.atraso_s}
+              onChange={(e) => setR({ ...r, atraso_s: Number(e.target.value) })}
+            >
+              {ESPERAS.map((e) => (
+                <option key={e.s} value={e.s}>{t(e.rotulo)}</option>
+              ))}
+            </select>
+            <div className="field-help">
+              {t("Só avisa se o problema persistir por esse tempo — evita acordar alguém por uma piscada. O retorno ao normal nunca espera.")}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
