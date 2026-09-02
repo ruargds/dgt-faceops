@@ -29,6 +29,10 @@ set +e
 # script voar.
 echo "###FACEOPS:STAT1"
 grep '^cpu' /proc/stat 2>/dev/null
+echo "###FACEOPS:DIO1"
+cat /proc/diskstats 2>/dev/null
+echo "###FACEOPS:T1"
+date +%s.%N 2>/dev/null || date +%s
 echo "###FACEOPS:UPTIME"
 cat /proc/uptime 2>/dev/null
 echo "###FACEOPS:LOADAVG"
@@ -59,8 +63,100 @@ cat /proc/swaps 2>/dev/null
 sleep 0.3
 echo "###FACEOPS:STAT2"
 grep '^cpu' /proc/stat 2>/dev/null
+echo "###FACEOPS:DIO2"
+cat /proc/diskstats 2>/dev/null
+echo "###FACEOPS:T2"
+date +%s.%N 2>/dev/null || date +%s
 echo "###FACEOPS:END"
 """
+
+
+# Disco que não interessa medir: loop de snap, RAM disk, e a PARTIÇÃO
+# (sda1) quando o disco inteiro (sda) já é contado — somar os dois
+# contaria a mesma E/S duas vezes.
+_IGNORAR_DISCO = ("loop", "ram", "dm-", "sr", "fd")
+
+
+def _diskstats(texto: str) -> dict[str, tuple[int, int, int]]:
+    """
+    De /proc/diskstats para {dispositivo: (leituras, escritas, ms_ocupado)}.
+
+    Campos do kernel (Documentation/admin-guide/iostats.rst), a partir da
+    coluna 4: nome, leituras concluídas, leituras mescladas, setores
+    lidos, ms lendo, escritas concluídas, ... e o campo 13 é o tempo em
+    que o dispositivo esteve com E/S em andamento (`io_ticks`), que é o
+    que dá a utilização.
+    """
+    saida: dict[str, tuple[int, int, int]] = {}
+    for linha in (texto or "").splitlines():
+        campos = linha.split()
+        if len(campos) < 14:
+            continue
+        nome = campos[2]
+        if nome.startswith(_IGNORAR_DISCO):
+            continue
+        # Partição de um disco já contado (sda1 sob sda): pular.
+        if nome[-1].isdigit() and any(
+            nome.startswith(d) and d != nome for d in saida
+        ):
+            continue
+        try:
+            leituras = int(campos[3])
+            escritas = int(campos[7])
+            ocupado = int(campos[12])
+        except (ValueError, IndexError):
+            continue
+        saida[nome] = (leituras, escritas, ocupado)
+    return saida
+
+
+def calcular_io(texto1: str, texto2: str, segundos: float) -> dict:
+    """
+    IOPS e utilização entre duas leituras.
+
+    Por que isto passou a existir: um pico de E/S saturou o disco da VM e
+    a máquina PAROU DE RESPONDER — SSH recusando, containers sumindo. O
+    painel media `iowait` da CPU e ocupação do disco em GB, e nenhum dos
+    dois enxerga saturação: dá para estourar o teto de IOPS do provedor
+    com o disco quase vazio e a CPU ociosa esperando.
+
+    Em disco gerenciado de nuvem existe um TETO de IOPS contratado. Ao
+    encostar nele, o provedor enfileira, a latência explode e tudo que
+    toca disco trava junto — inclusive o systemd e o sshd.
+
+    Devolve o dispositivo mais castigado, não a soma: é ele que satura
+    primeiro, e a média entre um disco parado e um saturado esconde o
+    problema.
+    """
+    if segundos <= 0:
+        return {}
+    antes, depois = _diskstats(texto1), _diskstats(texto2)
+    if not antes or not depois:
+        return {}
+
+    pior = {}
+    for nome, (l2, e2, o2) in depois.items():
+        if nome not in antes:
+            continue
+        l1, e1, o1 = antes[nome]
+        # Contador do kernel reinicia no boot: valor menor = reinício, e
+        # a janela não vale.
+        if l2 < l1 or e2 < e1 or o2 < o1:
+            continue
+        iops = (l2 - l1 + e2 - e1) / segundos
+        # `io_ticks` em ms; o tempo com E/S em andamento sobre a janela dá
+        # a utilização. Pode passar de 100% em disco com fila (NVMe), daí
+        # o teto.
+        util = min(100.0, (o2 - o1) / (segundos * 1000) * 100)
+        if not pior or iops > pior["iops"]:
+            pior = {
+                "dispositivo": nome,
+                "iops": round(iops, 1),
+                "leitura_ps": round((l2 - l1) / segundos, 1),
+                "escrita_ps": round((e2 - e1) / segundos, 1),
+                "util_pct": round(util, 1),
+            }
+    return pior
 
 
 def _split_sections(saida: str) -> dict[str, str]:
@@ -389,9 +485,27 @@ class MetricsService:
             if n is not None:
                 por_nucleo.append({"nucleo": nome.replace("cpu", ""), "uso_pct": n["uso_pct"]})
 
+        # Janela real entre as duas leituras, carimbada pelo próprio
+        # script. Deduzi-la de jiffies daria um número aproximado, e IOPS
+        # aproximado num diagnóstico de saturação não serve.
+        def _instante(txt):
+            try:
+                return float((txt or "").strip().splitlines()[0])
+            except (ValueError, IndexError):
+                return 0.0
+
+        t1 = _instante(secoes.get("T1", ""))
+        t2 = _instante(secoes.get("T2", ""))
+        janela_s = (t2 - t1) if (t1 and t2 and t2 > t1) else 0.0
+
         return {
             "host_id": host.id,
             "host": host.name,
+            # Vazão de disco, da MESMA janela das duas leituras de
+            # /proc/stat — sem custo novo de coleta.
+            "io": calcular_io(
+                secoes.get("DIO1", ""), secoes.get("DIO2", ""), janela_s
+            ),
             "coletado_em": None,  # preenchido pela rota, com o fuso do painel
             "uptime_segundos": int(uptime_s),
             "cpu": {
@@ -434,9 +548,9 @@ set +e
 echo "{SEP}BASE"
 echo {base_q}
 echo "{SEP}TOTAL"
-timeout 240 du -sb {base_q} 2>/dev/null
+timeout 240 ionice -c3 du -sb {base_q} 2>/dev/null
 echo "{SEP}NIVEL1"
-timeout 240 du -b --max-depth=2 {base_q}/data 2>/dev/null | sort -rn | head -40
+timeout 240 ionice -c3 du -b --max-depth=2 {base_q}/data 2>/dev/null | sort -rn | head -40
 echo "{SEP}MOUNT"
 df -B1 -P {base_q} 2>/dev/null
 echo "{SEP}END"

@@ -59,6 +59,16 @@ class Amostra(Base):
     # Do disco guardamos só o pior: é o que dispara alerta. Qual disco é
     # fica no campo ao lado, para a tela poder dizer "/ em 94%".
     disco_pct: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # Saturação de disco — o que faltava para ver a queda chegando.
+    #
+    # Ocupação em GB e `iowait` da CPU NÃO enxergam isto: dá para estourar
+    # o teto de IOPS do provedor com o disco quase vazio. Ao encostar no
+    # teto, o disco enfileira, a latência explode e tudo que toca disco
+    # trava junto — inclusive o systemd e o sshd, e a máquina parece ter
+    # caído quando está só esperando o disco.
+    disco_iops: Mapped[float] = mapped_column(Float, default=0.0)
+    disco_util_pct: Mapped[float] = mapped_column(Float, default=0.0)
     disco_ponto: Mapped[str] = mapped_column(String(64), default="")
     disco_livre_gb: Mapped[float] = mapped_column(Float, default=0.0)
     disco_total_gb: Mapped[float] = mapped_column(Float, default=0.0)

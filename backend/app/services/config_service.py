@@ -439,6 +439,23 @@ CATALOGO: list[ItemConfig] = [
                "Depois disso o texto do log é esvaziado, mas a linha do "
                "histórico permanece. O log é o que pesa; a linha, não.",
                minimo=0, maximo=3650),
+    ItemConfig("alerta.disco_util_pct", "alerta",
+               "Disco saturado acima de (% do tempo ocupado)", "numero",
+               85,
+               "Percentual do tempo em que o disco esteve com E/S em "
+               "andamento. Acima de 85% ele está no limite: a fila cresce, "
+               "a latência explode e tudo que toca disco trava junto — "
+               "inclusive o SSH. Isto NÃO é ocupação em GB; disco vazio "
+               "satura igual.",
+               minimo=0, maximo=100),
+    ItemConfig("alerta.disco_iops", "alerta",
+               "Avisar quando o IOPS passar de", "numero",
+               0,
+               "Operações de disco por segundo. Zero desliga. Discos "
+               "gerenciados de nuvem têm teto contratado (por exemplo, "
+               "5000 num Premium SSD P30) — ponha aqui uns 80% do seu teto "
+               "para o aviso chegar ANTES da saturação.",
+               minimo=0, maximo=200000),
     ItemConfig("sessao.inatividade_min", "seguranca",
                "Encerrar sessão parada por (minutos)", "numero",
                20,

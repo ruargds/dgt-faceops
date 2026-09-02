@@ -458,6 +458,22 @@ class ApuracaoService:
                     ),
                 })
 
+        # Saturação de disco antes da queda — a pista que o `iowait` não
+        # dá. Vale citar mesmo sem salto: 90% de tempo ocupado já é
+        # suficiente para o SSH parar de responder.
+        pico_util = max(float(getattr(a, "disco_util_pct", 0) or 0) for a in amostras)
+        pico_iops = max(float(getattr(a, "disco_iops", 0) or 0) for a in amostras)
+        if pico_util >= 85 or pico_iops >= 1000:
+            achados.append({
+                "fonte": "amostras do painel",
+                "texto": (
+                    f"o disco chegou a {pico_util:.0f}% de tempo ocupado e "
+                    f"{pico_iops:.0f} operações por segundo antes da queda — "
+                    "disco saturado trava o SSH e o systemd junto, e a "
+                    "máquina parece cair sem motivo."
+                ),
+            })
+
         carga = max(float(getattr(a, "carga_por_nucleo", 0) or 0) for a in amostras)
         if carga >= 2.0:
             achados.append({
@@ -468,6 +484,60 @@ class ApuracaoService:
                 ),
             })
 
+        return achados
+
+    @staticmethod
+    async def backup_na_janela(db, host_id: int, inicio: datetime, fim: datetime) -> list[dict]:
+        """
+        Havia backup NOSSO rodando quando o servidor caiu?
+
+        A pergunta é desconfortável e por isso mesmo precisa ser
+        automática: o backup lê o banco inteiro — pg_dump, mongodump,
+        snapshot do Tarantool e tar — e é, de longe, a maior carga de
+        disco que este painel provoca no servidor que ele monitora.
+
+        Um painel que monitora e também escreve tem de conseguir dizer
+        quando o problema foi ele. Esperar que alguém desconfie e vá
+        cruzar horários à mão é contar com sorte.
+        """
+        from sqlalchemy import select as _select
+
+        from app.models.backup import BackupRun
+
+        if inicio.tzinfo is None:
+            inicio = inicio.replace(tzinfo=timezone.utc)
+        if fim.tzinfo is None:
+            fim = fim.replace(tzinfo=timezone.utc)
+        # Folga antes: a carga começa antes de a máquina desistir.
+        desde = inicio - timedelta(minutes=60)
+
+        r = await db.execute(
+            _select(BackupRun)
+            .where(BackupRun.host_id == host_id, BackupRun.started_at >= desde)
+            .order_by(BackupRun.started_at.desc())
+            .limit(5)
+        )
+        achados = []
+        for run in r.scalars().all():
+            comeco = run.started_at
+            if comeco.tzinfo is None:
+                comeco = comeco.replace(tzinfo=timezone.utc)
+            termino = run.finished_at or fim
+            if termino.tzinfo is None:
+                termino = termino.replace(tzinfo=timezone.utc)
+            # Sobrepõe a janela do incidente?
+            if termino < desde or comeco > fim:
+                continue
+            achados.append({
+                "fonte": "backup do painel",
+                "texto": (
+                    f"havia um backup '{run.profile}' deste servidor em "
+                    f"andamento ({comeco:%d/%m %H:%M} → "
+                    f"{termino:%d/%m %H:%M}, status {run.status}). O backup lê "
+                    "o banco inteiro e é a maior carga de disco que o painel "
+                    "provoca — considere-o suspeito antes de procurar fora."
+                ),
+            })
         return achados
 
     # ── Coleta ─────────────────────────────────────────────────────────
@@ -534,6 +604,12 @@ class ApuracaoService:
                 antes = await self.pressao_antes(
                     db, incidente.host_id, incidente.inicio, self.JANELA_ANTES_MIN
                 )
+                # "Fomos nós?" — a pergunta que o painel tem de saber
+                # responder sobre si mesmo. Entra ANTES da pressão: se o
+                # backup estava rodando, é a primeira coisa a olhar.
+                antes = await self.backup_na_janela(
+                    db, incidente.host_id, incidente.inicio, fim
+                ) + antes
                 if antes:
                     resultado["achados"] = antes + resultado["achados"]
                     # Sem veredito do sistema mas com pressão medida, a

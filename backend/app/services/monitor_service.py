@@ -322,6 +322,12 @@ class MonitorService:
         pct, ponto, livre, total_disco = _pior_disco(dados.get("discos", []))
         amostra.disco_pct = round(pct, 1)
         amostra.disco_ponto = ponto
+        # Vazão de disco: é o que enxerga saturação. Ocupação em GB
+        # não vê — disco vazio satura igual quando estoura o teto
+        # de IOPS do provedor.
+        io = dados.get("io") or {}
+        amostra.disco_iops = float(io.get("iops") or 0)
+        amostra.disco_util_pct = float(io.get("util_pct") or 0)
         amostra.disco_livre_gb = livre
         amostra.disco_total_gb = total_disco
 
@@ -465,6 +471,8 @@ class MonitorService:
             "disco_pct": float(self._cfg("alerta.disco_pct", 90)),
             "gpu_mem_pct": float(self._cfg("alerta.gpu_mem_pct", 92)),
             "gpu_temp": float(self._cfg("alerta.gpu_temp", 85)),
+            "disco_util_pct": float(self._cfg("alerta.disco_util_pct", 85)),
+            "disco_iops": float(self._cfg("alerta.disco_iops", 0)),
         }
         indisponivel_min = float(self._cfg("alerta.servico_indisponivel_min", 15))
 
@@ -603,6 +611,37 @@ class MonitorService:
                          "findface-video-worker entra em ciclo de reinício. "
                          "Em Serviços, confira a contagem de reinícios dele.",
                     onde="Serviços", onde_aba="servicos")
+
+            # Saturação de disco. O alerta que faltava: um pico de E/S
+            # derrubou um servidor inteiro e o painel não tinha como ver,
+            # porque media ocupação em GB e `iowait`, não vazão.
+            if limites["disco_util_pct"] > 0 and a.disco_util_pct >= limites["disco_util_pct"]:
+                add("disco_io", "critico" if a.disco_util_pct >= 95 else "atencao",
+                    f"disco saturado — ocupado {a.disco_util_pct:.0f}% do tempo, "
+                    f"{a.disco_iops:.0f} operações por segundo",
+                    a.disco_util_pct, limites["disco_util_pct"],
+                    significa="O disco está no limite do que aguenta. A fila "
+                              "cresce, a latência dispara e TUDO que toca "
+                              "disco trava junto — inclusive o SSH e o "
+                              "systemd. A máquina parece cair, quando está "
+                              "só esperando o disco.",
+                    acao="Veja em Recursos quem está escrevendo. Se houver "
+                         "backup em andamento, ele agora roda em prioridade "
+                         "baixa de E/S — mas em disco de nuvem o teto de "
+                         "IOPS é contratado, e a saída pode ser um disco "
+                         "com teto maior.",
+                    onde="Recursos", onde_aba="recursos")
+
+            if limites["disco_iops"] > 0 and a.disco_iops >= limites["disco_iops"]:
+                add("disco_iops", "atencao",
+                    f"{a.disco_iops:.0f} operações de disco por segundo",
+                    a.disco_iops, limites["disco_iops"],
+                    significa="Perto do teto contratado do disco. Ao "
+                              "encostar nele, o provedor enfileira e a "
+                              "latência explode.",
+                    acao="Em Recursos, veja o que está gerando E/S. Backup e "
+                         "limpeza de eventos são os suspeitos usuais.",
+                    onde="Recursos", onde_aba="recursos")
 
             if a.gpu_temp >= limites["gpu_temp"]:
                 add("gpu_temp", "atencao",

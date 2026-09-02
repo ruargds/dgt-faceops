@@ -55,7 +55,7 @@ COMANDOS: dict[str, dict] = {
         "ajuda": "Ocupação por ponto de montagem e os maiores diretórios do "
                  "sistema. Leitura pura, não apaga nada.",
         "comando": "df -h -x tmpfs -x devtmpfs; echo; "
-                   "du -xh --max-depth=1 /var 2>/dev/null | sort -rh | head -8",
+                   "ionice -c3 du -xh --max-depth=1 /var 2>/dev/null | sort -rh | head -8",
         "sudo": False,
         "permissao": "maintenance.view",
         "destrutivo": False,

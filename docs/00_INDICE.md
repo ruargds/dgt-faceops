@@ -108,6 +108,10 @@
   e serviços receber, o formato da mensagem (o mesmo template do Zabbix, e
   por quê) e as travas contra virar spam.
 
+- **[33_SATURACAO_DE_DISCO](33_SATURACAO_DE_DISCO.md)** — por que um pico
+  de IOPS derruba a máquina inteira, o que o painel passou a medir, e a
+  auditoria honesta de quando o causador é o próprio backup.
+
 - **[32_SESSAO_E_PERFIS](32_SESSAO_E_PERFIS.md)** — os dois relógios da
   sessão (20 min parada, teto de 24 h), por que a renovação não pode vir
   do polling do painel, e o que cada um dos quatro perfis pode fazer.

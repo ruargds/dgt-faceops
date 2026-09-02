@@ -74,6 +74,40 @@ else
   com_teto() { shift; "$@"; }
 fi
 
+# ── Prioridade de E/S ──────────────────────────────────────────────────
+#
+# O backup le o banco inteiro: pg_dump, mongodump, snapshot do Tarantool e
+# tar, tudo em sequencia. Ate aqui isso rodava em prioridade NORMAL de
+# disco, disputando E/S de igual para igual com o FindFace em producao.
+#
+# Em disco gerenciado de nuvem existe um teto de IOPS contratado. Ao
+# encostar nele o provedor enfileira, a latencia explode e TUDO que toca
+# disco trava junto — inclusive o systemd e o sshd. A maquina entao parece
+# ter caido, quando na verdade esta esperando o disco.
+#
+# `ionice -c3` (classe idle) so recebe disco quando ninguem mais quer. Na
+# pratica: o backup fica mais lento sob carga e para de ser candidato a
+# derrubar o servidor que ele existe para proteger. `nice -n19` faz o
+# mesmo com a CPU do gzip.
+#
+# Ausencia de ionice nao e erro: cai para nice, e sem nice roda direto.
+if command -v ionice >/dev/null 2>&1; then
+  io_baixo() { ionice -c3 nice -n19 "$@"; }
+elif command -v nice >/dev/null 2>&1; then
+  io_baixo() { nice -n19 "$@"; }
+else
+  io_baixo() { "$@"; }
+fi
+
+# O mesmo, mas avaliado DENTRO do container: `ionice` no cliente do
+# `docker exec` nao afeta o processo que roda la dentro. Usado como
+# `docker exec "$c" sh -c "$IO_BAIXO_SH" _ pg_dump ...`.
+IO_BAIXO_SH='command -v ionice >/dev/null 2>&1 && set -- ionice -c3 "$@"; command -v nice >/dev/null 2>&1 && set -- nice -n19 "$@"; exec "$@"'
+
+# Respiro entre instancias do Tarantool. Sao 16 shards + 16 replicas: sem
+# pausa, os snapshots viram um unico bloco de escrita pesada.
+PAUSA_SNAPSHOT="${PAUSA_SNAPSHOT:-1}"
+
 # ── Descoberta do ambiente ─────────────────────────────────────────────────
 
 compose_bin() {
@@ -151,7 +185,7 @@ backup_configs() {
   # (ponte de integracao, coletor, dashboards) nao tem — e mesmo assim
   # precisa do compose e dos arquivos de configuracao salvos.
   if [ -d "$FF_DIR/configs" ]; then
-    tar -czf "$WORK/config/configs.tar.gz" -C "$FF_DIR" configs \
+    io_baixo tar -czf "$WORK/config/configs.tar.gz" -C "$FF_DIR" configs \
       || die "falha ao arquivar configs/"
     emit configs_bytes "$(stat -c %s "$WORK/config/configs.tar.gz")"
     log "  configs/ arquivado"
@@ -167,7 +201,7 @@ backup_configs() {
          -size -20M \
          -not -path "*/data/*" -not -path "*/volumes/*" -not -path "*/node_modules/*" \
          -print0 2>/dev/null \
-      | tar --null -czf "$WORK/config/projeto-config.tar.gz" -T - 2>/dev/null
+      | io_baixo tar --null -czf "$WORK/config/projeto-config.tar.gz" -T - 2>/dev/null
     if [ -s "$WORK/config/projeto-config.tar.gz" ]; then
       emit configs_bytes "$(stat -c %s "$WORK/config/projeto-config.tar.gz")"
       log "  configuracao do projeto arquivada"
@@ -220,7 +254,7 @@ backup_postgres() {
 
     # Papeis e permissoes: pg_dump por banco NAO leva isso, e sem eles o
     # restore falha com erro de permissao que parece corrupcao.
-    com_teto "$T_DUMP" docker exec "$c" pg_dumpall -U "$PGUSER" --globals-only       > "$WORK/postgres/$svc/globals.sql" 2>"$WORK/postgres/$svc/globals.err"       || log "    AVISO: pg_dumpall --globals-only falhou"
+    com_teto "$T_DUMP" docker exec "$c" sh -c "$IO_BAIXO_SH" _ pg_dumpall -U "$PGUSER" --globals-only       > "$WORK/postgres/$svc/globals.sql" 2>"$WORK/postgres/$svc/globals.err"       || log "    AVISO: pg_dumpall --globals-only falhou"
 
     # Enumera os bancos em vez de chutar nomes: a lista muda conforme os
     # modulos habilitados do FindFace.
@@ -233,7 +267,7 @@ backup_postgres() {
     fi
 
     for db in $bancos; do
-      if com_teto "$T_DUMP" docker exec "$c" pg_dump -U "$PGUSER" -Fc --no-password "$db"            > "$WORK/postgres/$svc/${db}.dump" 2>>"$WORK/postgres/$svc/dump.err"; then
+      if com_teto "$T_DUMP" docker exec "$c" sh -c "$IO_BAIXO_SH" _ pg_dump -U "$PGUSER" -Fc --no-password "$db"            > "$WORK/postgres/$svc/${db}.dump" 2>>"$WORK/postgres/$svc/dump.err"; then
         local sz; sz="$(stat -c %s "$WORK/postgres/$svc/${db}.dump")"
         if [ "$sz" -lt 100 ]; then
           log "    AVISO: dump de $db saiu vazio ($sz bytes)"
@@ -277,7 +311,7 @@ backup_mongodb() {
 
   # --archive --gzip sai por stdout: nao precisa de espaco temporario
   # dentro do container, que pode ter volume pequeno.
-  if com_teto "$T_DUMP" docker exec "$c" sh -c "mongodump $ARGS --archive --gzip"        > "$WORK/mongodb/mongodump.gz" 2>"$WORK/mongodb/mongodump.err"; then
+  if com_teto "$T_DUMP" docker exec "$c" sh -c "$IO_BAIXO_SH" _ sh -c "mongodump $ARGS --archive --gzip"        > "$WORK/mongodb/mongodump.gz" 2>"$WORK/mongodb/mongodump.err"; then
     local sz; sz="$(stat -c %s "$WORK/mongodb/mongodump.gz")"
     if [ "$sz" -lt 100 ]; then
       log "  AVISO: dump vazio — ver mongodump.err"
@@ -375,6 +409,9 @@ backup_tarantool() {
     # parecer travada. Sem isto, 32 shards viram um "55%" imovel.
     log "  snapshot $i/$qtd ($c)"
     emit tarantool_progresso "$i/$qtd"
+    # Respiro entre instancias: 32 snapshots seguidos viram um bloco unico
+    # de escrita pesada, e e nesse bloco que o disco satura.
+    [ "$PAUSA_SNAPSHOT" -gt 0 ] 2>/dev/null && sleep "$PAUSA_SNAPSHOT"
 
     # box.snapshot() forca um .snap consistente AGORA. tarantoolctl eval
     # roda o codigo no processo sem depender de socket de console.

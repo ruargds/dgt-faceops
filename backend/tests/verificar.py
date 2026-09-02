@@ -701,6 +701,125 @@ async def cenario_apuracao_correlaciona_pico_de_recurso():
     await engine.dispose()
 
 
+async def cenario_saturacao_de_disco_e_medida():
+    """
+    Um pico de E/S derrubou um servidor de produção e o painel não tinha
+    como ver: ele media ocupação em GB e `iowait` da CPU, e **nenhum dos
+    dois enxerga saturação**. Dá para estourar o teto de IOPS do provedor
+    com o disco quase vazio e a CPU ociosa esperando.
+
+    Em disco gerenciado de nuvem o teto é contratado. Ao encostar nele, a
+    fila cresce, a latência dispara e tudo que toca disco trava junto —
+    inclusive o systemd e o sshd. A máquina parece cair; está esperando.
+    """
+    from app.services.metrics_service import calcular_io
+
+    # 600 leituras + 700 escritas em 1s, com 1000ms de tempo ocupado.
+    d1 = "8 0 sda 100 0 0 0 200 0 0 0 0 5000 0"
+    d2 = "8 0 sda 700 0 0 0 900 0 0 0 0 6000 0"
+    io = calcular_io(d1, d2, 1.0)
+    assert io["iops"] == 1300.0, io
+    assert io["leitura_ps"] == 600.0 and io["escrita_ps"] == 700.0, io
+    assert io["util_pct"] == 100.0, io
+    assert io["dispositivo"] == "sda"
+
+    # Janela inválida não vira número inventado.
+    assert calcular_io(d1, d2, 0) == {}
+    assert calcular_io("", "", 1.0) == {}
+
+    # Contador que reinicia (boot) é descartado, não vira valor negativo
+    # nem um pico falso de milhões.
+    assert calcular_io(d2, d1, 1.0) == {}
+
+    # Disco virtual não entra na conta: loop de snap e device-mapper
+    # inflariam o número sem representar E/S real do provedor.
+    lixo1 = "7 0 loop0 999999 0 0 0 999999 0 0 0 0 999999 0\n8 0 sda 100 0 0 0 200 0 0 0 0 5000 0"
+    lixo2 = "7 0 loop0 999999 0 0 0 999999 0 0 0 0 999999 0\n8 0 sda 110 0 0 0 210 0 0 0 0 5100 0"
+    io2 = calcular_io(lixo1, lixo2, 1.0)
+    assert io2["dispositivo"] == "sda", io2
+
+    # Devolve o disco MAIS castigado, não a média: a média entre um disco
+    # parado e um saturado esconde exatamente o que se procura.
+    a = "8 0 sda 0 0 0 0 0 0 0 0 0 0 0\n8 16 sdb 0 0 0 0 0 0 0 0 0 0 0"
+    b = "8 0 sda 10 0 0 0 10 0 0 0 0 100 0\n8 16 sdb 900 0 0 0 900 0 0 0 0 900 0"
+    assert calcular_io(a, b, 1.0)["dispositivo"] == "sdb"
+
+    # O limite existe no catálogo, e o de IOPS vem DESLIGADO: o teto varia
+    # por tipo de disco, e um padrão errado geraria alarme falso todo dia.
+    from app.services.config_service import POR_CHAVE
+
+    assert POR_CHAVE["alerta.disco_util_pct"].padrao == 85
+    assert POR_CHAVE["alerta.disco_iops"].padrao == 0
+
+    # E o alerta existe de fato no ciclo.
+    import inspect
+
+    from app.services.monitor_service import MonitorService
+
+    fonte = inspect.getsource(MonitorService.alertas)
+    assert '"disco_io"' in fonte, "mede saturação e não alerta"
+    assert "disco_util_pct" in fonte
+
+
+async def cenario_backup_do_painel_nao_disputa_disco():
+    """
+    O backup lê o banco inteiro — pg_dump, mongodump, snapshot do
+    Tarantool e tar — e é a maior carga de disco que ESTE painel provoca
+    no servidor que ele monitora.
+
+    Até aqui isso rodava em prioridade normal de E/S, de igual para igual
+    com o FindFace em produção. Num disco com teto de IOPS, o backup era
+    candidato legítimo a derrubar o servidor que ele existe para
+    proteger.
+    """
+    script = (pathlib.Path(__file__).resolve().parents[2]
+              / "scripts" / "ffmulti-backup.sh").read_text(encoding="utf-8")
+
+    # Classe idle: só recebe disco quando ninguém mais quer.
+    assert "ionice -c3" in script, "o backup voltou a disputar disco"
+    assert "io_baixo()" in script
+
+    # Ausência de ionice não pode quebrar o backup — cai para nice, e sem
+    # nice roda direto.
+    assert "elif command -v nice" in script, "sem plano B onde falta ionice"
+
+    # Dentro do container também: `ionice` no cliente do `docker exec` não
+    # afeta o processo que roda lá dentro, que é quem lê o banco.
+    assert "IO_BAIXO_SH" in script
+    # Cada LINHA que de fato executa o comando pesado — e não a primeira
+    # aparição do nome, que é um comentário. (A primeira versão desta
+    # trava checava o comentário e passaria com o backup em prioridade
+    # normal: teste que olha o lugar errado não guarda nada.)
+    for pesado in ("pg_dump", "pg_dumpall", "mongodump"):
+        linhas = [
+            l for l in script.splitlines()
+            if pesado in l and "docker exec" in l and not l.strip().startswith("#")
+        ]
+        assert linhas, f"não achei onde {pesado} é executado"
+        for linha in linhas:
+            assert "IO_BAIXO_SH" in linha, (
+                f"{pesado} roda em prioridade normal de E/S: {linha.strip()[:120]}"
+            )
+
+    # Respiro entre os 32 snapshots do Tarantool: sem pausa eles viram um
+    # bloco único de escrita pesada, e é nesse bloco que o disco satura.
+    assert "PAUSA_SNAPSHOT" in script
+
+    # E o painel sabe dizer quando o suspeito é ele mesmo.
+    import inspect
+
+    from app.services.apuracao_service import ApuracaoService
+
+    fonte = inspect.getsource(ApuracaoService.backup_na_janela)
+    assert "BackupRun" in fonte
+    assert "suspeito" in fonte.lower(), (
+        "a correlação existe e não diz o que concluir dela"
+    )
+    # A apuração usa isso de verdade.
+    usa = inspect.getsource(ApuracaoService.apurar)
+    assert "backup_na_janela" in usa, "correlaciona e não conta a ninguém"
+
+
 async def cenario_erro_de_conexao_diz_onde_procurar():
     """
     "[Errno 111] Connection refused" está tecnicamente correto e é inútil
@@ -2646,6 +2765,8 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_saturacao_de_disco_e_medida,
+    cenario_backup_do_painel_nao_disputa_disco,
     cenario_erro_de_conexao_diz_onde_procurar,
     cenario_acoes_rapidas_nao_sao_shell_remoto,
     cenario_sessao_cai_parada_e_tem_teto,

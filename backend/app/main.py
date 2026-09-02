@@ -106,6 +106,10 @@ COLUNAS_NOVAS = [
     # Apuração da causa no fechamento do incidente (02/09/2026). Entra
     # NULA: incidente antigo fica sem apuração, e a tela oferece apurar
     # sob demanda para os que ainda têm servidor de pé.
+    # Saturação de disco (02/09/2026): pico de IOPS derrubou um servidor
+    # e o painel não tinha como ver — media ocupação em GB, não vazão.
+    ("amostras", "disco_iops", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
+    ("amostras", "disco_util_pct", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
     ("incidentes", "apuracao", "JSONB"),
     ("incidentes", "apurado_em", "TIMESTAMPTZ"),
     ("notificacao_regras", "destino_id", "INTEGER"),
