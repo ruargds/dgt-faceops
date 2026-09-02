@@ -236,6 +236,12 @@ input[type="checkbox"] { width: auto; }
 }
 .link-inline:hover { text-decoration: underline; }
 
+/* Ícone girando enquanto uma ação está em curso. É o único elemento que
+   muda durante a busca: trocar o TEXTO do botão mudaria a largura dele, e
+   a barra inteira tremia a cada atualização. */
+@keyframes girar-360 { to { transform: rotate(360deg); } }
+.girando { animation: girar-360 .9s linear infinite; transform-origin: center; }
+
 /* Barra de filtros. Envolve em várias linhas no notebook e no tablet em
    vez de espremer os campos, e a busca cresce para ocupar o que sobra —
    é ela que recebe texto longo. */

@@ -326,6 +326,9 @@ export const api = {
 
   // Monitor contínuo
   monitorResumo: () => get("/monitor/resumo"),
+  // "Atualizar" vai aos servidores agora. Reler o resumo não adianta: ele
+  // é cacheado por ciclo, e sem coleta nova o payload é idêntico.
+  monitorColetar: () => post("/monitor/coletar", {}),
   monitorSerie: (id, horas) => get(`/monitor/serie/${id}?horas=${horas}`),
   monitorAlertas: () => get("/monitor/alertas"),
   // Horário de pico: agregação sobre o histórico já gravado, sem modelo.

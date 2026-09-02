@@ -67,6 +67,21 @@ async def serie(
     return dados
 
 
+@router.post("/coletar")
+async def coletar(
+    request: Request,
+    _: User = Depends(require_permission("metrics.view")),
+):
+    """
+    Força uma coleta agora — é o que o botão "Atualizar" faz.
+
+    Sem isto o botão era decorativo: o resumo é cacheado por ciclo, então
+    reler a rota devolvia o mesmo payload. Quem clica em "Atualizar"
+    quer que o painel vá aos servidores agora, não que ele releia o banco.
+    """
+    return await request.app.state.monitor.coletar_agora()
+
+
 @router.get("/resumo")
 async def resumo(
     request: Request,

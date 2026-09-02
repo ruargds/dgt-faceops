@@ -124,6 +124,11 @@ class MonitorService:
         # painel no modo econômico mostraria dado de até 5 min atrás e
         # ficaria assim até a espera terminar.
         self._acordar: asyncio.Event | None = None
+        # Coleta sob demanda: uma de cada vez, e não mais que uma a cada
+        # `ESPERA_FORCAR_S`. Sem isso, segurar o botão viraria uma rajada
+        # de SSH contra quatro servidores de produção.
+        self._coletando = False
+        self._ultima_forcada: datetime | None = None
 
     def _cfg(self, chave: str, padrao):
         if self.config is None:
@@ -507,6 +512,66 @@ class MonitorService:
                 }
                 for a in selecionadas
             ],
+        }
+
+    # ── Coleta sob demanda ─────────────────────────────────────────────
+
+    # Espaçamento mínimo entre coletas forçadas. Curto o bastante para
+    # não atrapalhar quem está diagnosticando, longo o bastante para o
+    # botão não virar rajada de SSH em produção.
+    ESPERA_FORCAR_S = 15
+
+    async def coletar_agora(self) -> dict:
+        """
+        Roda um ciclo AGORA e só devolve quando termina.
+
+        Existe porque o botão "Atualizar" deixou de fazer sentido: com o
+        resumo cacheado por ciclo, clicar nele devolvia exatamente o mesmo
+        payload de antes. O botão parecia funcionar e não fazia nada — que
+        é pior do que não existir.
+
+        "Atualizar", para quem clica, significa **ir buscar agora nos
+        servidores**, e não relê-lo do banco. É isso que esta função faz.
+
+        Duas cercas, porque isto abre SSH em produção a pedido de um
+        clique: uma coleta por vez, e no máximo uma a cada
+        `ESPERA_FORCAR_S`.
+        """
+        agora = datetime.now(timezone.utc)
+
+        if self._coletando:
+            return {"ok": False, "motivo": "já há uma coleta em andamento"}
+
+        if self._ultima_forcada is not None:
+            faltam = self.ESPERA_FORCAR_S - (agora - self._ultima_forcada).total_seconds()
+            if faltam > 0:
+                return {
+                    "ok": False,
+                    "motivo": f"aguarde {int(faltam) + 1}s — a coleta lê quatro "
+                              "servidores de produção, e o botão não pode virar "
+                              "rajada",
+                    "espera_s": int(faltam) + 1,
+                }
+
+        self._coletando = True
+        self._ultima_forcada = agora
+        inicio = datetime.now(timezone.utc)
+        try:
+            await self._ciclo()
+        except Exception as exc:
+            log.exception("coleta sob demanda falhou")
+            return {"ok": False, "motivo": f"a coleta falhou: {str(exc)[:200]}"}
+        finally:
+            self._coletando = False
+            # O ciclo já subiu a versão; garantir aqui cobre o caminho de
+            # erro, para a tela não ficar servindo cache velho.
+            self._versao += 1
+
+        return {
+            "ok": True,
+            "duracao_s": round(
+                (datetime.now(timezone.utc) - inicio).total_seconds(), 1
+            ),
         }
 
     # ── Cadência ───────────────────────────────────────────────────────

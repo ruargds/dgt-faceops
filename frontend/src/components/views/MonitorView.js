@@ -46,6 +46,7 @@ export default function MonitorView({ alvo, nav }) {
   const [erro, setErro] = useState("");
   const [atualizadoEm, setAtualizadoEm] = useState(null);
   const [buscando, setBuscando] = useState(false);
+  const [avisoColeta, setAvisoColeta] = useState("");
   // Milissegundos entre buscas. Começa conservador e passa a seguir o
   // que o servidor recomenda.
   const intervaloPoll = useRef(15000);
@@ -114,6 +115,32 @@ export default function MonitorView({ alvo, nav }) {
       setBuscando(false);
     }
   }, [som]);
+
+  /**
+   * O que o botão "Atualizar" faz.
+   *
+   * Manda COLETAR e só então relê. Reler sozinho não adiantaria: o
+   * resumo é cacheado por ciclo do coletor, então sem coleta nova o
+   * payload volta idêntico — o botão parecia funcionar e não fazia nada.
+   */
+  const atualizarAgora = useCallback(async () => {
+    setBuscando(true);
+    setAvisoColeta("");
+    try {
+      const r = await api.monitorColetar();
+      if (r && r.ok === false) {
+        // Cerca do servidor (coleta em andamento, ou cedo demais). Dizer
+        // o motivo é melhor que um botão que não responde.
+        setAvisoColeta(r.motivo || "não foi possível coletar agora");
+      }
+    } catch (ex) {
+      setAvisoColeta(ex.message);
+    } finally {
+      // Relê de qualquer jeito: mesmo quando a coleta foi recusada, o
+      // ciclo automático pode ter trazido algo novo.
+      await carregar();
+    }
+  }, [carregar]);
 
   const carregarSerie = useCallback(async (hostId, horas) => {
     if (!hostId) return;
@@ -218,16 +245,30 @@ export default function MonitorView({ alvo, nav }) {
               clicar em Atualizar quando nada mudou é indistinguível de
               um botão quebrado — e foi assim que este pareceu não
               funcionar. Agora o clique sempre deixa prova. */}
-          {atualizadoEm && (
-            <span className="small muted" title={t("Quando esta tela leu o painel pela última vez")}>
-              {t("atualizado às")}{" "}
-              {atualizadoEm.toLocaleTimeString([], {
-                hour: "2-digit", minute: "2-digit", second: "2-digit",
-              })}
-            </span>
-          )}
-          <button className="btn btn-secondary" onClick={carregar} disabled={buscando}>
-            <IconAtualizar size={15} /> {buscando ? t("Atualizando…") : t("Atualizar")}
+          {/* Largura reservada e texto FIXO. Antes, "Atualizar" virava
+              "Atualizando…" e o carimbo de hora aparecia e sumia — a cada
+              busca a linha inteira mudava de tamanho e a barra tremia de
+              um lado para o outro. O que muda agora é só o ícone girar. */}
+          <span
+            className="small muted"
+            style={{ minWidth: 132, textAlign: "right" }}
+            title={t("Quando esta tela leu o painel pela última vez")}
+          >
+            {atualizadoEm
+              ? `${t("atualizado às")} ${atualizadoEm.toLocaleTimeString([], {
+                  hour: "2-digit", minute: "2-digit", second: "2-digit",
+                })}`
+              : ""}
+          </span>
+          <button
+            className="btn btn-secondary"
+            onClick={atualizarAgora}
+            disabled={buscando}
+            style={{ minWidth: 116, justifyContent: "center" }}
+            title={t("Vai aos servidores agora, em vez de reler o que já está no banco")}
+          >
+            <IconAtualizar size={15} className={buscando ? "girando" : undefined} />{" "}
+            {t("Atualizar")}
           </button>
         </div>
       </div>
@@ -275,6 +316,17 @@ export default function MonitorView({ alvo, nav }) {
           />
         )}
       </div>
+
+      {avisoColeta && (
+        <div
+          className="card card-tight"
+          style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", marginBottom: 12 }}
+        >
+          <span className="small" style={{ color: "var(--amber-fg)" }}>
+            {avisoColeta}
+          </span>
+        </div>
+      )}
 
       <Erro mensagem={erro} onTentar={carregar} />
 

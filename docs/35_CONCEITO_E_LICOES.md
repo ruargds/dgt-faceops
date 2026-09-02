@@ -150,9 +150,21 @@ Aconteceu **três vezes** nesta base, e é sutil:
 | cerca do projeto compose | a **docstring** da função, que cita a cerca para explicá-la |
 | `ionice` no backup | a primeira aparição de `pg_dump` no script — um **comentário** |
 | ausência de SSH no histórico | a docstring, que fala de SSH para dizer que não usa |
+| rótulo fixo do botão | o **comentário que explica a correção**, dentro do arquivo corrigido |
+| botão que força coleta | a função de coletar continuar **definida e sem uso** — código morto aceito como prova |
 
-**A regra:** trava que lê código-fonte inspeciona o **corpo**, nunca o
-texto; e verifica a linha que **executa**, não a primeira que menciona.
+**A regra, em duas partes:**
+
+1. Trava que lê código-fonte inspeciona o **corpo**, nunca o texto —
+   remova comentário e docstring antes de comparar.
+2. Verifique a **ligação**, não a presença do nome. "A função existe no
+   arquivo" não prova que alguém a chama; confira quem chama quem.
+
+A quinta ocorrência foi a mais instrutiva: a trava exigia que
+`monitorColetar` aparecesse na tela, e continuou passando com o botão
+religado a outra coisa — porque a função ficou lá, morta. Só passou a
+guardar quando conferiu `onClick={atualizarAgora}` dentro do bloco do
+botão.
 
 E acima de tudo: **toda trava nova é verificada por injeção.** Quebra-se
 o comportamento de propósito e confirma-se que o teste falha, com a

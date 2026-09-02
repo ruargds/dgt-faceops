@@ -701,6 +701,119 @@ async def cenario_apuracao_correlaciona_pico_de_recurso():
     await engine.dispose()
 
 
+async def cenario_atualizar_forca_coleta_de_verdade():
+    """
+    Regressão introduzida pelo cache do resumo: com o payload cacheado
+    por ciclo, clicar em "Atualizar" devolvia exatamente o mesmo
+    conteúdo. O botão parecia funcionar e não fazia nada — pior do que
+    não existir.
+
+    Para quem clica, "Atualizar" significa **ir buscar agora nos
+    servidores**, não relê-lo do banco. Mas isso abre SSH em produção a
+    pedido de um clique, então tem duas cercas: uma coleta por vez, e
+    espaçamento mínimo entre elas.
+    """
+    from datetime import timedelta as _td
+
+    from app.services.monitor_service import MonitorService
+
+    m = MonitorService(metrics=None, stack=None)
+
+    # Coleta já em andamento: recusa, e diz por quê.
+    m._coletando = True
+    r = await m.coletar_agora()
+    assert r["ok"] is False
+    assert "andamento" in r["motivo"], r
+    m._coletando = False
+
+    # Cedo demais: recusa dizendo quanto falta. Botão que não responde e
+    # botão que responde "espere 8s" são coisas diferentes para quem usa.
+    m._ultima_forcada = datetime.now(timezone.utc)
+    r = await m.coletar_agora()
+    assert r["ok"] is False and r["espera_s"] >= 1, r
+    assert str(r["espera_s"]) in r["motivo"] or "aguarde" in r["motivo"], r
+
+    # Passado o espaçamento, deixa. O ciclo em si é substituído: o que
+    # esta trava guarda é a CERCA, não a coleta — rodar um ciclo de
+    # verdade exigiria Postgres e quatro servidores.
+    rodou = []
+
+    async def _ciclo_falso():
+        rodou.append(True)
+
+    m._ciclo = _ciclo_falso
+    m._ultima_forcada = datetime.now(timezone.utc) - _td(
+        seconds=MonitorService.ESPERA_FORCAR_S + 1
+    )
+    m._coletando = False
+    r = await m.coletar_agora()
+    assert r["ok"] is True, r
+    assert "duracao_s" in r
+    assert rodou, "liberou a cerca e não rodou o ciclo"
+
+    # E a coleta é marcada como concluída — senão a próxima seria recusada
+    # para sempre por "já há uma coleta em andamento".
+    assert m._coletando is False, "a trava de concorrência ficou presa"
+
+    # A coleta INVALIDA o cache: sem isso a tela releria o mesmo payload
+    # logo depois de coletar, e o botão continuaria parecendo quebrado.
+    m._ultima_forcada = datetime.now(timezone.utc) - _td(
+        seconds=MonitorService.ESPERA_FORCAR_S + 1
+    )
+    antes = m.chave_cache()
+    await m.coletar_agora()
+    assert m.chave_cache() != antes, "coletou e a tela continuaria no cache velho"
+
+    # O espaçamento é finito e curto: cerca que atrapalha quem diagnostica
+    # vira motivo para alguém desligá-la.
+    assert 0 < MonitorService.ESPERA_FORCAR_S <= 60
+
+    # A rota existe e a tela chama COLETAR, não só reler.
+    rota = (pathlib.Path(__file__).resolve().parents[1]
+            / "app" / "api" / "routes" / "monitor.py").read_text(encoding="utf-8")
+    assert "coletar_agora" in rota, "a rota de coleta sob demanda sumiu"
+
+    tela = (pathlib.Path(__file__).resolve().parents[2]
+            / "frontend" / "src" / "components" / "views"
+            / "MonitorView.js").read_text(encoding="utf-8")
+    # Conferir a LIGAÇÃO, não a presença do nome. A primeira versão desta
+    # linha só exigia "monitorColetar" em algum lugar do arquivo — e
+    # passava com o botão religado ao `carregar`, porque a função de
+    # coletar continuava definida, apenas sem uso. Trava que aceita código
+    # morto como prova não guarda nada.
+    assert "const atualizarAgora" in tela, "a função de forçar coleta sumiu"
+    corpo_fn = tela[tela.index("const atualizarAgora"):]
+    corpo_fn = corpo_fn[:corpo_fn.index("const carregarSerie")]
+    assert "monitorColetar" in corpo_fn, (
+        "forçar atualização deixou de coletar: com o resumo cacheado por "
+        "ciclo, reler devolve o mesmo payload e o botão não faz nada"
+    )
+
+    # E o BOTÃO chama essa função.
+    i = tela.index('{t("Atualizar")}')
+    bloco_botao = tela[max(0, i - 900):i]
+    assert "onClick={atualizarAgora}" in bloco_botao, (
+        "o botão Atualizar foi religado a algo que só relê o resumo"
+    )
+    # E o texto do botão não muda: trocar o rótulo mudava a largura e a
+    # barra inteira tremia a cada atualização.
+    #
+    # A verificação IGNORA comentários. A primeira versão desta linha
+    # falhava por causa do comentário que explica a correção, dentro do
+    # próprio arquivo corrigido — a quarta vez nesta base em que uma
+    # trava casou com texto em vez de código.
+    import re as _re
+
+    codigo = _re.sub(r"\{/\*.*?\*/\}", "", tela, flags=_re.S)
+    codigo = "\n".join(
+        l for l in codigo.splitlines() if not l.strip().startswith("//")
+    )
+    assert "Atualizando" not in codigo, (
+        "o rótulo do botão voltou a mudar de tamanho durante a busca"
+    )
+    assert "girando" in codigo, "sem indicação visual de que está buscando"
+
+
 async def cenario_projeto_sem_marca_de_ferramenta():
     """
     Os arquivos do projeto não carregam marca de ferramenta de IA — nem
@@ -3015,6 +3128,7 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_atualizar_forca_coleta_de_verdade,
     cenario_projeto_sem_marca_de_ferramenta,
     cenario_coletor_desacelera_sem_ninguem_olhando,
     cenario_painel_nao_pesa_no_que_monitora,
