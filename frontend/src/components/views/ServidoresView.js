@@ -109,7 +109,14 @@ export default function ServidoresView({ alvo }) {
                 }}
               >
                 <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-                  <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{h.name}</strong>
+                  <div>
+                    <strong style={{ fontSize: 15, color: "var(--titulo)" }}>
+                      {h.rotulo || h.name}
+                    </strong>
+                    {h.alias && h.alias !== h.name && (
+                      <div className="nome-tecnico">{h.name}</div>
+                    )}
+                  </div>
                   <div className="stack-h" style={{ gap: 5 }}>
                     {h.has_gpu && (
                       <span className="pill pill-info"><IconGPU size={12} /> {t("GPU")}</span>
@@ -223,6 +230,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
   const editando = Boolean(inicial.id);
   const [f, setF] = useState({
     name: inicial.name || "",
+    alias: inicial.alias || "",
     description: inicial.description || "",
     role: inicial.role || "outro",
     address: inicial.address || "",
@@ -320,10 +328,14 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
           {erro && <div className="login-err">{erro}</div>}
 
           <div className="section-title">{t("Identificação")}</div>
-          <div className="row row-2">
+          <div className="row row-3 form-linha">
             <div className="field">
               <label className="label label-required">{t("Nome")}</label>
               <input value={f.name} onChange={set("name")} placeholder="vm-appserver" required />
+            </div>
+            <div className="field">
+              <label className="label">{t("Apelido")}</label>
+              <input value={f.alias} onChange={set("alias")} placeholder={f.name || "Servidor da portaria"} />
             </div>
             <div className="field">
               <label className="label">{t("Papel")}</label>
@@ -333,6 +345,12 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
                 ))}
               </select>
             </div>
+          </div>
+          {/* O nome é identidade: vai no alvo da auditoria e no caminho
+              dos artefatos de backup no disco. O apelido é só rótulo —
+              trocá-lo não move nem renomeia nada. */}
+          <div className="form-ajuda" style={{ marginBottom: 14 }}>
+            {t("O apelido é o que aparece nas telas e nos avisos do Telegram. O nome continua sendo a identidade técnica do servidor — em auditoria, nos arquivos de backup e na confirmação de ações destrutivas.")}
           </div>
           <div className="field">
             <label className="label">{t("Descrição")}</label>

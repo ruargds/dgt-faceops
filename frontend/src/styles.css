@@ -211,6 +211,25 @@ input[type="checkbox"] { width: auto; }
 .check span { font-size: 13px; color: var(--text-2); }
 
 .row { display: grid; gap: 14px; }
+/* Numa grade de formulário, o campo que tem texto de ajuda fica mais alto
+   que os vizinhos, e daí qualquer `align-items` desalinha a linha dos
+   inputs: `flex-end` empurra o botão para baixo do rodapé do campo mais
+   alto. A regra que resolve é não misturar — campo com campo na grade, e
+   a AÇÃO fora dela, em linha própria à direita. */
+.form-linha { align-items: start; }
+.form-linha .field { margin-bottom: 0; }
+.form-acao {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 8px; margin-top: 14px; flex-wrap: wrap;
+}
+/* Ajuda que vale para a linha inteira, em vez de esticar um campo só. */
+.form-ajuda {
+  font-size: 12px; color: var(--text-3); margin-top: 8px; line-height: 1.5;
+}
+/* Nome técnico ao lado do apelido: menor, sem competir com o rótulo. */
+.nome-tecnico {
+  font-size: 11px; color: var(--text-3); font-family: var(--mono, monospace);
+}
 .row-2 { grid-template-columns: 1fr 1fr; }
 .row-3 { grid-template-columns: 1fr 1fr 1fr; }
 .row-4 { grid-template-columns: repeat(4, 1fr); }

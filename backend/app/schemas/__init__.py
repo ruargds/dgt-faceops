@@ -68,6 +68,8 @@ class MeOut(BaseModel):
 
 class HostIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    # Vazio é o normal: sem apelido, o rótulo é o próprio nome.
+    alias: str = Field(default="", max_length=120)
     description: str = ""
     role: str = "outro"
     address: str = Field(min_length=1, max_length=255)
@@ -103,6 +105,7 @@ class HostIn(BaseModel):
 
 class HostUpdate(BaseModel):
     name: str | None = None
+    alias: str | None = None
     description: str | None = None
     role: str | None = None
     address: str | None = None
@@ -129,6 +132,10 @@ class HostOut(BaseModel):
 
     id: int
     name: str
+    alias: str
+    # Calculado no modelo (`Host.rotulo`) e servido pronto: a tela não
+    # deve reimplementar a regra de qual nome mostrar.
+    rotulo: str
     description: str
     role: str
     address: str

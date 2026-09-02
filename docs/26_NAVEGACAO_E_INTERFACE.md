@@ -170,6 +170,53 @@ produto, desenvolvedora, CNPJ, ano de direitos e a versão do bundle
 carregado. Reaproveita o mesmo `REACT_APP_BUILD_STAMP` que o rodapé da
 sidebar já usava para o selo de versão.
 
+## Apelido do servidor
+
+Nome de VM é bom para o sistema e ruim para quem está de plantão:
+`vm-appserver-03` não diz onde a máquina fica. Cada servidor aceita um
+**apelido**, em Servidores → Identificação, e é ele que aparece nos
+cartões, nos seletores, nos alertas e no aviso do Telegram.
+
+O nome técnico não desaparece: fica sob o apelido no cartão, em fonte
+menor, e continua sendo o que a auditoria registra, o que nomeia o
+diretório dos backups e a palavra que o painel pede para confirmar uma
+ação destrutiva. A separação está detalhada em
+[09_REGRAS_DESENVOLVIMENTO](09_REGRAS_DESENVOLVIMENTO.md#rótulo-não-é-identidade)
+e travada por teste — trocar um pelo outro perderia backup em silêncio.
+
+Apagar o apelido devolve o nome técnico. Nada é renomeado no disco.
+
+## Alinhamento dos formulários
+
+O botão "Adicionar destino" aparecia desalinhado da linha dos campos, e a
+causa não era espaçamento: numa grade, a célula com texto de ajuda fica
+mais alta que as vizinhas, então `align-items: flex-end` alinhava o botão
+ao rodapé da célula mais alta, não à linha dos inputs.
+
+A correção é estrutural — **campo com campo na grade; ação fora dela** —
+com as classes `.form-linha`, `.form-acao` e `.form-ajuda`. As três estão
+documentadas em
+[09_REGRAS_DESENVOLVIMENTO](09_REGRAS_DESENVOLVIMENTO.md#formulário-campo-com-campo-ação-fora-da-grade).
+
+## Campo que não podia ficar morto
+
+O seletor de **Serviço**, nas regras de aviso, ficava desabilitado
+dizendo "escolha um servidor primeiro" — inclusive com servidor já
+escolhido. O motivo real era outro: o coletor ainda não tinha listado os
+serviços daquele servidor (`hosts.servicos_conhecidos` vazio). Quem
+escolhia ficava sem saída e sem entender por quê.
+
+Agora há três estados, e cada um diz a verdade:
+
+| Estado | O campo |
+|---|---|
+| sem servidor escolhido | seletor desabilitado — a regra vale para todos, não há o que restringir |
+| servidor com serviços conhecidos | seletor com a lista real |
+| servidor sem lista ainda | campo digitável, com sugestões, e a explicação de que o coletor preenche na próxima passada |
+
+A regra geral: campo desabilitado tem que dizer o que **destravaria** ele.
+Se a resposta for "esperar o coletor", isso precisa estar escrito.
+
 ## O que fica de fora deste registro
 
 Decisões de arquitetura mais profundas (por que não há roteador, por que

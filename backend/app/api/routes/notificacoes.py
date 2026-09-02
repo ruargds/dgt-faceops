@@ -282,7 +282,7 @@ async def listar_regras(
     rh = await db.execute(select(Host).where(Host.enabled.is_(True)).order_by(Host.name))
     hosts = [
         {
-            "id": h.id, "nome": h.name, "papel": h.role,
+            "id": h.id, "nome": h.rotulo, "papel": h.role,
             "servicos": sorted(h.servicos_conhecidos or []),
         }
         for h in rh.scalars().all()

@@ -295,7 +295,7 @@ export default function MonitorView({ alvo, nav }) {
                     <IconAlerta size={17} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 13.5 }}>
-                        {a.host} — {a.texto}
+                        {a.rotulo || a.host} — {a.texto}
                         {a.desde && (
                           <span className="small" style={{ fontWeight: 400, opacity: 0.85 }}>
                             {" "}· {t("há")} {formatDuracao(a.duracao_s)}
@@ -453,7 +453,7 @@ export default function MonitorView({ alvo, nav }) {
                       onClick={() => irParaHost(Number(hostId))}
                     >
                       <span className={`dot ${incs.some((i) => i.aberto && i.nivel === "critico") ? "dot-err" : incs.some((i) => i.aberto) ? "dot-warn" : "dot-ok"}`} />
-                      <strong>{s ? s.host : `host ${hostId}`}</strong>
+                      <strong>{s ? (s.rotulo || s.host) : `host ${hostId}`}</strong>
                     </div>
                     <div className="table-wrap">
                       <table>
@@ -499,7 +499,7 @@ export default function MonitorView({ alvo, nav }) {
           <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 14 }}>
             <div>
               <div className="section-title" style={{ marginBottom: 2 }}>
-                Histórico de {hostDetalhe.host}
+                Histórico de {hostDetalhe.rotulo || hostDetalhe.host}
               </div>
               <div className="small muted">
                 {serie ? `${serie.total} amostra(s) no período` : "carregando…"}
@@ -717,7 +717,7 @@ function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar }) {
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 2 }}>
         <div className="stack-h">
           <span className={`dot ${dot}`} />
-          <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{s.host}</strong>
+          <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{s.rotulo || s.host}</strong>
         </div>
         {s.tem_gpu && (
           <span className="pill pill-info" title={s.gpu_nome || t("GPU")}>

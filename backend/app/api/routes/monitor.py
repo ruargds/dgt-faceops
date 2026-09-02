@@ -94,7 +94,10 @@ async def resumo(
 
         cartoes.append({
             "host_id": host.id,
+            # `host` é o nome técnico e continua sendo: a tela usa no nome
+            # do arquivo exportado. `rotulo` é o que aparece escrito.
             "host": host.name,
+            "rotulo": host.rotulo,
             "papel": host.role,
             "endereco": host.address,
             "ativo": host.enabled,

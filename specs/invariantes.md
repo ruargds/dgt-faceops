@@ -220,11 +220,30 @@ O resumo do topo do Monitor degrada para zeros se a consulta falhar.
 
 **Trava:** `resumo do painel degrada sem quebrar`
 
+### INV-22 — Apelido é rótulo; `hosts.name` é identidade
+
+O apelido (`hosts.alias`) só aparece onde o nome é texto lido por gente.
+Onde o nome é chave — alvo da auditoria, diretório dos artefatos de
+backup, nome do arquivo exportado e palavra de confirmação de ação
+destrutiva — vale `hosts.name`, sempre.
+
+*Por quê:* `StorageService.caminho_artefato` monta o diretório da cópia
+com o nome do host. Se o rótulo entrasse ali, renomear um servidor
+deixaria todo backup anterior órfão num diretório que ninguém procura —
+e a trilha de auditoria passaria a apontar para um nome editável.
+
+*Dano se quebrar:* perda silenciosa do histórico de backup e auditoria
+não rastreável. Nenhum dos dois dá erro na hora.
+
+**Trava:** `apelido e rotulo nunca identidade` (inclui varredura do
+código de `backups.py` e das rotas que auditam) e
+`aviso mostra apelido e roteia por id`
+
 ---
 
 ## Cobertura
 
-26 cenários em `backend/tests/verificar.py`. Rodam sem Postgres e sem
+32 cenários em `backend/tests/verificar.py`. Rodam sem Postgres e sem
 framework:
 
 ```bash

@@ -104,7 +104,7 @@ export function SeletorHost({ hosts, hostId, onMudar, incluirTodos = false }) {
       {incluirTodos && <option value="">{t("Todos os servidores")}</option>}
       {hosts.map((h) => (
         <option key={h.id} value={h.id} disabled={!h.enabled}>
-          {h.name}
+          {h.rotulo || h.name}
           {h.enabled ? "" : " (desativado)"}
         </option>
       ))}

@@ -22,6 +22,12 @@ class Host(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    # Apelido de exibição. O `name` NÃO pode virar rótulo editável: ele é
+    # identidade — vai no alvo da auditoria e no caminho dos artefatos de
+    # backup no disco (`StorageService.caminho_artefato`), então renomear
+    # perderia de vista a cópia antiga. O apelido fica ao lado: aparece
+    # para quem lê, e nunca substitui o nome nas trilhas técnicas.
+    alias: Mapped[str] = mapped_column(String(120), default="")
     description: Mapped[str] = mapped_column(String(255), default="")
 
     # Papel na topologia: appserver | dbserver | extraction | ftpserver | outro
@@ -78,6 +84,17 @@ class Host(Base):
     ff_api_user: Mapped[str] = mapped_column(String(120), default="")
     ff_api_pass_enc: Mapped[str] = mapped_column(Text, default="")
     ff_api_token_enc: Mapped[str] = mapped_column(Text, default="")
+
+    @property
+    def rotulo(self) -> str:
+        """
+        Nome para gente ler: o apelido quando houver, senão o técnico.
+
+        Um único lugar decide isso. Espalhar `alias or name` pelo código
+        garantiria que alguma tela ficasse de fora e mostrasse nome
+        diferente da vizinha, para o mesmo servidor.
+        """
+        return (self.alias or "").strip() or self.name
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     last_seen_at: Mapped[datetime | None] = mapped_column(

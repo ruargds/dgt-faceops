@@ -98,6 +98,10 @@ COLUNAS_NOVAS = [
     # propósito: nula significa "todos os destinos ativos", então regra que
     # já existia continua valendo sem backfill. O padrão de `tipos` cobre o
     # comportamento anterior (queda + retorno + métrica).
+    # Apelido do servidor (02/09/2026). Entra vazio: sem apelido, o
+    # rótulo continua sendo o nome técnico, e nada muda de aparência
+    # até alguém preencher.
+    ("hosts", "alias", "VARCHAR(120) NOT NULL DEFAULT ''"),
     ("notificacao_regras", "destino_id", "INTEGER"),
     ("notificacao_regras", "tipos",
      '''JSON NOT NULL DEFAULT '["servico_parado","host_sem_contato","retorno","metrica"]'::json'''),

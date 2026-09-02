@@ -447,6 +447,7 @@ class MonitorService:
                 item = {
                     "host_id": host.id,
                     "host": host.name,
+                    "rotulo": host.rotulo,
                     "chave": chave,
                     "nivel": nivel,
                     "texto": texto,
@@ -463,7 +464,7 @@ class MonitorService:
 
             if a.erro:
                 add("conexao", "critico",
-                    f"sem contato com {host.name}", 0, 0,
+                    f"sem contato com {host.rotulo}", 0, 0,
                     acao="Confira se a máquina está ligada e se a rede está "
                          "de pé. Em Servidores, use 'Testar conexão' para "
                          "ver o erro exato.",

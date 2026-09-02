@@ -18,6 +18,7 @@ Saída: uma linha por cenário e o total. Código de saída != 0 se algo
 falhar — serve para chamar do CI ou antes de um deploy.
 """
 import asyncio
+import pathlib
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1231,6 +1232,95 @@ async def cenario_reincidencia_nao_inventa_horario():
     await engine.dispose()
 
 
+async def cenario_apelido_e_rotulo_nunca_identidade():
+    """
+    Apelido é rótulo; `name` é identidade. A separação não é preciosismo:
+    `StorageService.caminho_artefato` monta o diretório dos backups com o
+    nome do host, e a auditoria registra o alvo por ele. Se o apelido
+    substituísse o nome, renomear um servidor deixaria todo backup antigo
+    órfão num diretório que ninguém mais procura, e a trilha de auditoria
+    passaria a apontar para um nome que muda.
+    """
+    from app.models.host import Host
+
+    # Sem apelido, o rótulo é o nome técnico — nada muda de aparência.
+    assert Host(name="vm-appserver").rotulo == "vm-appserver"
+    # Com apelido, é ele que aparece.
+    h = Host(name="vm-appserver", alias="Servidor da portaria")
+    assert h.rotulo == "Servidor da portaria"
+    # Só espaço não é apelido: cairia num rótulo vazio na tela.
+    assert Host(name="vm-db", alias="   ").rotulo == "vm-db"
+    assert Host(name="vm-db", alias=None).rotulo == "vm-db"
+
+    # O apelido não pode ter entrado no caminho dos artefatos. Esta é a
+    # trava contra o refactor bem-intencionado: trocar `host.name` por
+    # `host.rotulo` em backups.py compila, passa em revisão superficial e
+    # perde as cópias antigas em silêncio.
+    fonte = (pathlib.Path(__file__).resolve().parents[1]
+             / "app" / "api" / "routes" / "backups.py").read_text(encoding="utf-8")
+    for linha in fonte.splitlines():
+        if "caminho_artefato(" in linha:
+            assert "rotulo" not in linha, (
+                f"caminho de artefato usando apelido: {linha.strip()}"
+            )
+
+    # Mesma trava para o alvo da auditoria: quem auditou precisa poder
+    # cruzar o registro com o servidor, e apelido é editável.
+    for arquivo in ("hosts.py", "ops.py", "maintenance.py"):
+        fonte = (pathlib.Path(__file__).resolve().parents[1]
+                 / "app" / "api" / "routes" / arquivo).read_text(encoding="utf-8")
+        assert "target=host.rotulo" not in fonte, f"auditoria por apelido em {arquivo}"
+
+
+async def cenario_aviso_mostra_apelido_e_roteia_por_id():
+    """
+    O apelido serve justamente para o aviso no celular dizer "Servidor da
+    portaria" em vez de "vm-appserver-03". Mas a regra tem que continuar
+    casando por `host_id`: casar por nome faria toda regra parar de valer
+    no dia em que alguém trocasse o apelido.
+    """
+    from app.models.notificacao import NotificacaoDestino, NotificacaoRegra
+    from app.services import notificacao_service as ns
+
+    evento = {
+        "tipo": "servico_parado",
+        "nivel": "critico",
+        "host_id": 7,
+        "host": "Servidor da portaria",   # já vem como rótulo do serviço
+        "servico": "findface-video-worker",
+        "texto": "findface-video-worker com problema",
+        "chave": "ini:7:servico:findface-video-worker",
+        "idade_s": 999,
+    }
+
+    texto = ns.montar_mensagem(evento)
+    assert "Servidor da portaria" in texto, "aviso não mostrou o apelido"
+    assert len(texto.splitlines()) <= 4, "aviso passou de quatro linhas"
+
+    destino = NotificacaoDestino(id=1, nome="Plantão", tipo="grupo",
+                                 chat_id="-100123", ativo=True)
+    # A regra fixa o host por id. O apelido no evento é outro texto de
+    # propósito: se o roteamento olhasse o nome, isto não casaria.
+    regra = NotificacaoRegra(
+        id=1, destino_id=None, host_id=7, servico="", ativo=True,
+        nivel_minimo="critico", atraso_s=0,
+        tipos=["servico_parado"],
+    )
+    assert ns.NotificacaoService.rotear([regra], [destino], evento) == [destino], (
+        "regra deixou de casar quando o evento trouxe o apelido"
+    )
+
+    # E o servidor errado continua fora.
+    outra = NotificacaoRegra(
+        id=2, destino_id=None, host_id=8, servico="", ativo=True,
+        nivel_minimo="critico", atraso_s=0,
+        tipos=["servico_parado"],
+    )
+    assert ns.NotificacaoService.rotear([outra], [destino], evento) == [], (
+        "regra de outro servidor recebeu o aviso"
+    )
+
+
 CENARIOS = [
     cenario_ddl_sem_indice_duplicado,
     cenario_resumo_do_painel_degrada_sem_quebrar,
@@ -1262,6 +1352,8 @@ CENARIOS = [
     cenario_camera_tenta_de_novo_sem_ordering,
     cenario_processos_junta_gpu_e_container_sem_coletor_novo,
     cenario_licenca_so_cobra_quem_hospeda_o_ntls,
+    cenario_apelido_e_rotulo_nunca_identidade,
+    cenario_aviso_mostra_apelido_e_roteia_por_id,
 ]
 
 

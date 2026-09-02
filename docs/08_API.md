@@ -45,6 +45,12 @@ POST /api/auth/login
 | DELETE | `/hosts/{id}` | `hosts.manage` |
 | POST | `/hosts/{id}/testar` | `hosts.view` |
 
+`HostOut` traz três campos de nome: `name` (identidade — auditoria,
+diretório de backup), `alias` (apelido, pode ser vazio) e `rotulo`
+(pronto para exibir: o apelido quando houver, senão o nome). A tela usa
+`rotulo`; ver
+[09_REGRAS_DESENVOLVIMENTO](09_REGRAS_DESENVOLVIMENTO.md#rótulo-não-é-identidade).
+
 ```http
 POST /api/hosts/scan-chave
 { "address": "10.0.1.10", "ssh_port": 22 }

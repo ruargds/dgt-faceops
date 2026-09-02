@@ -19,6 +19,24 @@ const NIVEL_ROTULO = {
   atencao: "Atenção e parada",
 };
 
+// Sugestão para o servidor cujos serviços o coletor ainda não listou.
+// É sugestão, não validação: instalação pode ter serviço fora desta
+// lista, e recusar o que não está aqui seria pior do que aceitar.
+const SERVICOS_COMUNS = [
+  "findface-multi-findface-multi-legacy-1",
+  "findface-video-worker",
+  "findface-video-manager",
+  "findface-extraction-api",
+  "findface-sf-api",
+  "findface-ntls",
+  "findface-upload",
+  "findface-multi-postgresql-1",
+  "findface-multi-mongodb-1",
+  "findface-tarantool-server",
+  "findface-counter",
+  "findface-liveness-api",
+];
+
 const ESPERAS = [
   { s: 0, rotulo: "na hora" },
   { s: 120, rotulo: "2 min" },
@@ -199,11 +217,11 @@ export default function NotificacoesView() {
                 onChange={(e) => setForm({ ...form, bot_token: e.target.value })}
               />
             </div>
-            <div className="field" style={{ display: "flex", alignItems: "flex-end" }}>
-              <button className="btn btn-primary" disabled={ocupado === "conta"}>
-                {ocupado === "conta" ? t("Salvando…") : t("Salvar bot")}
-              </button>
-            </div>
+          </div>
+          <div className="form-acao">
+            <button className="btn btn-primary" disabled={ocupado === "conta"}>
+              {ocupado === "conta" ? t("Salvando…") : t("Salvar bot")}
+            </button>
           </div>
 
           {/* Habilitar é decisão própria, não um checkbox perdido. */}
@@ -384,8 +402,7 @@ export default function NotificacoesView() {
         )}
 
         <form
-          className="row row-4"
-          style={{ marginTop: 14, alignItems: "flex-end" }}
+          style={{ marginTop: 14 }}
           onSubmit={(e) => {
             e.preventDefault();
             acao("novo-destino", async () => {
@@ -394,41 +411,47 @@ export default function NotificacoesView() {
             }, t("Destino cadastrado."));
           }}
         >
-          <div className="field">
-            <label className="label label-required">{t("Nome")}</label>
-            <input
-              placeholder="Plantão NOC"
-              value={novoDestino.nome}
-              onChange={(e) => setNovoDestino({ ...novoDestino, nome: e.target.value })}
-              required
-            />
-          </div>
-          <div className="field">
-            <label className="label">{t("Tipo")}</label>
-            <select
-              value={novoDestino.tipo}
-              onChange={(e) => setNovoDestino({ ...novoDestino, tipo: e.target.value })}
-            >
-              <option value="grupo">{t("Grupo")}</option>
-              <option value="individual">{t("Pessoa (conversa direta)")}</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="label label-required">{t("Id do chat")}</label>
-            <input
-              className="mono"
-              placeholder={novoDestino.tipo === "grupo" ? "-1001234567890" : "123456789"}
-              value={novoDestino.chat_id}
-              onChange={(e) => setNovoDestino({ ...novoDestino, chat_id: e.target.value })}
-              required
-            />
-            <div className="field-help">
-              {novoDestino.tipo === "grupo"
-                ? t("Grupo tem id negativo. O bot precisa ter sido adicionado lá.")
-                : t("Id numérico da pessoa. Ela precisa ter mandado /start para o bot.")}
+          <div className="row row-3 form-linha">
+            <div className="field">
+              <label className="label label-required">{t("Nome")}</label>
+              <input
+                placeholder="Plantão NOC"
+                value={novoDestino.nome}
+                onChange={(e) => setNovoDestino({ ...novoDestino, nome: e.target.value })}
+                required
+              />
+            </div>
+            <div className="field">
+              <label className="label">{t("Tipo")}</label>
+              <select
+                value={novoDestino.tipo}
+                onChange={(e) => setNovoDestino({ ...novoDestino, tipo: e.target.value })}
+              >
+                <option value="grupo">{t("Grupo")}</option>
+                <option value="individual">{t("Pessoa (conversa direta)")}</option>
+              </select>
+            </div>
+            <div className="field">
+              <label className="label label-required">{t("Id do chat")}</label>
+              <input
+                className="mono"
+                placeholder={novoDestino.tipo === "grupo" ? "-1001234567890" : "123456789"}
+                value={novoDestino.chat_id}
+                onChange={(e) => setNovoDestino({ ...novoDestino, chat_id: e.target.value })}
+                required
+              />
             </div>
           </div>
-          <div className="field">
+
+          {/* Ajuda da linha inteira: dentro de um campo só, ela deixava
+              aquela célula mais alta que as vizinhas e torcia a linha. */}
+          <div className="form-ajuda">
+            {novoDestino.tipo === "grupo"
+              ? t("Grupo tem id negativo, começando por -100. O bot precisa ter sido adicionado ao grupo.")
+              : t("Id numérico da pessoa. Ela precisa ter aberto conversa com o bot e mandado /start.")}
+          </div>
+
+          <div className="form-acao">
             <button className="btn btn-primary" disabled={ocupado === "novo-destino"}>
               <IconMais size={14} /> {t("Adicionar destino")}
             </button>
@@ -652,8 +675,8 @@ function FormRegra({
         </div>
       </div>
 
-      <div className="row row-4">
-        <div className="field" style={{ marginBottom: 0 }}>
+      <div className="row row-4 form-linha">
+        <div className="field">
           <label className="label">{t("Enviar para")}</label>
           <select
             value={r.destino_id ?? ""}
@@ -665,7 +688,7 @@ function FormRegra({
             ))}
           </select>
         </div>
-        <div className="field" style={{ marginBottom: 0 }}>
+        <div className="field">
           <label className="label">{t("Servidor")}</label>
           <select
             value={r.host_id ?? ""}
@@ -681,21 +704,43 @@ function FormRegra({
             ))}
           </select>
         </div>
-        <div className="field" style={{ marginBottom: 0 }}>
+        <div className="field">
           <label className="label">{t("Serviço")}</label>
-          <select
-            value={r.servico}
-            onChange={(e) => setR({ ...r, servico: e.target.value })}
-            disabled={!host || (host.servicos || []).length === 0}
-          >
-            <option value="">{t("todos")}</option>
-            {(host ? host.servicos : []).map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          {!host && <div className="field-help">{t("escolha um servidor primeiro")}</div>}
+          {/* Três estados, e cada um precisa dizer a verdade. Antes havia
+              um só: sem serviço conhecido o campo ficava morto dizendo
+              "escolha um servidor primeiro" — mesmo com servidor
+              escolhido. Quem escolhia ficava sem saída, sem entender por
+              quê. Agora, servidor cujos serviços o coletor ainda não
+              listou aceita o nome digitado, com a lista como sugestão. */}
+          {!host || (host.servicos || []).length > 0 ? (
+            <select
+              value={r.servico}
+              onChange={(e) => setR({ ...r, servico: e.target.value })}
+              disabled={!host}
+            >
+              <option value="">{t("todos")}</option>
+              {(host ? host.servicos : []).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <input
+                className="mono"
+                list={`serv-${r.id || "novo"}`}
+                placeholder={t("todos")}
+                value={r.servico}
+                onChange={(e) => setR({ ...r, servico: e.target.value.trim() })}
+              />
+              <datalist id={`serv-${r.id || "novo"}`}>
+                {SERVICOS_COMUNS.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </>
+          )}
         </div>
-        <div className="field" style={{ marginBottom: 0 }}>
+        <div className="field">
           <label className="label">{t("Gravidade mínima")}</label>
           <select
             value={r.nivel_minimo}
@@ -707,6 +752,17 @@ function FormRegra({
           </select>
         </div>
       </div>
+
+      {!host && (
+        <div className="form-ajuda">
+          {t("Sem servidor escolhido a regra vale para todos — e aí não faz sentido restringir a um serviço.")}
+        </div>
+      )}
+      {host && (host.servicos || []).length === 0 && (
+        <div className="form-ajuda">
+          {t("Ainda não conheço os serviços deste servidor — o coletor preenche a lista na próxima passada. Até lá, escreva o nome do serviço (ou deixe vazio para todos).")}
+        </div>
+      )}
 
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
         <div className="label" style={{ marginBottom: 8 }}>{t("Tipos de evento")}</div>
@@ -732,8 +788,8 @@ function FormRegra({
           </div>
         )}
 
-        <div className="row row-2" style={{ marginTop: 12 }}>
-          <div className="field" style={{ marginBottom: 0 }}>
+        <div className="row row-4 form-linha" style={{ marginTop: 12 }}>
+          <div className="field">
             <label className="label">{t("Avisar depois de")}</label>
             <select
               value={r.atraso_s}
@@ -743,10 +799,10 @@ function FormRegra({
                 <option key={e.s} value={e.s}>{t(e.rotulo)}</option>
               ))}
             </select>
-            <div className="field-help">
-              {t("Só avisa se o problema persistir por esse tempo — evita acordar alguém por uma piscada. O retorno ao normal nunca espera.")}
-            </div>
           </div>
+        </div>
+        <div className="form-ajuda">
+          {t("Só avisa se o problema persistir por esse tempo — evita acordar alguém por uma piscada. O retorno ao normal nunca espera.")}
         </div>
       </div>
     </div>

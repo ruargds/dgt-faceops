@@ -99,6 +99,7 @@ async def criar(
 
     host = Host(
         name=dados.name,
+        alias=dados.alias.strip(),
         description=dados.description,
         role=dados.role,
         address=dados.address,
@@ -159,7 +160,7 @@ async def atualizar(
     alterados: list[str] = []
 
     for campo in (
-        "name", "description", "role", "ssh_user", "auth_method",
+        "name", "alias", "description", "role", "ssh_user", "auth_method",
         "ffmulti_dir", "compose_file", "has_gpu", "enabled", "monitorar",
         "ff_api_url", "ff_api_user", "ssh_port",
     ):

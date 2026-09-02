@@ -31,8 +31,8 @@ async def reincidencia(
     itens = await request.app.state.incidentes.reincidencia(db, dias=dias)
 
     # Nome do host junto, para a tela não precisar de outra consulta.
-    r = await db.execute(select(Host.id, Host.name))
-    nomes = {i: n for i, n in r.all()}
+    r = await db.execute(select(Host))
+    nomes = {h.id: h.rotulo for h in r.scalars().all()}
     for i in itens:
         i["host"] = nomes.get(i["host_id"], f"#{i['host_id']}")
     return {"dias": dias, "itens": itens}
@@ -49,8 +49,8 @@ async def padroes(
     """Erros do log agrupados por molde, com causa e ação quando reconhecidos."""
     itens = await request.app.state.analise.listar(db, host_id=host_id, dias=dias)
 
-    r = await db.execute(select(Host.id, Host.name))
-    nomes = {i: n for i, n in r.all()}
+    r = await db.execute(select(Host))
+    nomes = {h.id: h.rotulo for h in r.scalars().all()}
     for i in itens:
         i["host"] = nomes.get(i["host_id"], f"#{i['host_id']}")
     return {"dias": dias, "itens": itens}

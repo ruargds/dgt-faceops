@@ -111,6 +111,10 @@ disco / em 94% — só 6 GB livres
 Em Manutenção, use Diagnosticar para ver o que ocupa
 ```
 
+O nome do servidor na mensagem é o **apelido**, quando houver — quem
+recebe o aviso quer saber onde é, não como a VM se chama. Sem apelido, sai
+o nome técnico.
+
 Texto puro, sem Markdown: nome de container tem `_`, `-` e `.`, que
 quebram o parser do Telegram e fariam a mensagem falhar justamente durante
 um incidente. E **sem endereço interno** — IP de servidor não vai para um

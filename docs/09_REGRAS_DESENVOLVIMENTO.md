@@ -203,6 +203,44 @@ Se um schema estiver inconsistente, quebra aqui, sem precisar de Postgres.
 - Backend: 4 espaços, linha até ~95 colunas.
 - Frontend: 2 espaços.
 
+## Rótulo não é identidade
+
+Servidor tem dois nomes, e confundi-los custa dado:
+
+| | `hosts.name` | `hosts.alias` (apelido) |
+|---|---|---|
+| O que é | identidade | rótulo |
+| Quem lê | o sistema | a pessoa |
+| Muda? | quase nunca | quando quiser |
+| Onde aparece | auditoria, diretório de backup, nome de arquivo exportado, palavra de confirmação | cartões, seletores, alertas, aviso no Telegram |
+
+Um único lugar decide o rótulo: a propriedade `Host.rotulo`
+(`alias` quando houver, senão `name`), servida pronta nos schemas como
+`rotulo`. A tela nunca reimplementa a regra — espalhar `alias or name`
+pelo código garante que alguma tela fique de fora e mostre, para o mesmo
+servidor, nome diferente da tela vizinha.
+
+Ao adicionar um campo novo que exibe servidor, a pergunta é: **isto vai
+ser lido por gente ou casado por máquina?** Se for casado, use `name`.
+A trava é o cenário `apelido e rotulo nunca identidade`, que varre o
+código de `backups.py` procurando `rotulo` num caminho de artefato.
+
+## Formulário: campo com campo, ação fora da grade
+
+Numa `.row`, o campo que tem texto de ajuda fica mais alto que os
+vizinhos — e aí qualquer `align-items` desalinha a linha dos inputs
+(`flex-end` empurra o botão para baixo do rodapé do campo mais alto).
+Três utilidades em `styles.css` resolvem, e a regra é:
+
+| Classe | Para quê |
+|---|---|
+| `.form-linha` | na `.row` de formulário: alinha ao topo e zera a margem dos campos |
+| `.form-acao` | linha própria para o botão, à direita, **fora** da grade |
+| `.form-ajuda` | ajuda que vale para a linha inteira, em vez de esticar uma célula |
+
+`.field-help` continua valendo para ajuda de um campo só — desde que ela
+não seja a única célula alta de uma linha de vários campos.
+
 ## Onde não mexer sem pensar duas vezes
 
 | Arquivo | Por quê |
@@ -212,3 +250,4 @@ Se um schema estiver inconsistente, quebra aqui, sem precisar de Postgres.
 | `stack_service._garantir_do_projeto` | é a cerca que impede controle remoto irrestrito do Docker |
 | `backend/Dockerfile` (`--workers 1`) | dois workers duplicam agendamento |
 | `scripts/ffmulti-backup.sh` (`trap`) | é o que garante o stack subir se o script morrer |
+| `hosts.name` em `backups.py` e nos alvos de auditoria | é identidade, não rótulo (ver acima) |

@@ -157,7 +157,7 @@ class IncidenteService:
         if not host_ok:
             atuais[("host", "")] = {
                 "nivel": "critico",
-                "texto": f"sem contato com {host.name}",
+                "texto": f"sem contato com {host.rotulo}",
                 "causa": "rede fora, VM desligada ou parada — confira o provedor antes de investigar o painel.",
             }
         else:
@@ -199,7 +199,7 @@ class IncidenteService:
             eventos.append({
                 "tipo": "retorno",
                 "host_id": host.id,
-                "host": host.name,
+                "host": host.rotulo,
                 "servico": incidente.servico,
                 "nivel": incidente.nivel,
                 "duracao_s": incidente.duracao_s,
@@ -237,7 +237,7 @@ class IncidenteService:
                 # "serviço parado": a causa e quem precisa agir são outros.
                 "tipo": "host_sem_contato" if tipo == "host" else "servico_parado",
                 "host_id": host.id,
-                "host": host.name,
+                "host": host.rotulo,
                 "servico": servico,
                 "nivel": info["nivel"],
                 "texto": info["texto"],
