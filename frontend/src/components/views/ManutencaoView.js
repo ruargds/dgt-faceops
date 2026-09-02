@@ -273,13 +273,13 @@ function Faxina() {
 
   if (!previa) return null;
 
-  const r = previa.retencoes || {};
-  const totalBytes = (previa.gravacoes_bytes || 0) + (previa.staging_bytes || 0);
-  const temAlgo =
-    previa.gravacoes > 0 ||
-    previa.staging > 0 ||
-    previa.auditoria > 0 ||
-    previa.logs_execucao > 0;
+  // A tabela vem pronta do backend, uma linha por categoria. Antes esta
+  // tela listava quatro categorias enquanto a faxina apagava onze — quem
+  // via zero concluía que nada seria removido, no mesmo dia em que
+  // milhares de amostras iam embora.
+  const linhas = previa.linhas || [];
+  const totalBytes = previa.total_bytes || 0;
+  const temAlgo = (previa.total_itens || 0) > 0;
 
   return (
     <div className="card">
@@ -302,35 +302,24 @@ function Faxina() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>{t("Gravações do terminal")}</td>
-              <td className="right mono">
-                {previa.gravacoes} ({formatBytes(previa.gravacoes_bytes)})
-              </td>
-              <td className="small muted">{r.gravacoes_dias} dias</td>
-            </tr>
-            <tr>
-              <td>{t("Staging órfão")}<div className="small muted">{t("sobra de execução que falhou no meio")}</div>
-              </td>
-              <td className="right mono">
-                {previa.staging} ({formatBytes(previa.staging_bytes)})
-              </td>
-              <td className="small muted">{t("24 horas")}</td>
-            </tr>
-            <tr>
-              <td>{t("Registros de auditoria")}<div className="small muted">{t("nível crítico fica o triplo do prazo")}</div>
-              </td>
-              <td className="right mono">
-                {previa.auditoria} de {previa.auditoria_total}
-              </td>
-              <td className="small muted">{r.auditoria_dias} dias</td>
-            </tr>
-            <tr>
-              <td>{t("Log das execuções")}<div className="small muted">{t("esvazia o texto, mantém a linha do histórico")}</div>
-              </td>
-              <td className="right mono">{previa.logs_execucao}</td>
-              <td className="small muted">{r.log_execucao_dias} dias</td>
-            </tr>
+            {linhas.map((l) => (
+              <tr key={l.chave} style={{ opacity: l.quantidade > 0 ? 1 : 0.62 }}>
+                <td>
+                  {t(l.rotulo)}
+                  {l.nota && <div className="small muted">{t(l.nota)}</div>}
+                </td>
+                <td className="right mono">
+                  {/* "até" quando a conta é teto e não promessa: a linha
+                      da execução só sai se o artefato já não existir, e
+                      isso o disco decide, não esta consulta. */}
+                  {l.aproximado && l.quantidade > 0 ? `${t("até")} ` : ""}
+                  {l.quantidade}
+                  {l.total !== undefined && ` ${t("de")} ${l.total}`}
+                  {l.bytes !== undefined && l.bytes > 0 && ` (${formatBytes(l.bytes)})`}
+                </td>
+                <td className="small muted">{l.retencao}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -424,6 +413,12 @@ const CATEGORIAS_LIMPEZA = [
     rotulo: "Amostras do monitor",
     nota: "os pontos dos gráficos da aba Monitor",
     campo: "amostras",
+  },
+  {
+    id: "licenca",
+    rotulo: "Histórico de consumo de licença",
+    nota: "uma linha por recurso por dia; a projeção de 'quando acaba' encurta",
+    campo: "licenca",
   },
 ];
 
@@ -552,10 +547,15 @@ function LimpezaPontual() {
           style={{ background: "var(--green-bg)", borderColor: "var(--green-bd)", marginBottom: 12 }}
         >
           <span className="small" style={{ color: "var(--green-fg)" }}>
-            <IconOk size={13} /> Limpeza concluída — {feito.gravacoes} gravação(ões),{" "}
-            {feito.staging} sobra(s) de staging, {feito.auditoria} registro(s) de
-            auditoria, {feito.sessoes} sessão(ões), {feito.logs_execucao} log(s)
-            esvaziado(s), {feito.amostras} amostra(s).
+            {/* Percorre o catálogo em vez de enumerar campo por campo:
+                categoria nova aparece aqui sozinha. Enumerar à mão foi o
+                que deixou "licença" fora do resumo e sem ninguém notar
+                que ela nem agia. */}
+            <IconOk size={13} /> Limpeza concluída —{" "}
+            {CATEGORIAS_LIMPEZA
+              .filter((c) => (feito[c.campo] || 0) > 0)
+              .map((c) => `${feito[c.campo]} ${t(c.rotulo).toLowerCase()}`)
+              .join(", ") || t("nada a remover no período escolhido")}.
             {feito.erros && feito.erros.length > 0 && (
               <div style={{ color: "var(--red-fg)", marginTop: 4 }}>{feito.erros.join(" · ")}</div>
             )}

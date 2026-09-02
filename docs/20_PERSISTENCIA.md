@@ -13,6 +13,10 @@ dado sem pergunta que o justifique é lixo com backup.
 | Registros de auditoria | 365 dias (crítico: o triplo) | Configurações → Faxina |
 | Sessões de terminal (a linha) | junto da auditoria | Configurações → Faxina |
 | Texto do log das execuções | 60 dias — a linha fica, o texto sai | Configurações → Faxina |
+| Linha das execuções de backup | 730 dias, **e só sem artefato** | Configurações → Faxina |
+| Incidentes fechados | 30 dias | Configurações → Incidentes |
+| Moldes de log | 30 dias | Configurações → Análise |
+| Avisos enviados no Telegram | 14 dias | Configurações → Notificação |
 | Sobras de staging | 24 horas | fixo |
 | Artefatos de backup | por perfil, no disco local | no agendamento ou no disparo |
 
@@ -130,6 +134,7 @@ Nada aqui cresce sem teto. Verificado item por item:
 | `audit_logs` | faxina, retenção em dias (crítico fica o triplo) |
 | `terminal_sessions` | faxina, junto com a auditoria |
 | `backup_runs.log` | faxina esvazia o texto e mantém a linha |
+| `backup_runs` (a linha) | faxina, `faxina.execucoes_dias` (padrão 730) — **só a execução cujo artefato já não existe**. O texto saía em 60 dias e a linha ficava para sempre; agora ela também tem prazo, mas nunca à frente do arquivo que descreve: apagar a linha e deixar o `.tar.gz` no disco produziria um artefato que ninguém sabe de onde veio |
 | `amostras` (monitor) | faxina, `monitor.retencao_dias` (padrão 30) |
 | `incidentes` | faxina, `incidentes.retencao_dias` (padrão 30) — **só os fechados**; um aberto é estado atual, não histórico |
 | `log_padroes` | faxina, `analise.retencao_dias` (padrão 30). Guarda molde com contador, não a linha: mil ocorrências do mesmo erro são UMA linha |
@@ -143,6 +148,25 @@ Nada aqui cresce sem teto. Verificado item por item:
 A faxina roda **uma vez por dia**, no horário configurado. Prazos em
 Configurações → Faxina automática. Detalhes em
 [14_MANUTENCAO](14_MANUTENCAO.md).
+
+### A prévia mostra tudo, e há teste para isso
+
+A tela "Faxina do painel" lista **uma linha por categoria**, e a lista vem
+do backend. Ela já esteve errada de um jeito perigoso: mostrava quatro
+categorias enquanto a faxina apagava onze. Quem abria, via zero e
+concluía que nada seria removido — no mesmo dia em que milhares de
+amostras iam embora. Painel que apresenta um subconjunto como se fosse o
+todo é a mesma falha de "serviço travado" e "câmera sem evento", em outro
+lugar.
+
+A trava é o cenário `previa da faxina nao esconde categoria`: ele lê os
+contadores que `executar()` declara e exige uma linha correspondente na
+prévia. Retenção nova sem linha na tela **quebra o teste**, nomeando o
+contador esquecido.
+
+Uma linha é declaradamente aproximada: a das execuções de backup mostra
+"até N", porque quem decide se aquela linha sai é a existência do arquivo
+no disco, não a consulta. Dizer "até" é o que a prévia sabe de fato.
 
 ## Volumes fantasma
 

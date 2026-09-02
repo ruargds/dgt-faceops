@@ -153,6 +153,31 @@ vfs.fs.size[/,pfree]               trigger em 15%
 O segundo é o que faltou. Um disco levou semanas para encher; houve
 tempo de sobra para alertar.
 
+## Rotatividade do painel: as três garantias
+
+A faxina do painel é diária e está detalhada em
+[20_PERSISTENCIA](20_PERSISTENCIA.md#crescimento-controlado). O que vale
+registrar aqui são as três garantias que ela precisou ganhar, cada uma
+depois de um furo real:
+
+1. **Toda categoria oferecida age.** A limpeza pontual lista categorias
+   que a API aceita — e cada uma tem de devolver um contador e remover de
+   verdade. "Histórico de consumo de licença" esteve no catálogo sem ser
+   tratada: respondia "ok, 0 removidos" e não removia nada. Categoria
+   oferecida que não age é pior que categoria ausente, porque quem pediu
+   acredita que foi feito. Trava:
+   `faxina nao oferece categoria que nao age`.
+2. **A prévia mostra tudo o que a faxina apaga.** Ela mostrava quatro
+   categorias enquanto a faxina apagava onze — quem via zero concluía que
+   nada sairia, no dia em que milhares de amostras saíam. Trava:
+   `previa da faxina nao esconde categoria`.
+3. **Nada é apagado à frente do que depende dele.** A linha da execução de
+   backup só sai depois do artefato — apagar a linha e deixar o `.tar.gz`
+   produziria um arquivo que ninguém sabe de onde veio. E a gravação do
+   terminal, ao ser apagada, **limpa o caminho na linha da sessão**: antes
+   a linha vivia 365 dias apontando para um `.cast` removido em 90, a tela
+   oferecia o download e o clique voltava 404 sem dizer por quê.
+
 ## Rotatividade do FindFace
 
 O que enche o disco num servidor de reconhecimento facial não é o log — são

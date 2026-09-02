@@ -32,7 +32,9 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from app.db.database import Base  # noqa: E402
 from app.models.amostra import Amostra  # noqa: E402
 from app.models.host import Host  # noqa: E402
-from app.models.audit import AuditLog
+from app.models.audit import AuditLog, TerminalSession
+from app.models.licenca_amostra import LicencaAmostra
+from app.models.backup import BackupRun
 from app.models.incidente import Incidente  # noqa: E402
 from app.models.limiar_override import LimiarOverride  # noqa: E402
 from app.models.log_padrao import LogPadrao  # noqa: E402
@@ -47,7 +49,8 @@ TABELAS = [
     LimiarOverride.__table__, LogPadrao.__table__,
     NotificacaoConta.__table__, NotificacaoDestino.__table__,
     NotificacaoRegra.__table__, NotificacaoEnvio.__table__,
-    AuditLog.__table__,
+    AuditLog.__table__, TerminalSession.__table__,
+    LicencaAmostra.__table__, BackupRun.__table__,
 ]
 
 AGORA = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
@@ -623,6 +626,171 @@ async def cenario_notificacao_espera_antes_de_avisar():
 
     volta = {"tipo": "retorno", "host_id": 1, "servico": "x", "duracao_s": 30}
     assert len(NS.rotear([regra], destinos, volta)) == 1, "retorno não deveria esperar"
+
+
+async def cenario_faxina_nao_oferece_categoria_que_nao_age():
+    """
+    `CATEGORIAS_PONTUAIS` é o que a rota aceita e a tela oferece. Cada
+    chave dali TEM de virar um contador no resultado de `pontual()` — e
+    de agir de verdade.
+
+    Era defeito real: "licenca" estava no catálogo (logo, aceita pela
+    API) e não era tratada. A limpeza respondia "ok, 0 removidos" e não
+    removia nada. Categoria oferecida que não age é pior que categoria
+    ausente, porque quem pediu acredita que foi feito.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.licenca_amostra import LicencaAmostra
+    from app.services import faxina_service as fx
+
+    engine, fabrica = await nova_sessao()
+    original = fx.AsyncSessionLocal
+    fx.AsyncSessionLocal = fabrica
+    try:
+        servico = fx.FaxinaService(config=None)
+
+        # Toda categoria oferecida devolve contador numérico.
+        for chave in fx.CATEGORIAS_PONTUAIS:
+            r = await servico.pontual([chave], dias=9999, aplicar=False)
+            assert chave in r, (
+                f"categoria '{chave}' é oferecida e não devolve contador — "
+                f"resultado: {sorted(r)}"
+            )
+            assert isinstance(r[chave], int), f"{chave}: contador não é número"
+
+        # E a que era morta agora age de verdade.
+        agora = datetime.now(timezone.utc)
+        async with fabrica() as db:
+            db.add_all([
+                LicencaAmostra(host_id=1, recurso="cameras",
+                               ts=agora - timedelta(days=400)),
+                LicencaAmostra(host_id=1, recurso="cameras",
+                               ts=agora - timedelta(days=200)),
+                LicencaAmostra(host_id=1, recurso="cameras", ts=agora),
+            ])
+            await db.commit()
+
+        # Prévia não apaga nada.
+        r = await servico.pontual(["licenca"], dias=100, aplicar=False)
+        assert r["licenca"] == 2, r
+        async with fabrica() as db:
+            import sqlalchemy as sa
+            resta = (await db.execute(
+                sa.select(sa.func.count(LicencaAmostra.id))
+            )).scalar()
+        assert resta == 3, "a prévia apagou algo"
+
+        # Aplicando, sai o que passou do prazo — e só isso.
+        r = await servico.pontual(["licenca"], dias=100, aplicar=True)
+        assert r["licenca"] == 2, r
+        async with fabrica() as db:
+            import sqlalchemy as sa
+            resta = (await db.execute(
+                sa.select(sa.func.count(LicencaAmostra.id))
+            )).scalar()
+        assert resta == 1, f"sobrou {resta}, esperava 1"
+
+        # Categoria inventada não passa.
+        r = await servico.pontual(["nao-existe"], dias=9999)
+        assert r["categorias"] == [], r
+
+        # O piso de idade não se burla com zero nem com negativo: o
+        # estrago de um clique errado aqui é irreversível.
+        r = await servico.pontual(["auditoria"], dias=0)
+        assert r["dias"] == fx.DIAS_MINIMO_PONTUAL, r
+        r = await servico.pontual(["auditoria"], dias=-30)
+        assert r["dias"] == fx.DIAS_MINIMO_PONTUAL, r
+    finally:
+        fx.AsyncSessionLocal = original
+    await engine.dispose()
+
+
+async def cenario_previa_da_faxina_nao_esconde_categoria():
+    """
+    A prévia mostrava QUATRO categorias enquanto `executar()` apagava
+    onze. Quem abria a tela, via zero e concluía que nada seria removido
+    — no mesmo dia em que milhares de amostras iam embora.
+
+    A trava compara os dois lados: todo contador que a faxina preenche
+    tem de ter uma linha na prévia. Falha se alguém acrescentar retenção
+    nova e esquecer de mostrá-la.
+    """
+    import inspect
+
+    from app.services.faxina_service import FaxinaService
+
+    fonte = inspect.getsource(FaxinaService.executar)
+
+    # Os contadores que `executar()` declara no dicionário de resultado.
+    contadores = set()
+    for linha in fonte.splitlines():
+        linha = linha.strip()
+        if linha.startswith('"') and '": 0,' in linha:
+            contadores.add(linha.split('"')[1])
+
+    assert len(contadores) >= 10, f"não li os contadores certos: {contadores}"
+
+    # As linhas que a prévia sabe mostrar.
+    fonte_previa = inspect.getsource(FaxinaService.previa)
+    mostradas = {
+        parte.split('"')[0]
+        for parte in fonte_previa.split('{"chave": "')[1:]
+    }
+
+    # Cada contador tem de casar com uma linha da prévia. O nome do
+    # contador é `<coisa>_removida(s)` / `_esvaziados`; a linha usa a
+    # coisa. Comparar pelo radical evita exigir nomes iguais nos dois
+    # lados sem deixar passar categoria esquecida.
+    def radical(nome: str) -> str:
+        for sufixo in ("_removidas", "_removidos", "_removida", "_removido",
+                       "_esvaziados", "_desapontadas", "_bytes"):
+            if nome.endswith(sufixo):
+                return nome[: -len(sufixo)]
+        return nome
+
+    radicais_previa = {radical(m) for m in mostradas} | mostradas
+    # "logs" (esvaziados) aparece como "logs_execucao" na prévia.
+    equivalentes = {"logs": "logs_execucao", "padroes": "padroes"}
+
+    faltando = []
+    for contador in contadores:
+        base = radical(contador)
+        base = equivalentes.get(base, base)
+        if base not in radicais_previa and base not in mostradas:
+            faltando.append(contador)
+
+    assert not faltando, (
+        f"a faxina apaga e a prévia não mostra: {sorted(faltando)}"
+    )
+
+
+async def cenario_faxina_poupa_execucao_com_artefato():
+    """
+    A linha da execução de backup é o comprovante de que o backup rodou —
+    e o descritor do arquivo que ainda está no disco. Apagar a linha e
+    deixar o .tar.gz produziria um artefato que ninguém sabe de onde veio.
+
+    Então: sai a execução sem artefato; fica a que ainda tem arquivo.
+    """
+    import inspect
+
+    from app.services.faxina_service import FaxinaService
+
+    fonte = inspect.getsource(FaxinaService._execucoes)
+
+    # Só estado terminal: execução em curso não pode ser apagada debaixo
+    # de quem a está rodando.
+    assert 'notin_(("executando", "pendente"))' in fonte, fonte
+    # A decisão passa pelo disco, não só pela data.
+    assert "caminho_artefato" in fonte, fonte
+    # E tem teto por passada, para atraso grande não virar pico num dia.
+    assert "TETO_EXECUCOES" in fonte, fonte
+
+    # O teto existe e é finito.
+    from app.services.faxina_service import TETO_EXECUCOES
+
+    assert 0 < TETO_EXECUCOES <= 5000
 
 
 async def cenario_auditoria_busca_acha_e_filtra():
@@ -1545,6 +1713,9 @@ CENARIOS = [
     cenario_notificacao_roteia_para_os_destinos_certos,
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
+    cenario_faxina_nao_oferece_categoria_que_nao_age,
+    cenario_previa_da_faxina_nao_esconde_categoria,
+    cenario_faxina_poupa_execucao_com_artefato,
     cenario_auditoria_busca_acha_e_filtra,
     cenario_notificacao_mensagem_tem_campos_e_assina_a_origem,
     cenario_duracao_no_formato_do_zabbix,

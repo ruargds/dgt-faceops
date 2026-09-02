@@ -13,6 +13,13 @@ hospeda. Aqui a lista do que cresce e como cada um é contido:
 | `terminal_sessions`           | uma linha por sessão   | retenção em dias  |
 | `backup_runs.log`             | log inteiro por        | esvazia o texto,  |
 |                               | execução, KB a MB      | mantém a linha    |
+| `backup_runs` (a linha)       | uma por execução       | retenção em dias, |
+|                               |                        | só sem artefato   |
+| `amostras`                    | uma por host por ciclo | retenção em dias  |
+| `incidentes`                  | uma por queda          | retenção em dias  |
+| `log_padroes`                 | um molde por erro novo | retenção em dias  |
+| `notificacao_envios`          | uma por aviso mandado  | retenção em dias  |
+| `licenca_amostras`            | uma por recurso/dia    | retenção em dias  |
 | Log dos containers do painel  | contínuo               | limite no compose |
 
 Roda **uma vez por dia**, no horário configurado, pelo mesmo APScheduler
@@ -33,12 +40,18 @@ from app.core.config import settings
 from app.db.database import AsyncSessionLocal
 from app.models.audit import AuditLog, TerminalSession
 from app.models.backup import BackupRun
+from app.models.host import Host
 
 log = logging.getLogger("faceops.faxina")
 
 # Órfão de staging: uma execução que falhou no meio deixa o .tar.gz para
 # trás. 24h é folga suficiente para o backup mais longo terminar.
 STAGING_HORAS = 24
+
+# Teto de linhas de execução avaliadas por passada. A verificação bate no
+# disco uma vez por candidato; com teto, um atraso grande é resolvido em
+# vários dias em vez de um pico num só.
+TETO_EXECUCOES = 500
 
 # ── Limpeza pontual ────────────────────────────────────────────────────
 # A faxina diária é boa para o regime, e ruim para o caso pontual: "o disco
@@ -85,6 +98,7 @@ class FaxinaService:
             "em": datetime.now(timezone.utc).isoformat(),
             "gravacoes_removidas": 0,
             "gravacoes_bytes": 0,
+            "gravacoes_desapontadas": 0,
             "staging_removido": 0,
             "staging_bytes": 0,
             "auditoria_removida": 0,
@@ -95,6 +109,7 @@ class FaxinaService:
             "padroes_removidos": 0,
             "avisos_removidos": 0,
             "licenca_removidas": 0,
+            "execucoes_removidas": 0,
             "erros": [],
         }
 
@@ -107,6 +122,7 @@ class FaxinaService:
             ("padroes de log", self._padroes_log),
             ("avisos enviados", self._notificacoes),
             ("licenca", self._licenca),
+            ("execucoes", self._execucoes),
         ):
             try:
                 await tarefa(resultado)
@@ -140,6 +156,7 @@ class FaxinaService:
             return
 
         corte = time.time() - dias * 86400
+        removidos: list[str] = []
         for arquivo in pasta.glob("*.cast"):
             try:
                 st = arquivo.stat()
@@ -147,8 +164,24 @@ class FaxinaService:
                     r["gravacoes_bytes"] += st.st_size
                     arquivo.unlink()
                     r["gravacoes_removidas"] += 1
+                    removidos.append(str(arquivo))
             except OSError:
                 continue
+
+        # A linha da sessão vive mais que o arquivo (365 dias contra 90), e
+        # continuava apontando para a gravação apagada: a tela oferecia o
+        # download e o clique voltava 404 sem dizer por quê. Limpar o
+        # caminho é o que faz a linha contar a verdade — a sessão
+        # aconteceu, a gravação não existe mais.
+        if removidos:
+            async with AsyncSessionLocal() as db:
+                res = await db.execute(
+                    update(TerminalSession)
+                    .where(TerminalSession.recording_path.in_(removidos))
+                    .values(recording_path="")
+                )
+                r["gravacoes_desapontadas"] = res.rowcount or 0
+                await db.commit()
 
     # ── Staging órfão ──────────────────────────────────────────────────
 
@@ -291,6 +324,68 @@ class FaxinaService:
             r["licenca_removidas"] = res.rowcount or 0
             await db.commit()
 
+    async def _execucoes(self, r: dict) -> None:
+        """
+        A LINHA da execução de backup — não o texto do log, que já era
+        esvaziado antes.
+
+        Faltava: o texto saía em 60 dias e a linha ficava para sempre. Uma
+        por execução, por host, por dia — alguns milhares por ano. Pouco
+        para sempre continua sendo para sempre.
+
+        A regra que faz isto ser seguro: **só sai execução cujo artefato
+        já não existe**. Enquanto houver arquivo para restaurar, a linha
+        que o descreve fica — apagar a linha e deixar o .tar.gz no disco
+        produziria um arquivo que ninguém sabe de onde veio, que é pior do
+        que gastar a linha.
+
+        O candidato é buscado com teto: se houver anos de atraso, a faxina
+        de amanhã continua o serviço, em vez de varrer a tabela inteira
+        num dia.
+        """
+        dias = int(self._cfg("faxina.execucoes_dias", 730))
+        if dias <= 0:
+            return
+
+        from app.services.storage_service import StorageService
+
+        corte = datetime.now(timezone.utc) - timedelta(days=dias)
+        async with AsyncSessionLocal() as db:
+            nomes_res = await db.execute(select(Host.id, Host.name))
+            nomes = {i: n for i, n in nomes_res.all()}
+
+            candidatos = await db.execute(
+                select(BackupRun)
+                .where(
+                    BackupRun.started_at < corte,
+                    BackupRun.status.notin_(("executando", "pendente")),
+                )
+                .order_by(BackupRun.started_at)
+                .limit(TETO_EXECUCOES)
+            )
+            apagar = []
+            for run in candidatos.scalars().all():
+                if not run.artifact_name:
+                    # Execução que não gerou artefato (falha, cancelada):
+                    # não há arquivo para proteger.
+                    apagar.append(run.id)
+                    continue
+                caminho = StorageService.caminho_artefato(
+                    nomes.get(run.host_id, "painel"), run.artifact_name
+                )
+                if caminho is None:
+                    # `caminho_artefato` devolve None quando o arquivo não
+                    # existe (ou o nome não passa na cerca) — nos dois
+                    # casos não há artefato local a preservar.
+                    apagar.append(run.id)
+
+            if apagar:
+                res = await db.execute(
+                    delete(BackupRun).where(BackupRun.id.in_(apagar))
+                )
+                r["execucoes_removidas"] = res.rowcount or 0
+                await db.commit()
+
     # ── Limpeza pontual, por categoria e período ───────────────────────
 
     async def pontual(
@@ -329,6 +424,7 @@ class FaxinaService:
             "sessoes": 0,
             "logs_execucao": 0,
             "amostras": 0,
+            "licenca": 0,
             "erros": [],
         }
         if not pedidas:
@@ -366,7 +462,9 @@ class FaxinaService:
                     except OSError as exc:
                         r["erros"].append(f"staging {arquivo.name}: {exc}")
 
-        precisa_banco = {"auditoria", "sessoes", "logs_execucao", "amostras"} & set(pedidas)
+        precisa_banco = {
+            "auditoria", "sessoes", "logs_execucao", "amostras", "licenca",
+        } & set(pedidas)
         if precisa_banco:
             from sqlalchemy import func
 
@@ -426,6 +524,25 @@ class FaxinaService:
                     else:
                         r["amostras"] = await MonitorService.contar_antigas(db, dias)
 
+                if "licenca" in pedidas:
+                    # Estava no catálogo de categorias — logo, aceita pela
+                    # rota — e não era tratada aqui: a limpeza respondia
+                    # "ok, 0 removidos" e não removia nada. Categoria
+                    # oferecida que não age é pior que categoria ausente,
+                    # porque quem pediu acredita que foi feito.
+                    from app.models.licenca_amostra import LicencaAmostra
+
+                    onde = (LicencaAmostra.ts < corte_dt,)
+                    if aplicar:
+                        res = await db.execute(
+                            delete(LicencaAmostra).where(*onde)
+                        )
+                        r["licenca"] = res.rowcount or 0
+                    else:
+                        r["licenca"] = (await db.execute(
+                            select(func.count(LicencaAmostra.id)).where(*onde)
+                        )).scalar() or 0
+
                 if aplicar:
                     await db.commit()
 
@@ -434,69 +551,155 @@ class FaxinaService:
     # ── Prévia, sem alterar nada ───────────────────────────────────────
 
     async def previa(self) -> dict:
-        """O que a faxina removeria agora. Só leitura."""
-        dias_grav = int(self._cfg("faxina.gravacoes_dias", 90))
-        dias_audit = int(self._cfg("faxina.auditoria_dias", 365))
-        dias_log = int(self._cfg("faxina.log_execucao_dias", 60))
+        """
+        O que a faxina removeria agora. Só leitura.
 
-        gravacoes, gravacoes_bytes = 0, 0
-        pasta = Path(settings.TERMINAL_SESSION_DIR)
-        if pasta.exists() and dias_grav > 0:
-            corte = time.time() - dias_grav * 86400
-            for arquivo in pasta.glob("*.cast"):
+        Devolve **uma linha por categoria**, e não um punhado de campos
+        soltos. O motivo é concreto: esta prévia mostrava quatro
+        categorias enquanto a faxina apagava onze — quem olhava e via
+        zero concluía que nada seria removido, no mesmo dia em que
+        milhares de amostras iam embora. Painel que apresenta um
+        subconjunto como se fosse o todo é a mesma falha de "serviço
+        travado" e "câmera sem evento", só em outro lugar.
+
+        Com a lista, retenção nova aparece aqui sozinha — e há teste que
+        falha se alguém acrescentar um contador ao `executar()` sem
+        acrescentar a linha correspondente.
+        """
+        from sqlalchemy import func
+
+        from app.models.amostra import Amostra
+        from app.models.incidente import Incidente
+        from app.models.licenca_amostra import LicencaAmostra
+        from app.models.log_padrao import LogPadrao
+        from app.models.notificacao import NotificacaoEnvio
+
+        agora = datetime.now(timezone.utc)
+
+        def dias_de(chave, padrao):
+            return int(self._cfg(chave, padrao))
+
+        d_grav = dias_de("faxina.gravacoes_dias", 90)
+        d_audit = dias_de("faxina.auditoria_dias", 365)
+        d_log = dias_de("faxina.log_execucao_dias", 60)
+        d_exec = dias_de("faxina.execucoes_dias", 730)
+        d_amostra = dias_de("monitor.retencao_dias", 30)
+        d_inc = dias_de("incidentes.retencao_dias", 30)
+        d_padrao = dias_de("analise.retencao_dias", 30)
+        d_aviso = dias_de("notificacao.retencao_dias", 14)
+        d_lic = dias_de("faxina.licenca_dias", 365)
+
+        # ── Disco ──────────────────────────────────────────────────────
+        def varrer(pasta: Path, padrao: str, segundos: float):
+            qtd = tam = 0
+            if not pasta.exists() or segundos <= 0:
+                return qtd, tam
+            corte = time.time() - segundos
+            for arquivo in pasta.glob(padrao):
                 try:
                     st = arquivo.stat()
-                    if st.st_mtime < corte:
-                        gravacoes += 1
-                        gravacoes_bytes += st.st_size
+                    if arquivo.is_file() and st.st_mtime < corte:
+                        qtd += 1
+                        tam += st.st_size
                 except OSError:
                     continue
+            return qtd, tam
 
-        staging, staging_bytes = 0, 0
-        pasta = Path(settings.LOCAL_BACKUP_DIR) / "_staging"
-        if pasta.exists():
-            corte = time.time() - STAGING_HORAS * 3600
-            for arquivo in pasta.iterdir():
-                try:
-                    if arquivo.is_file() and arquivo.stat().st_mtime < corte:
-                        staging += 1
-                        staging_bytes += arquivo.stat().st_size
-                except OSError:
-                    continue
+        gravacoes, gravacoes_bytes = varrer(
+            Path(settings.TERMINAL_SESSION_DIR), "*.cast", d_grav * 86400
+        )
+        staging, staging_bytes = varrer(
+            Path(settings.LOCAL_BACKUP_DIR) / "_staging", "*", STAGING_HORAS * 3600
+        )
 
+        # ── Banco ──────────────────────────────────────────────────────
         async with AsyncSessionLocal() as db:
-            from sqlalchemy import func
 
-            corte = datetime.now(timezone.utc) - timedelta(days=dias_audit)
-            auditoria = (await db.execute(
-                select(func.count(AuditLog.id)).where(
-                    AuditLog.ts < corte, AuditLog.level != "critical"
-                )
-            )).scalar() or 0
+            async def contar(modelo, coluna, dias, *extra):
+                if dias <= 0:
+                    return 0
+                onde = [coluna < agora - timedelta(days=dias), *extra]
+                return (await db.execute(
+                    select(func.count(modelo.id)).where(*onde)
+                )).scalar() or 0
 
-            corte_log = datetime.now(timezone.utc) - timedelta(days=dias_log)
-            logs = (await db.execute(
-                select(func.count(BackupRun.id)).where(
-                    BackupRun.started_at < corte_log, BackupRun.log != ""
-                )
-            )).scalar() or 0
-
-            total_audit = (await db.execute(
+            auditoria = await contar(
+                AuditLog, AuditLog.ts, d_audit, AuditLog.level != "critical"
+            )
+            auditoria_total = (await db.execute(
                 select(func.count(AuditLog.id))
             )).scalar() or 0
+            sessoes = await contar(
+                TerminalSession, TerminalSession.started_at, d_audit,
+                TerminalSession.ended_at.isnot(None),
+            )
+            logs = await contar(
+                BackupRun, BackupRun.started_at, d_log, BackupRun.log != ""
+            )
+            # Candidatas: a decisão final depende de o artefato existir no
+            # disco, então aqui é teto, não promessa. Dizer "até N" é o
+            # que a prévia sabe de fato.
+            execucoes = await contar(
+                BackupRun, BackupRun.started_at, d_exec,
+                BackupRun.status.notin_(("executando", "pendente")),
+            )
+            amostras = await contar(Amostra, Amostra.ts, d_amostra)
+            incidentes = await contar(
+                Incidente, Incidente.fim, d_inc, Incidente.fim.isnot(None)
+            )
+            padroes = await contar(LogPadrao, LogPadrao.ultima_vez, d_padrao)
+            avisos = await contar(NotificacaoEnvio, NotificacaoEnvio.ts, d_aviso)
+            licenca = await contar(LicencaAmostra, LicencaAmostra.ts, d_lic)
+
+        linhas = [
+            {"chave": "gravacoes", "rotulo": "Gravações do terminal",
+             "nota": "arquivos .cast no disco do painel",
+             "quantidade": gravacoes, "bytes": gravacoes_bytes,
+             "retencao": f"{d_grav} dias"},
+            {"chave": "staging", "rotulo": "Staging órfão",
+             "nota": "sobra de execução que falhou no meio",
+             "quantidade": staging, "bytes": staging_bytes,
+             "retencao": "24 horas"},
+            {"chave": "auditoria", "rotulo": "Registros de auditoria",
+             "nota": "nível crítico fica o triplo do prazo",
+             "quantidade": auditoria, "total": auditoria_total,
+             "retencao": f"{d_audit} dias"},
+            {"chave": "sessoes", "rotulo": "Sessões de terminal encerradas",
+             "nota": "a linha do histórico; sessão aberta fica de fora",
+             "quantidade": sessoes, "retencao": f"{d_audit} dias"},
+            {"chave": "logs_execucao", "rotulo": "Log das execuções de backup",
+             "nota": "esvazia o texto, mantém a linha do histórico",
+             "quantidade": logs, "retencao": f"{d_log} dias"},
+            {"chave": "execucoes", "rotulo": "Linha das execuções de backup",
+             "nota": "só a execução cujo artefato já não existe",
+             "quantidade": execucoes, "aproximado": True,
+             "retencao": f"{d_exec} dias"},
+            {"chave": "amostras", "rotulo": "Amostras do monitor",
+             "nota": "os pontos dos gráficos da aba Monitor",
+             "quantidade": amostras, "retencao": f"{d_amostra} dias"},
+            {"chave": "incidentes", "rotulo": "Incidentes encerrados",
+             "nota": "janelas de indisponibilidade já fechadas",
+             "quantidade": incidentes, "retencao": f"{d_inc} dias"},
+            {"chave": "padroes", "rotulo": "Moldes de log analisados",
+             "nota": "as impressões digitais dos erros agrupados",
+             "quantidade": padroes, "retencao": f"{d_padrao} dias"},
+            {"chave": "avisos", "rotulo": "Avisos enviados",
+             "nota": "o histórico de envios do Telegram",
+             "quantidade": avisos, "retencao": f"{d_aviso} dias"},
+            {"chave": "licenca", "rotulo": "Histórico de licença",
+             "nota": "uma linha por recurso por dia",
+             "quantidade": licenca, "retencao": f"{d_lic} dias"},
+        ]
 
         return {
-            "gravacoes": gravacoes,
-            "gravacoes_bytes": gravacoes_bytes,
-            "staging": staging,
-            "staging_bytes": staging_bytes,
-            "auditoria": auditoria,
-            "auditoria_total": total_audit,
-            "logs_execucao": logs,
+            "linhas": linhas,
+            "total_itens": sum(l["quantidade"] for l in linhas),
+            "total_bytes": gravacoes_bytes + staging_bytes,
             "retencoes": {
-                "gravacoes_dias": dias_grav,
-                "auditoria_dias": dias_audit,
-                "log_execucao_dias": dias_log,
+                "gravacoes_dias": d_grav,
+                "auditoria_dias": d_audit,
+                "log_execucao_dias": d_log,
+                "execucoes_dias": d_exec,
             },
             "ultima": self.ultima,
         }

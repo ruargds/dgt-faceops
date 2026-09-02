@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,11 +40,14 @@ class VisaoLog(Base):
     # [{"caminho": "context.dgtId", "rotulo": "dgtId",
     #   "corte_inicio": null, "corte_fim": null}]
     # Caminho com ponto navega objeto aninhado, como no jq.
-    campos: Mapped[list] = mapped_column(JSONB, default=list)
+    # JSONB no Postgres, JSON simples em qualquer outro banco: o tipo do
+    # dialeto Postgres não compila no SQLite, e modelo que não compila é
+    # modelo que nenhum teste alcança.
+    campos: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
 
     # Só mostra a linha se TODOS estes campos existirem — equivale ao
     # `select(.trace_id)` do jq.
-    exigir_campos: Mapped[list] = mapped_column(JSONB, default=list)
+    exigir_campos: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
 
     # Filtro de texto simples aplicado à linha inteira (case-insensitive)
     filtro: Mapped[str] = mapped_column(String(255), default="")

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,7 +52,10 @@ class BackupRun(Base):
     checksum_sha256: Mapped[str] = mapped_column(String(64), default="")
 
     # [{"type":"local|azure|gdrive","uri":"...","status":"ok|erro","error":"..."}]
-    destinations: Mapped[list] = mapped_column(JSONB, default=list)
+    # JSONB no Postgres, JSON simples em qualquer outro banco: o tipo do
+    # dialeto Postgres não compila no SQLite, e modelo que não compila é
+    # modelo que nenhum teste alcança.
+    destinations: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
 
     # Se o stack precisou ser parado (perfil completo)
     caused_downtime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -89,13 +92,13 @@ class Schedule(Base):
     tipo: Mapped[str] = mapped_column(String(16), nullable=False, default="backup")
     # Parâmetros do tipo. Para limpeza:
     #   {"como_configurado": true, "itens": [{"opcao": "...", "dias": 30}]}
-    parametros: Mapped[dict] = mapped_column(JSONB, default=dict)
+    parametros: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
 
     # Expressão cron de 5 campos (min hora dia mês diadasemana), fuso do painel
     cron: Mapped[str] = mapped_column(String(64))
 
     # ["local","azure","gdrive"]
-    destinations: Mapped[list] = mapped_column(JSONB, default=list)
+    destinations: Mapped[list] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
     retention_days: Mapped[int] = mapped_column(Integer, default=30)
 
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

@@ -434,6 +434,14 @@ CATALOGO: list[ItemConfig] = [
                "Depois disso o texto do log é esvaziado, mas a linha do "
                "histórico permanece. O log é o que pesa; a linha, não.",
                minimo=0, maximo=3650),
+    ItemConfig("faxina.execucoes_dias", "faxina",
+               "Guardar a linha das execuções de backup por (dias)", "numero",
+               730,
+               "Prazo mais longo que o do texto do log, e de propósito: a "
+               "linha é o comprovante de que o backup rodou. Só sai a "
+               "execução cujo artefato JÁ NÃO EXISTE mais — enquanto houver "
+               "arquivo para restaurar, a linha que o descreve fica.",
+               minimo=0, maximo=3650),
 ]
 
 POR_CHAVE: dict[str, ItemConfig] = {i.chave: i for i in CATALOGO}
