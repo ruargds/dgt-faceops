@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.rede_segura import DestinoRecusado, validar_url
 from app.core.deps import client_ip, require_permission
 from app.core.vault import encrypt_secret, fingerprint
 from app.db.database import get_db
@@ -97,6 +98,18 @@ async def criar(
             detail=f"não consegui alcançar {dados.address}:{dados.ssh_port} — {exc}",
         ) from exc
 
+    # A URL da API do FindFace é endereço escolhido por quem cadastra —
+    # o formato clássico de SSRF. A cerca barra link-local (onde vive o
+    # IMDS do Azure, que entrega token de identidade sem autenticação),
+    # loopback e esquema que não seja http/https.
+    if dados.ff_api_url:
+        try:
+            validar_url(dados.ff_api_url)
+        except DestinoRecusado as exc:
+            raise HTTPException(
+                status_code=400, detail=f"endereço da API recusado: {exc}"
+            ) from exc
+
     host = Host(
         name=dados.name,
         alias=dados.alias.strip(),
@@ -158,6 +171,14 @@ async def atualizar(
         raise HTTPException(status_code=404, detail="servidor não encontrado")
 
     alterados: list[str] = []
+
+    if dados.ff_api_url:
+        try:
+            validar_url(dados.ff_api_url)
+        except DestinoRecusado as exc:
+            raise HTTPException(
+                status_code=400, detail=f"endereço da API recusado: {exc}"
+            ) from exc
 
     for campo in (
         "name", "alias", "description", "role", "ssh_user", "auth_method",
@@ -385,6 +406,13 @@ async def testar_api(
         raise HTTPException(status_code=404, detail="servidor não encontrado")
 
     url = (dados.ff_api_url or host.ff_api_url or "").strip()
+    if url:
+        try:
+            validar_url(url)
+        except DestinoRecusado as exc:
+            raise HTTPException(
+                status_code=400, detail=f"endereço da API recusado: {exc}"
+            ) from exc
 
     # O que foi digitado na tela tem precedência sobre o que está salvo —
     # é isso que permite validar a credencial ANTES de gravar.

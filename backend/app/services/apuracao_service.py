@@ -384,6 +384,92 @@ class ApuracaoService:
             "em": datetime.now(timezone.utc).isoformat(),
         }
 
+    # ── Correlação com o que o próprio painel mediu ────────────────────
+
+    # Janela olhada antes da queda. Meia hora cobre a subida de memória
+    # que antecede um OOM sem trazer ruído de horas antes.
+    JANELA_ANTES_MIN = 30
+
+    # Salto que vale mencionar. Abaixo disso é variação normal de carga —
+    # apontar 3 pontos percentuais como "causa" seria ruído com cara de
+    # conclusão.
+    SALTO_PCT = 10.0
+
+    @staticmethod
+    async def pressao_antes(db, host_id: int, inicio: datetime, janela_min: int = 30) -> list[dict]:
+        """
+        O que as amostras do painel mostram nos minutos ANTES da queda.
+
+        Custo zero de servidor: são as amostras que o ciclo do monitor já
+        gravou. É a leitura que responde "foi falta de memória?" sem
+        precisar de nada do FindFace — e foi um gráfico de memória subindo
+        de 78% para 94% que motivou esta função.
+
+        Devolve achados, nunca uma afirmação de causa: memória alta antes
+        da queda é correlação, e correlação apontada como causa é
+        exatamente o tipo de conclusão que o painel não deve dar.
+        """
+        from sqlalchemy import select as _select
+
+        from app.models.amostra import Amostra
+
+        if inicio.tzinfo is None:
+            inicio = inicio.replace(tzinfo=timezone.utc)
+        desde = inicio - timedelta(minutes=max(5, janela_min))
+
+        r = await db.execute(
+            _select(Amostra)
+            .where(
+                Amostra.host_id == host_id,
+                Amostra.ts >= desde,
+                Amostra.ts <= inicio,
+                Amostra.erro == "",
+            )
+            .order_by(Amostra.ts)
+        )
+        amostras = list(r.scalars().all())
+        if len(amostras) < 3:
+            # Duas amostras não desenham tendência. Silêncio é melhor que
+            # uma "tendência" tirada de dois pontos.
+            return []
+
+        achados: list[dict] = []
+        primeira, ultima = amostras[0], amostras[-1]
+
+        for campo, rotulo, unidade in (
+            ("mem_pct", "memória", "%"),
+            ("swap_pct", "swap", "%"),
+            ("disco_pct", "disco", "%"),
+            ("gpu_mem_pct", "memória de vídeo", "%"),
+        ):
+            de = float(getattr(primeira, campo, 0) or 0)
+            ate = float(getattr(ultima, campo, 0) or 0)
+            pico = max(float(getattr(a, campo, 0) or 0) for a in amostras)
+            if ate <= 0:
+                continue
+            subiu = ate - de
+            if subiu >= ApuracaoService.SALTO_PCT or pico >= 90:
+                achados.append({
+                    "fonte": "amostras do painel",
+                    "texto": (
+                        f"{rotulo} foi de {de:.0f}{unidade} a {ate:.0f}{unidade} "
+                        f"(pico {pico:.0f}{unidade}) nos {janela_min} min antes da "
+                        "queda — correlação, não causa comprovada."
+                    ),
+                })
+
+        carga = max(float(getattr(a, "carga_por_nucleo", 0) or 0) for a in amostras)
+        if carga >= 2.0:
+            achados.append({
+                "fonte": "amostras do painel",
+                "texto": (
+                    f"carga chegou a {carga:.2f} por núcleo antes da queda — "
+                    "havia processo esperando CPU."
+                ),
+            })
+
+        return achados
+
     # ── Coleta ─────────────────────────────────────────────────────────
 
     def nivel(self) -> str:
@@ -397,6 +483,7 @@ class ApuracaoService:
         incidente: Incidente,
         containers: dict | None = None,
         nivel: str | None = None,
+        db=None,
     ) -> dict:
         """
         Uma chamada SSH, e o veredito. Nunca levanta: apuração que
@@ -435,9 +522,33 @@ class ApuracaoService:
                 "em": datetime.now(timezone.utc).isoformat(),
             }
 
-        return self.interpretar(
+        resultado = self.interpretar(
             secoes, incidente.tipo, incidente.inicio, fim, nivel=nivel
         )
+
+        # O que o próprio painel mediu antes da queda entra ANTES dos
+        # achados do sistema: memória subindo é a pista que quem lê
+        # procura primeiro, e ela não custa nada ao servidor.
+        if db is not None:
+            try:
+                antes = await self.pressao_antes(
+                    db, incidente.host_id, incidente.inicio, self.JANELA_ANTES_MIN
+                )
+                if antes:
+                    resultado["achados"] = antes + resultado["achados"]
+                    # Sem veredito do sistema mas com pressão medida, a
+                    # correlação vira a melhor resposta disponível — dita
+                    # como correlação, e com confiança baixa.
+                    if resultado["confianca"] == "nenhuma":
+                        resultado["veredito"] = (
+                            "Não encontrei a causa no sistema, mas houve "
+                            "pressão de recurso antes da queda"
+                        )
+                        resultado["confianca"] = "media"
+            except Exception:
+                log.exception("falha ao correlacionar amostras do incidente %s", incidente.id)
+
+        return resultado
 
     async def apurar_fechados(
         self, db, host, eventos: list[dict], containers: dict | None = None
@@ -475,7 +586,9 @@ class ApuracaoService:
                 if incidente is None:
                     continue
 
-                apuracao = await self.apurar(host, incidente, containers=containers)
+                apuracao = await self.apurar(
+                    host, incidente, containers=containers, db=db
+                )
                 incidente.apuracao = apuracao
                 incidente.apurado_em = datetime.now(timezone.utc)
                 evento["apuracao"] = apuracao

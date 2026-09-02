@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
 
     # Segurança
+    # Placeholders conhecidos. Estão no repositório e no `.env.example`,
+    # portanto são chave pública: quem os tiver forja token de admin e,
+    # como o cofre Fernet deriva daqui, decifra toda credencial SSH
+    # guardada. Ver `verificar_chave()`.
     SECRET_KEY: str = "dev-only-trocar"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
@@ -66,3 +70,55 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+# Valores que NÃO podem chegar em produção: estão versionados no
+# repositório e no `.env.example`.
+CHAVES_PROIBIDAS = frozenset({
+    "dev-only-trocar",
+    "troque-esta-chave",
+    "changeme",
+    "secret",
+    "",
+})
+
+TAMANHO_MINIMO_CHAVE = 32
+
+
+def verificar_chave() -> str:
+    """
+    Motivo da recusa, ou string vazia se a chave serve.
+
+    Falhar FECHADO aqui é a decisão certa, mesmo custando uma subida:
+    com a chave de exemplo, qualquer pessoa que leia o repositório assina
+    um token de administrador e, de quebra, decifra as chaves SSH dos
+    quatro servidores de produção — o cofre Fernet deriva desta mesma
+    chave. Um painel que sobe assim é pior que um painel que não sobe,
+    porque parece funcionar.
+
+    Em `MODO_DEV` só avisa: o ambiente de desenvolvimento precisa subir
+    com o `.env.example` sem cerimônia.
+    """
+    chave = (settings.SECRET_KEY or "").strip()
+    if chave.lower() in CHAVES_PROIBIDAS:
+        return (
+            "a SECRET_KEY ainda é o valor de exemplo. Ele está no "
+            "repositório, então qualquer um assina um token de "
+            "administrador e decifra as credenciais SSH guardadas."
+        )
+    if len(chave) < TAMANHO_MINIMO_CHAVE:
+        return (
+            f"a SECRET_KEY tem {len(chave)} caracteres; o mínimo é "
+            f"{TAMANHO_MINIMO_CHAVE}. Chave curta é chave adivinhável."
+        )
+    return ""
+
+
+def como_gerar_chave() -> str:
+    """A instrução, para a mensagem de erro não deixar ninguém parado."""
+    return (
+        "Gere uma e coloque em SECRET_KEY no .env:\n"
+        "    python -c \"import secrets; print(secrets.token_urlsafe(48))\"\n"
+        "Guarde-a: trocar a SECRET_KEY torna ilegível toda credencial já "
+        "gravada no cofre."
+    )

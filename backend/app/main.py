@@ -18,7 +18,7 @@ from app.api.routes import (
     diagnostico, exportar, hosts, incidentes, limiares, logs, maintenance, marca,
     monitor, notificacoes, ops, processos, terminal,
 )
-from app.core.config import settings
+from app.core.config import como_gerar_chave, settings, verificar_chave
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
 from app.models import (  # noqa: F401 — registra todos os modelos
@@ -297,6 +297,20 @@ if settings.MODO_DEV:
 
 @app.on_event("startup")
 async def iniciar() -> None:
+    # ── Antes de qualquer coisa: a chave ──────────────────────────────
+    # Falha FECHADO. Painel de pé com a chave de exemplo é pior que
+    # painel fora do ar: ele parece funcionar enquanto qualquer pessoa
+    # que leia o repositório assina token de administrador e decifra as
+    # credenciais SSH guardadas no cofre, que deriva desta mesma chave.
+    problema = verificar_chave()
+    if problema:
+        if settings.MODO_DEV:
+            log.warning("SEGURANÇA: %s (tolerado só porque MODO_DEV=1)", problema)
+        else:
+            log.critical("SEGURANÇA: %s", problema)
+            log.critical("%s", como_gerar_chave())
+            raise RuntimeError(f"recusando subir: {problema}")
+
     await _criar_tabelas()
     await _semear_admin()
     await _semear_destino_local()

@@ -299,6 +299,7 @@ export const api = {
     ),
   // A apuração completa sai só quando alguém abre: a lista de 7 dias não
   // carrega o log de cada queda junto.
+  apuracoesRecentes: (dias = 14) => get(`/diagnostico/apuracoes?dias=${dias}`),
   apuracaoIncidente: (id) => get(`/incidentes/${id}/apuracao`),
   apurarIncidente: (id) => post(`/incidentes/${id}/apurar`, {}),
 

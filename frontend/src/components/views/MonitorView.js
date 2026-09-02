@@ -44,6 +44,8 @@ const EXPLICACAO = {
 export default function MonitorView({ alvo, nav }) {
   const [resumo, setResumo] = useState(null);
   const [erro, setErro] = useState("");
+  const [atualizadoEm, setAtualizadoEm] = useState(null);
+  const [buscando, setBuscando] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [detalhe, setDetalhe] = useState(alvo && alvo.hostId ? alvo.hostId : null);
   const [serie, setSerie] = useState(null);
@@ -82,9 +84,11 @@ export default function MonitorView({ alvo, nav }) {
   const pedidoSerie = useRef(0);
 
   const carregar = useCallback(async () => {
+    setBuscando(true);
     try {
       const r = await api.monitorResumo();
       setResumo(r);
+      setAtualizadoEm(new Date());
       setErro("");
 
       const atuais = new Set((r.alertas || []).map((a) => `${a.host_id}:${a.chave}`));
@@ -102,6 +106,7 @@ export default function MonitorView({ alvo, nav }) {
       setErro(ex.message);
     } finally {
       setCarregando(false);
+      setBuscando(false);
     }
   }, [som]);
 
@@ -201,8 +206,21 @@ export default function MonitorView({ alvo, nav }) {
             <input type="checkbox" checked={som} onChange={(e) => setSom(e.target.checked)} />
             <span>{t("Aviso sonoro")}</span>
           </label>
-          <button className="btn btn-secondary" onClick={carregar}>
-            <IconAtualizar size={15} /> {t("Atualizar")}</button>
+          {/* A hora da última leitura fica ao lado do botão. Sem ela,
+              clicar em Atualizar quando nada mudou é indistinguível de
+              um botão quebrado — e foi assim que este pareceu não
+              funcionar. Agora o clique sempre deixa prova. */}
+          {atualizadoEm && (
+            <span className="small muted" title={t("Quando esta tela leu o painel pela última vez")}>
+              {t("atualizado às")}{" "}
+              {atualizadoEm.toLocaleTimeString([], {
+                hour: "2-digit", minute: "2-digit", second: "2-digit",
+              })}
+            </span>
+          )}
+          <button className="btn btn-secondary" onClick={carregar} disabled={buscando}>
+            <IconAtualizar size={15} /> {buscando ? t("Atualizando…") : t("Atualizar")}
+          </button>
         </div>
       </div>
 

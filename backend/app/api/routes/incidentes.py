@@ -122,7 +122,9 @@ async def apurar_agora(
         # de fora. Melhor uma apuração parcial que nenhuma.
         pass
 
-    resultado = await servico.apurar(host, incidente, containers=containers)
+    resultado = await servico.apurar(
+        host, incidente, containers=containers, db=db
+    )
     incidente.apuracao = resultado
     incidente.apurado_em = datetime.now(timezone.utc)
     await db.commit()

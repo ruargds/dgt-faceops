@@ -30,6 +30,14 @@ const TENDENCIA = {
 export default function DiagnosticoView({ nav }) {
   const [dias, setDias] = useState(14);
   const [reincidencia, setReincidencia] = useState(null);
+  // O que a apuração descobriu nas quedas recentes. Esta tela mostrava
+  // três zeros no dia seguinte a um incidente real: reincidência exige
+  // três ocorrências, e molde de log só é lido de SERVIÇO com incidente
+  // aberto — queda de máquina inteira, a mais grave, não entrava em
+  // nenhum dos dois.
+  const [apuracoes, setApuracoes] = useState(null);
+  const [atualizadoEm, setAtualizadoEm] = useState(null);
+  const [buscando, setBuscando] = useState(false);
   const [padroes, setPadroes] = useState(null);
   const [catalogo, setCatalogo] = useState(null);
   const [verCatalogo, setVerCatalogo] = useState(false);
@@ -39,15 +47,21 @@ export default function DiagnosticoView({ nav }) {
 
   const carregar = useCallback(async () => {
     setErro("");
+    setBuscando(true);
     try {
-      const [r, p] = await Promise.all([
+      const [r, p, a] = await Promise.all([
         api.reincidencia(dias),
         api.padroesLog(dias),
+        api.apuracoesRecentes(dias).catch(() => ({ itens: [] })),
       ]);
       setReincidencia(r.itens);
       setPadroes(p.itens);
+      setApuracoes(a.itens || []);
+      setAtualizadoEm(new Date());
     } catch (ex) {
       setErro(ex.message);
+    } finally {
+      setBuscando(false);
     }
   }, [dias]);
 
@@ -116,7 +130,7 @@ export default function DiagnosticoView({ nav }) {
             </button>
           ))}
           <button className="btn btn-secondary" onClick={carregar}>
-            <IconAtualizar size={15} /> {t("Atualizar")}
+            <IconAtualizar size={15} /> {buscando ? t("Atualizando…") : t("Atualizar")}
           </button>
           {/* Recomeçar: o contador acumulado de um erro já resolvido só
               atrapalha a leitura. Não toca em incidente. */}
@@ -152,6 +166,89 @@ export default function DiagnosticoView({ nav }) {
       </div>
 
       {/* ── Reincidência ───────────────────────────────────────────── */}
+      {/* ── O que foi apurado ──────────────────────────────────────
+          Primeiro card de propósito: é a resposta mais direta a "o que
+          aconteceu", e é a que faltava. */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="stack-h" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <div className="section-title" style={{ marginBottom: 4 }}>
+              {t("O que foi apurado nas quedas")}
+            </div>
+            <div className="small muted">
+              {t("Lido no servidor no instante em que ele voltou — inclusive queda de máquina inteira, que não deixa molde de log.")}
+            </div>
+          </div>
+          {atualizadoEm && (
+            <span className="small muted">
+              {t("atualizado às")}{" "}
+              {atualizadoEm.toLocaleTimeString([], {
+                hour: "2-digit", minute: "2-digit", second: "2-digit",
+              })}
+            </span>
+          )}
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          {apuracoes === null ? (
+            <Carregando />
+          ) : apuracoes.length === 0 ? (
+            <div className="small muted">
+              {t("Nenhuma queda apurada na janela. A apuração roda quando o incidente FECHA — incidente ainda aberto não aparece aqui.")}
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t("Quando")}</th>
+                    <th>{t("Onde")}</th>
+                    <th className="right">{t("Fora")}</th>
+                    <th>{t("Causa apurada")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apuracoes.map((a) => (
+                    <tr key={a.id}>
+                      <td className="small">{formatData(a.inicio)}</td>
+                      <td className="small">
+                        <strong>{a.host}</strong>
+                        <div className="muted mono" style={{ fontSize: 11.5 }}>
+                          {a.servico || t("máquina inteira")}
+                        </div>
+                      </td>
+                      <td className="right mono small">{formatDuracao(a.duracao_s)}</td>
+                      <td className="small">
+                        <span
+                          style={{
+                            color:
+                              a.confianca === "alta"
+                                ? "var(--green-fg)"
+                                : a.confianca === "media"
+                                  ? "var(--amber-fg)"
+                                  : "var(--text-2)",
+                          }}
+                        >
+                          {a.veredito}
+                        </span>
+                        {a.evidencia && (
+                          <div className="muted" style={{ marginTop: 2 }}>{a.evidencia}</div>
+                        )}
+                        {a.achados > 1 && (
+                          <div className="muted" style={{ marginTop: 2, fontSize: 11.5 }}>
+                            +{a.achados - 1} {t("linha(s) lidas — veja em Serviços › Histórico")}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="section-title" style={{ marginBottom: 4 }}>
           {t("O que repete")}

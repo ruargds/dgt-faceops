@@ -93,3 +93,38 @@ o catálogo **não** reconhece.
 **Condições para reabrir:** rodar fora da VM do painel, sob demanda (nunca
 no ciclo), com teto de memória e timeout, e sem permissão para gerar
 comando executável.
+
+## P-6 — Redirecionamento pode driblar a cerca de SSRF
+
+`core/rede_segura.validar_url` valida o endereço CADASTRADO. O cliente
+HTTP segue redirecionamento (`follow_redirects=True`), então um servidor
+legítimo poderia responder com redirect para `169.254.169.254`.
+
+Fechar exige validar cada salto — trocar por redirecionamento manual com
+validação a cada passo, ou desligar redirect e ver o que quebra. Não foi
+feito agora porque instalação existente pode depender do redirect (barra
+final, HTTP para HTTPS).
+
+**Risco real:** baixo. Exige `hosts.manage`, e quem tem essa permissão já
+tem SSH com sudo nos quatro servidores.
+
+## P-7 — Segundo fator
+
+O que reduz de verdade o valor de uma senha roubada. Hoje há freio de
+força bruta, senha em bcrypt e sessão com expiração, mas quem tiver a
+senha entra.
+
+TOTP é o caminho: sem dependência de SMS, sem custo, e o `pyotp` é
+pequeno. Precisa de tela de cadastro com QR, códigos de recuperação e
+decisão sobre exigir por perfil ou para todos.
+
+## P-8 — Sair do `react-scripts`
+
+`npm audit` acusa 31 alertas, todos de dependência transitiva do
+`react-scripts` que roda em tempo de BUILD — nenhuma vai para o
+navegador. O pacote está abandonado.
+
+Migrar para Vite resolve os 31 de uma vez e acelera o build. Porte médio:
+mexe em `index.html`, variáveis de ambiente (`REACT_APP_` → `VITE_`) e
+scripts do `package.json`. `npm audit fix --force` quebraria o build sem
+ganho de segurança real.

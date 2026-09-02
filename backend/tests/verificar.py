@@ -628,6 +628,275 @@ async def cenario_notificacao_espera_antes_de_avisar():
     assert len(NS.rotear([regra], destinos, volta)) == 1, "retorno não deveria esperar"
 
 
+async def cenario_apuracao_correlaciona_pico_de_recurso():
+    """
+    Um gráfico de memória subindo de 78% para 94% pouco antes da queda é
+    a pista que quem investiga procura primeiro — e ela já está no banco
+    do painel, gravada pelo ciclo do monitor. Ler isso custa zero ao
+    servidor de produção.
+
+    Duas regras que não podem se perder:
+
+    * é apresentado como **correlação**, nunca como causa comprovada;
+    * duas amostras não desenham tendência — com poucos pontos, silêncio.
+    """
+    from app.models.amostra import Amostra
+    from app.services.apuracao_service import ApuracaoService
+
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        host = await com_host(db)
+        queda = AGORA
+
+        # Memória subindo de 78% a 94% nos 30 min anteriores — o caso do
+        # gráfico do Zabbix que motivou esta função.
+        for i, pct in enumerate([78.0, 80.0, 83.0, 88.0, 93.7]):
+            db.add(Amostra(
+                host_id=host.id, ts=queda - timedelta(minutes=25 - i * 5),
+                mem_pct=pct, cpu_pct=20.0, disco_pct=40.0, swap_pct=0.0,
+                erro="",
+            ))
+        await db.commit()
+
+        achados = await ApuracaoService.pressao_antes(db, host.id, queda, 30)
+        assert achados, "não viu a memória subir"
+        texto = " ".join(a["texto"] for a in achados)
+        assert "memória" in texto and "94" in texto, texto
+        # Palavra por palavra: correlação, não causa.
+        assert "correlação" in texto and "não causa" in texto, texto
+        assert all(a["fonte"] == "amostras do painel" for a in achados)
+
+        # Disco parado no mesmo período não vira achado — apontar variação
+        # normal como pista é ruído com cara de conclusão.
+        assert "disco" not in texto, texto
+
+    await engine.dispose()
+
+    # Poucas amostras: silêncio, não tendência inventada.
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        host = await com_host(db)
+        db.add(Amostra(host_id=host.id, ts=AGORA - timedelta(minutes=5),
+                       mem_pct=95.0, erro=""))
+        await db.commit()
+        assert await ApuracaoService.pressao_antes(db, host.id, AGORA, 30) == [], (
+            "desenhou tendência com uma amostra só"
+        )
+    await engine.dispose()
+
+    # Amostra com erro (host sem comunicação) não entra na conta: os
+    # números dela não foram medidos, foram deixados em zero.
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        host = await com_host(db)
+        for i in range(5):
+            db.add(Amostra(
+                host_id=host.id, ts=AGORA - timedelta(minutes=25 - i * 5),
+                mem_pct=0.0, erro="SSHError: timeout",
+            ))
+        await db.commit()
+        assert await ApuracaoService.pressao_antes(db, host.id, AGORA, 30) == [], (
+            "usou amostra que não mediu nada"
+        )
+    await engine.dispose()
+
+
+async def cenario_chave_fraca_impede_a_subida():
+    """
+    A SECRET_KEY assina o token de sessão E deriva a chave do cofre que
+    guarda as credenciais SSH dos quatro servidores. Com o valor de
+    exemplo — que está no repositório e no `.env.example` — qualquer
+    pessoa assina um token de administrador e decifra tudo.
+
+    Por isso a subida falha FECHADO. Painel de pé com chave de exemplo é
+    pior que painel fora do ar: ele parece funcionar.
+    """
+    from app.core.config import (
+        CHAVES_PROIBIDAS, TAMANHO_MINIMO_CHAVE, como_gerar_chave,
+        settings, verificar_chave,
+    )
+
+    original = settings.SECRET_KEY
+    try:
+        # Os placeholders versionados são recusados, um a um.
+        for ruim in CHAVES_PROIBIDAS:
+            settings.SECRET_KEY = ruim
+            assert verificar_chave(), f"aceitou a chave de exemplo {ruim!r}"
+
+        # Chave curta também: chave curta é chave adivinhável.
+        settings.SECRET_KEY = "a" * (TAMANHO_MINIMO_CHAVE - 1)
+        assert verificar_chave(), "aceitou chave curta"
+
+        # Espaço em volta não disfarça o placeholder.
+        settings.SECRET_KEY = "  dev-only-trocar  "
+        assert verificar_chave(), "espaço em volta driblou a checagem"
+
+        # Chave de verdade passa.
+        import secrets
+
+        settings.SECRET_KEY = secrets.token_urlsafe(48)
+        assert verificar_chave() == "", verificar_chave()
+
+        # E a mensagem de erro ensina a gerar uma — recusar sem dizer
+        # como resolver só transfere o problema.
+        assert "secrets.token_urlsafe" in como_gerar_chave()
+    finally:
+        settings.SECRET_KEY = original
+
+    # A subida realmente consulta isso.
+    fonte = (pathlib.Path(__file__).resolve().parents[1]
+             / "app" / "main.py").read_text(encoding="utf-8")
+    assert "verificar_chave()" in fonte, "a guarda existe e ninguém a chama"
+    assert "raise RuntimeError" in fonte, "a guarda avisa mas deixa subir"
+
+
+async def cenario_jwt_nao_aceita_algoritmo_trocado():
+    """
+    Confusão de algoritmo é o ataque clássico contra JWT: o atacante
+    troca o `alg` do cabeçalho e a biblioteca obedece.
+
+    A lista de algoritmos aceitos é FECHADA no código, e não vem de
+    `settings.ALGORITHM`: configuração errada não pode abrir a porta —
+    `alg: none` ali viraria token forjável por qualquer um.
+    """
+    import jwt as pyjwt
+
+    from app.core.config import settings
+    from app.core.security import (
+        ALGORITMOS_ACEITOS, create_access_token, decode_access_token,
+    )
+
+    assert "none" not in [a.lower() for a in ALGORITMOS_ACEITOS]
+    assert all(a.startswith("HS") for a in ALGORITMOS_ACEITOS), ALGORITMOS_ACEITOS
+
+    bom = create_access_token("admin", {"token_version": 1})
+    assert decode_access_token(bom)["sub"] == "admin"
+
+    # Token sem assinatura ("alg": "none") é recusado.
+    sem_assinatura = pyjwt.encode(
+        {"sub": "admin", "exp": 9999999999}, key="", algorithm="none"
+    )
+    assert decode_access_token(sem_assinatura) is None, "aceitou token sem assinatura"
+
+    # Assinado com outra chave: recusado.
+    outra = pyjwt.encode(
+        {"sub": "admin", "exp": 9999999999}, key="chave-do-atacante", algorithm="HS256"
+    )
+    assert decode_access_token(outra) is None, "aceitou assinatura de outra chave"
+
+    # Adulterado: recusado.
+    assert decode_access_token(bom[:-4] + "aaaa") is None
+
+    # Sem `exp` não passa: token eterno é o mesmo que senha que nunca
+    # muda, e o `token_version` só protege quem já foi invalidado.
+    eterno = pyjwt.encode({"sub": "admin"}, key=settings.SECRET_KEY, algorithm="HS256")
+    assert decode_access_token(eterno) is None, "aceitou token sem expiração"
+
+    # Expirado: recusado.
+    expirado = pyjwt.encode(
+        {"sub": "admin", "exp": 1}, key=settings.SECRET_KEY, algorithm="HS256"
+    )
+    assert decode_access_token(expirado) is None, "aceitou token expirado"
+
+    # Lixo não derruba o servidor: vira None, não exceção.
+    for entulho in ("", "nao.e.um.token", "a" * 5000, "..."):
+        assert decode_access_token(entulho) is None
+
+
+async def cenario_url_da_api_nao_alcanca_o_metadados():
+    """
+    A URL da API do FindFace é endereço escolhido por quem cadastra — o
+    formato clássico de SSRF.
+
+    Aqui o risco tem endereço: as VMs são do Azure, e todo Azure responde
+    em 169.254.169.254 com o IMDS, que entrega token de identidade
+    gerenciada para quem perguntar, SEM autenticação. Uma URL apontada
+    para lá faria o painel ler credencial da assinatura inteira.
+    """
+    from app.core.rede_segura import DestinoRecusado, validar_url
+
+    def recusa(url):
+        try:
+            validar_url(url)
+        except DestinoRecusado as exc:
+            return str(exc)
+        raise AssertionError(f"aceitou {url!r}")
+
+    # O alvo com nome e sobrenome.
+    assert "link-local" in recusa("http://169.254.169.254/metadata/instance")
+    assert "link-local" in recusa("https://169.254.169.254:443/")
+    # IPv6 link-local também.
+    recusa("http://[fe80::1]/")
+    # Loopback: apontaria o painel para ele mesmo.
+    assert "loopback" in recusa("http://127.0.0.1:8000/")
+    assert "loopback" in recusa("http://localhost/")
+    # Esquema que não é HTTP vira leitura de arquivo.
+    recusa("file:///etc/shadow")
+    recusa("gopher://interno/")
+    # Credencial embutida na URL vaza em log de acesso.
+    recusa("http://usuario:senha@10.0.0.5/")
+    # Nome do serviço de metadados das outras nuvens.
+    recusa("http://metadata.google.internal/")
+    # Vazio e sem host.
+    recusa("")
+    recusa("http://")
+
+    # E o que É legítimo continua passando: rede privada é justamente
+    # onde os servidores do FindFace vivem. Recusar RFC1918 aqui
+    # quebraria o uso real.
+    for boa in ("https://10.0.0.5", "http://192.168.1.10:8000/api",
+                "https://ff.interno.local/"):
+        assert validar_url(boa) == boa, boa
+
+    # A rota de hosts realmente chama a cerca — nos três lugares que
+    # aceitam URL (criar, atualizar e testar).
+    fonte = (pathlib.Path(__file__).resolve().parents[1]
+             / "app" / "api" / "routes" / "hosts.py").read_text(encoding="utf-8")
+    assert fonte.count("validar_url(") >= 3, (
+        f"a cerca é chamada em {fonte.count('validar_url(')} lugar(es); "
+        "criar, atualizar e testar precisam das três"
+    )
+
+
+async def cenario_segredo_nunca_sai_em_resposta_nem_em_log():
+    """
+    As colunas `*_enc` guardam chave SSH, senha de sudo, senha da API e
+    token do Telegram. Nenhuma delas pode aparecer em schema de saída — e
+    o detalhe da auditoria não pode carregar segredo para o log.
+    """
+    from app.core.permissions import DESTRUCTIVE_PERMISSIONS
+    from app.schemas import HostOut
+    from app.services.audit_service import _limpar
+
+    # Nenhum campo de saída expõe segredo.
+    campos = set(HostOut.model_fields)
+    for proibido in ("ssh_key", "ssh_password", "sudo_password", "ff_api_pass",
+                     "ff_api_token", "hashed_password"):
+        vazando = [c for c in campos if proibido in c]
+        assert not vazando, f"HostOut expõe {vazando}"
+    # O que sai é só a impressão digital, que confirma sem revelar.
+    assert "key_fingerprint" in campos
+
+    # A auditoria omite segredo, inclusive aninhado.
+    limpo = _limpar({
+        "acao": "criar",
+        "ssh_password": "s3nh4",
+        "detalhe": {"sudo_password": "outra", "usuario_ssh": "ubuntu"},
+    })
+    assert limpo["ssh_password"] == "<omitido>", limpo
+    assert limpo["detalhe"]["sudo_password"] == "<omitido>", limpo
+    # E o que não é segredo continua legível — auditoria sem detalhe não
+    # serve para auditar.
+    assert limpo["detalhe"]["usuario_ssh"] == "ubuntu", limpo
+    assert limpo["acao"] == "criar", limpo
+
+    # Ação destrutiva vira registro de nível crítico, que a faxina guarda
+    # pelo triplo do prazo.
+    for esperada in ("services.stack", "services.power", "backups.restore",
+                     "backups.delete", "hosts.manage"):
+        assert esperada in DESTRUCTIVE_PERMISSIONS, esperada
+
+
 async def cenario_apuracao_distingue_reboot_de_rede():
     """
     A conclusão que paga a apuração inteira, e a mais barata de obter.
@@ -2060,6 +2329,11 @@ CENARIOS = [
     cenario_notificacao_roteia_para_os_destinos_certos,
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
+    cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_chave_fraca_impede_a_subida,
+    cenario_jwt_nao_aceita_algoritmo_trocado,
+    cenario_url_da_api_nao_alcanca_o_metadados,
+    cenario_segredo_nunca_sai_em_resposta_nem_em_log,
     cenario_apuracao_distingue_reboot_de_rede,
     cenario_apuracao_le_o_container_certo_e_aponta_oom,
     cenario_apuracao_respeita_o_nivel_e_os_tetos,

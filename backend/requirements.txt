@@ -5,8 +5,14 @@ sqlalchemy==2.0.36
 alembic==1.14.0
 asyncpg==0.30.0
 psycopg2-binary==2.9.10
-python-jose[cryptography]==3.3.0
+# PyJWT no lugar de python-jose: aquele carrega CVE-2024-33663
+# (confusão de algoritmo) e CVE-2024-33664 (negação de serviço por token
+# JWE inflado, no caminho que o painel usa em toda requisição) sem
+# correção publicada. Mesmo formato de token — nenhuma sessão cai.
+pyjwt==2.10.1
 passlib==1.7.4
+# 4.0.1 fixado: passlib 1.7.4 lê `bcrypt.__about__`, que sumiu no 4.1 —
+# subir esta versão sem trocar o passlib quebra TODO login.
 bcrypt==4.0.1
 pydantic==2.10.3
 pydantic-settings==2.6.1

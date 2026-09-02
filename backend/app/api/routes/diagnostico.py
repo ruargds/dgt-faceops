@@ -143,3 +143,61 @@ async def catalogo(
             for p in CATALOGO
         ]
     }
+
+
+@router.get("/apuracoes")
+async def apuracoes(
+    dias: int = Query(default=14, ge=1, le=90),
+    limite: int = Query(default=30, ge=1, le=100),
+    _: User = Depends(require_permission("metrics.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    O que foi apurado nas quedas recentes.
+
+    Existe porque a tela de Diagnóstico ficava vazia justamente nos dias
+    em que houve problema: ela só mostrava reincidência (que exige três
+    ocorrências) e molde de log (que só é lido de SERVIÇO com incidente
+    aberto). Queda de máquina inteira — a mais grave — não entrava em
+    nenhum dos dois, e o painel exibia três zeros no dia seguinte a um
+    incidente real.
+
+    Consulta local, sobre incidentes já apurados. Nenhum SSH.
+    """
+    from sqlalchemy import select
+
+    from app.models.host import Host
+    from app.models.incidente import Incidente
+
+    desde = datetime.now(timezone.utc) - timedelta(days=dias)
+    r = await db.execute(
+        select(Incidente)
+        .where(Incidente.apuracao.isnot(None), Incidente.inicio >= desde)
+        .order_by(Incidente.inicio.desc())
+        .limit(limite)
+    )
+    incidentes = list(r.scalars().all())
+
+    hosts = await db.execute(select(Host))
+    nomes = {h.id: h.rotulo for h in hosts.scalars().all()}
+
+    itens = []
+    for i in incidentes:
+        ap = i.apuracao or {}
+        itens.append({
+            "id": i.id,
+            "host_id": i.host_id,
+            "host": nomes.get(i.host_id, f"#{i.host_id}"),
+            "tipo": i.tipo,
+            "servico": i.servico,
+            "inicio": i.inicio.isoformat(),
+            "duracao_s": i.duracao_s,
+            "veredito": ap.get("veredito", ""),
+            "confianca": ap.get("confianca", "nenhuma"),
+            # Só o primeiro achado na lista: o resto sai em
+            # `/incidentes/{id}/apuracao` quando alguém abre.
+            "evidencia": (ap.get("achados") or [{}])[0].get("texto", ""),
+            "achados": len(ap.get("achados") or []),
+        })
+
+    return {"dias": dias, "itens": itens}

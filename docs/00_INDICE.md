@@ -108,6 +108,10 @@
   e serviços receber, o formato da mensagem (o mesmo template do Zabbix, e
   por quê) e as travas contra virar spam.
 
+- **[31_REVISAO_SEGURANCA](31_REVISAO_SEGURANCA.md)** — o que foi
+  verificado, o que foi corrigido e o que é aceito com ressalva. Inclui
+  por que cifrar a senha no JavaScript não protege nada.
+
 - **[30_APURACAO](30_APURACAO.md)** — o que causou a queda, apurado no
   momento em que a máquina volta: se ela reiniciou ou ficou ligada o tempo
   todo (a diferença entre chamado de VM e chamado de rede), com que custo
