@@ -46,6 +46,9 @@ export default function MonitorView({ alvo, nav }) {
   const [erro, setErro] = useState("");
   const [atualizadoEm, setAtualizadoEm] = useState(null);
   const [buscando, setBuscando] = useState(false);
+  // Milissegundos entre buscas. Começa conservador e passa a seguir o
+  // que o servidor recomenda.
+  const intervaloPoll = useRef(15000);
   const [carregando, setCarregando] = useState(true);
   const [detalhe, setDetalhe] = useState(alvo && alvo.hostId ? alvo.hostId : null);
   const [serie, setSerie] = useState(null);
@@ -89,6 +92,8 @@ export default function MonitorView({ alvo, nav }) {
       const r = await api.monitorResumo();
       setResumo(r);
       setAtualizadoEm(new Date());
+      const sugerido = (r.coletor && r.coletor.poll_s) || 15;
+      intervaloPoll.current = Math.max(10, sugerido) * 1000;
       setErro("");
 
       const atuais = new Set((r.alertas || []).map((a) => `${a.host_id}:${a.chave}`));
@@ -138,9 +143,12 @@ export default function MonitorView({ alvo, nav }) {
         await carregar();
         if (detalhe) await carregarSerie(detalhe, janela);
       }
-      if (vivo) timer = setTimeout(tick, 10000);
+      // Quem decide de quanto em quanto tempo perguntar é o SERVIDOR:
+      // ele sabe se o coletor está em modo econômico. Buscar a cada 10 s
+      // um dado que só muda a cada 5 min é pedir trabalho para nada.
+      if (vivo) timer = setTimeout(tick, intervaloPoll.current);
     };
-    timer = setTimeout(tick, 10000);
+    timer = setTimeout(tick, intervaloPoll.current);
 
     const aoVoltar = () => {
       if (document.visibilityState === "visible" && vivo) carregar();
@@ -686,10 +694,22 @@ export default function MonitorView({ alvo, nav }) {
 
       {/* ── Rodapé ───────────────────────────────────────────────── */}
       <div className="small muted" style={{ marginTop: 16 }}>
-        O coletor lê cada servidor a cada {coletor.intervalo_s || 60} segundos —{" "}
+        {/* O modo aparece porque muda o que a pessoa vê: em econômico, o
+            ponto mais recente pode ter alguns minutos. Esconder isso faria
+            o gráfico parecer atrasado sem explicação. */}
+        O coletor lê cada servidor a cada {coletor.intervalo_s || 60} segundos
+        {coletor.modo === "economico" ? (
+          <>
+            {" "}— <strong>{t("modo econômico")}</strong>, porque ninguém estava
+            usando o painel. Ele acelera para {coletor.intervalo_ativo_s || 60}s
+            assim que alguém abre, e a leitura mais recente já foi pedida.
+          </>
+        ) : (
+          <>.</>
+        )}{" "}
         {coletor.ciclos || 0} ciclo(s) desde que o painel subiu. Esta tela lê o
         histórico já gravado; não é ela que conversa com os servidores. Ajuste
-        os limites de alerta em <strong>{t("Configurações")}</strong>.
+        os limites e a cadência em <strong>{t("Configurações")}</strong>.
       </div>
     </>
   );

@@ -17,8 +17,38 @@ aqui é todo sobre não onerar:
   rodando naquele host, o ciclo pula — quem está esperando na tela vem
   primeiro.
 
-Com intervalo de 60 s e quatro servidores, isso é ~1,5% de um núcleo no
-painel e nada mensurável nos servidores.
+**Duas necessidades, uma cadência para cada.** Este painel não fica
+aberto o dia inteiro: ele é consultado de vez em quando. Mas o que ele
+faz atende a dois propósitos com exigências opostas:
+
+* **Vigiar** — detectar queda e avisar no Telegram. Precisa rodar sem
+  ninguém olhando, e é a razão de existir um laço.
+* **Mostrar** — desenhar os gráficos e cartões. Só importa enquanto
+  alguém está com a tela aberta.
+
+Durante muito tempo os dois foram servidos pelo mesmo ciclo de 60 s,
+dimensionado para a TELA. O resultado é que o painel fechado gastava
+exatamente o mesmo que o painel aberto: 5.760 idas por dia, e outras
+tantas linhas no banco, para ninguém ver.
+
+Agora o laço tem duas velocidades:
+
+| Situação | Intervalo | Por quê |
+|---|---|---|
+| alguém usando o painel | `monitor.intervalo_s` (60 s) | o gráfico precisa de pontos densos |
+| ninguém há mais de 10 min | `monitor.intervalo_ocioso_s` (300 s) | vigiar não precisa de 60 s: uma queda detectada em 5 min avisa igual |
+
+A troca é imediata nos dois sentidos. Abrir o painel **acorda o laço na
+hora** — não se espera o resto do intervalo longo — então a primeira tela
+já vem com leitura fresca.
+
+Ganho no modo econômico, com quatro servidores: de 5.760 para 1.152 idas
+por dia (80% a menos), e a mesma redução em linhas gravadas.
+
+O que **não** muda no modo econômico: incidente continua sendo aberto e
+fechado, aviso continua saindo no Telegram, backup e faxina continuam no
+horário. Economia que desliga a vigilância não é economia — é desligar o
+painel.
 """
 import asyncio
 import logging
@@ -87,6 +117,13 @@ class MonitorService:
         # e quando alguém mexe em servidor ou limiar (configuração nova).
         # É a chave do cache do resumo — ver `chave_cache`.
         self._versao = 0
+        # Quando alguém falou com o painel pela última vez. É o que
+        # decide a velocidade do laço — ver `modo()`.
+        self._ultima_atividade: datetime | None = None
+        # Acorda o laço no meio de uma espera longa. Sem isto, abrir o
+        # painel no modo econômico mostraria dado de até 5 min atrás e
+        # ficaria assim até a espera terminar.
+        self._acordar: asyncio.Event | None = None
 
     def _cfg(self, chave: str, padrao):
         if self.config is None:
@@ -120,7 +157,14 @@ class MonitorService:
             "ativo": self._rodando and self._tarefa is not None,
             "ciclos": self._ciclos,
             "ultimo_ciclo": self._ultimo_ciclo.isoformat() if self._ultimo_ciclo else None,
-            "intervalo_s": int(self._cfg("monitor.intervalo_s", 60)),
+            "intervalo_s": self.intervalo_atual(),
+            "intervalo_ativo_s": int(self._cfg("monitor.intervalo_s", 60)),
+            "intervalo_ocioso_s": int(self._cfg("monitor.intervalo_ocioso_s", 300)),
+            "modo": self.modo(),
+            # De quanto em quanto tempo a TELA deve perguntar. Não faz
+            # sentido a tela buscar a cada 10 s um dado que só muda a cada
+            # 5 min — e é o servidor que sabe disso, não o navegador.
+            "poll_s": max(10, self.intervalo_atual() // 4),
             "erros": self._ultimo_erro,
         }
 
@@ -131,8 +175,11 @@ class MonitorService:
         # fazer, e uma coleta a mais competiria com isso.
         await asyncio.sleep(20)
 
+        if self._acordar is None:
+            self._acordar = asyncio.Event()
+
         while self._rodando:
-            intervalo = max(15, int(self._cfg("monitor.intervalo_s", 60)))
+            intervalo = self.intervalo_atual()
             try:
                 if bool(self._cfg("monitor.ativo", True)):
                     await self._ciclo()
@@ -144,7 +191,14 @@ class MonitorService:
                 log.exception("erro no ciclo do monitor")
 
             try:
-                await asyncio.sleep(intervalo)
+                # Espera interrompível: alguém abrindo o painel acorda o
+                # laço em vez de esperar o resto do intervalo longo.
+                try:
+                    await asyncio.wait_for(self._acordar.wait(), timeout=intervalo)
+                except asyncio.TimeoutError:
+                    pass
+                finally:
+                    self._acordar.clear()
             except asyncio.CancelledError:
                 break
 
@@ -454,6 +508,39 @@ class MonitorService:
                 for a in selecionadas
             ],
         }
+
+    # ── Cadência ───────────────────────────────────────────────────────
+
+    def registrar_atividade(self) -> None:
+        """
+        Alguém falou com o painel.
+
+        Chamada em toda requisição autenticada — inclusive no poll da
+        tela, que é justamente o sinal de que há alguém com o Monitor
+        aberto. Se estava no modo econômico, acorda o laço na hora: a
+        primeira tela tem de vir com leitura fresca, não com o que sobrou
+        de cinco minutos atrás.
+        """
+        estava_ocioso = self.modo() == "economico"
+        self._ultima_atividade = datetime.now(timezone.utc)
+        if estava_ocioso and self._acordar is not None:
+            self._acordar.set()
+
+    def modo(self) -> str:
+        """`ativo` enquanto há gente usando; `economico` depois disso."""
+        limite_min = int(self._cfg("monitor.ocioso_apos_min", 10))
+        if limite_min <= 0 or self._ultima_atividade is None:
+            # Sem nunca ter tido atividade, começa econômico: subir o
+            # painel não é motivo para acelerar nada.
+            return "ativo" if limite_min <= 0 else "economico"
+        parado = datetime.now(timezone.utc) - self._ultima_atividade
+        return "economico" if parado > timedelta(minutes=limite_min) else "ativo"
+
+    def intervalo_atual(self) -> int:
+        """Segundos entre ciclos, conforme o modo."""
+        if self.modo() == "economico":
+            return max(30, int(self._cfg("monitor.intervalo_ocioso_s", 300)))
+        return max(15, int(self._cfg("monitor.intervalo_s", 60)))
 
     def chave_cache(self) -> str:
         """

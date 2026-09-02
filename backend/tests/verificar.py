@@ -701,6 +701,170 @@ async def cenario_apuracao_correlaciona_pico_de_recurso():
     await engine.dispose()
 
 
+async def cenario_projeto_sem_marca_de_ferramenta():
+    """
+    Os arquivos do projeto não carregam marca de ferramenta de IA — nem
+    em código, nem em documento, nem em diretório de configuração.
+
+    Não é preferência estética: este painel é entregue a um cliente
+    público e auditado por terceiros. O que está versionado tem de falar
+    do FaceOps e do FindFace, e de mais nada. Quem escreveu é decisão de
+    quem assina o repositório, não pegada deixada por acidente.
+
+    A varredura roda sobre o que é VERSIONADO — dependência de terceiro
+    dentro de `node_modules` ou de venv não é do projeto.
+    """
+    import subprocess
+
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+
+    try:
+        saida = subprocess.run(
+            ["git", "ls-files"],
+            cwd=raiz, capture_output=True, text=True, timeout=60,
+        )
+        arquivos = [l for l in saida.stdout.splitlines() if l.strip()]
+    except Exception:
+        # Sem git disponível, a trava não roda — melhor pular que falhar
+        # por motivo errado e treinar a equipe a ignorar o vermelho.
+        return
+
+    assert arquivos, "git ls-files não devolveu nada"
+
+    MARCAS = ("claude", "anthropic", "copilot", "chatgpt", "openai",
+              "gerado por ia", "generated with", "co-authored-by")
+    EXTENSOES = {".py", ".js", ".jsx", ".md", ".sh", ".yml", ".yaml",
+                 ".json", ".txt", ".css", ".html", ".conf", ".env"}
+
+    achados = []
+    for rel in arquivos:
+        caminho = raiz / rel
+        # O próprio arquivo de teste cita as marcas para poder proibi-las.
+        if caminho.resolve() == pathlib.Path(__file__).resolve():
+            continue
+        if caminho.suffix.lower() not in EXTENSOES:
+            continue
+        # Caminho também conta: um diretório `.claude/` é vínculo igual.
+        baixo_caminho = rel.lower()
+        for marca in MARCAS:
+            if marca in baixo_caminho:
+                achados.append(f"{rel} (no caminho: '{marca}')")
+        try:
+            texto = caminho.read_text(encoding="utf-8", errors="ignore").lower()
+        except OSError:
+            continue
+        for marca in MARCAS:
+            if marca in texto:
+                achados.append(f"{rel} (no conteúdo: '{marca}')")
+
+    assert not achados, (
+        "arquivo versionado com marca de ferramenta: "
+        + "; ".join(sorted(set(achados))[:10])
+    )
+
+
+async def cenario_coletor_desacelera_sem_ninguem_olhando():
+    """
+    O painel NÃO fica aberto o dia inteiro — é consultado de vez em
+    quando. Mas o coletor rodava a cada 60 s para sempre, dimensionado
+    para a TELA: 5.760 idas por dia e outras tantas linhas gravadas, para
+    ninguém ver.
+
+    Agora o laço tem duas velocidades. O que NÃO pode mudar é a
+    vigilância: incidente continua sendo aberto e fechado, e aviso
+    continua saindo. Economia que desliga a vigilância é só desligar o
+    painel.
+    """
+    from datetime import timedelta as _td
+
+    from app.services.monitor_service import MonitorService
+
+    m = MonitorService(metrics=None, stack=None)
+
+    # Sem ninguém nunca ter usado: econômico. Subir o painel não é motivo
+    # para acelerar nada.
+    assert m.modo() == "economico", m.modo()
+    assert m.intervalo_atual() == 300, m.intervalo_atual()
+
+    # Alguém usou: acelera.
+    m.registrar_atividade()
+    assert m.modo() == "ativo"
+    assert m.intervalo_atual() == 60
+
+    # Passado o tempo de ociosidade, volta a desacelerar.
+    m._ultima_atividade = datetime.now(timezone.utc) - _td(minutes=11)
+    assert m.modo() == "economico", m.modo()
+
+    # Dentro da janela, continua ativo.
+    m._ultima_atividade = datetime.now(timezone.utc) - _td(minutes=9)
+    assert m.modo() == "ativo"
+
+    # Zero desliga a economia, para quem preferir cadência fixa.
+    m.config = ConfigFalsa({"monitor.ocioso_apos_min": 0})
+    m._ultima_atividade = None
+    assert m.modo() == "ativo", "zero deveria manter sempre na velocidade normal"
+
+    # Abrir o painel ACORDA o laço: sem isso, a primeira tela mostraria
+    # dado de até cinco minutos atrás e ficaria assim até a espera
+    # terminar.
+    import asyncio as _asyncio
+
+    m2 = MonitorService(metrics=None, stack=None)
+    m2._acordar = _asyncio.Event()
+    assert not m2._acordar.is_set()
+    m2.registrar_atividade()          # estava econômico -> acorda
+    assert m2._acordar.is_set(), "abrir o painel não acorda o coletor"
+
+    # Atividade seguida NÃO fica acordando o laço à toa.
+    m2._acordar.clear()
+    m2.registrar_atividade()
+    assert not m2._acordar.is_set(), "acordou o laço já estando ativo"
+
+    # Piso de segurança: configuração absurda não vira laço apertado.
+    m3 = MonitorService(metrics=None, stack=None,
+                        config=ConfigFalsa({"monitor.intervalo_s": 1,
+                                            "monitor.intervalo_ocioso_s": 1,
+                                            "monitor.ocioso_apos_min": 10}))
+    m3.registrar_atividade()
+    assert m3.intervalo_atual() >= 15, m3.intervalo_atual()
+    m3._ultima_atividade = None
+    assert m3.intervalo_atual() >= 30, m3.intervalo_atual()
+
+    # A tela recebe o ritmo do servidor: buscar a cada 10 s um dado que só
+    # muda a cada 5 min é pedir trabalho para nada.
+    estado = m.estado()
+    for campo in ("modo", "intervalo_s", "intervalo_ativo_s",
+                  "intervalo_ocioso_s", "poll_s"):
+        assert campo in estado, f"estado sem '{campo}'"
+    assert estado["poll_s"] >= 10
+
+    # A atividade é registrada em TODA requisição autenticada — sem isso
+    # o painel nunca sairia do modo econômico.
+    deps = (pathlib.Path(__file__).resolve().parents[1]
+            / "app" / "core" / "deps.py").read_text(encoding="utf-8")
+    assert "registrar_atividade()" in deps, (
+        "nada marca atividade: o coletor ficaria devagar mesmo com alguém "
+        "usando o painel"
+    )
+
+    # E a vigilância NÃO depende do modo: o ciclo faz o mesmo trabalho nos
+    # dois, só com espaçamento diferente.
+    import inspect
+
+    laco = inspect.getsource(MonitorService._laco)
+    ciclo = inspect.getsource(MonitorService._ciclo)
+    assert "intervalo_atual()" in laco, "o laço ignora o modo"
+    assert "_ciclo()" in laco, "o laço deixou de rodar o ciclo"
+    assert "_amostrar" in ciclo, "o ciclo deixou de amostrar"
+    # O modo muda só o ESPAÇAMENTO. Se ele passar a decidir o que o ciclo
+    # faz, a vigilância vira refém da economia — e economia que desliga a
+    # vigilância é só desligar o painel.
+    assert "modo()" not in ciclo, (
+        "o ciclo passou a olhar o modo: ele deve fazer o mesmo trabalho "
+        "nas duas velocidades"
+    )
+
+
 async def cenario_painel_nao_pesa_no_que_monitora():
     """
     O painel não pode ser motivo de lentidão em nada — nem nos servidores
@@ -2851,6 +3015,8 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_projeto_sem_marca_de_ferramenta,
+    cenario_coletor_desacelera_sem_ninguem_olhando,
     cenario_painel_nao_pesa_no_que_monitora,
     cenario_saturacao_de_disco_e_medida,
     cenario_backup_do_painel_nao_disputa_disco,

@@ -1,5 +1,9 @@
 # FaceOps — índice da documentação
 
+> **Comece por aqui:** [35_CONCEITO_E_LICOES](35_CONCEITO_E_LICOES.md) —
+> o que o painel é, o que ele deliberadamente não é, e as oito lições que
+> vieram de defeito real. Leia antes de acrescentar qualquer coisa.
+
 ## Por onde começar
 
 | Se você é… | Leia nesta ordem |
@@ -181,7 +185,7 @@ Três camadas com papéis diferentes, que não se repetem:
 | Camada | Onde | Responde |
 |---|---|---|
 | Documentação | `docs/` | como opera, como instala, como resolve |
-| Skills | `.claude/skills/` | o que já foi aprendido na marra ao mexer no código |
+| Referência rápida | [36_REFERENCIA_RAPIDA](36_REFERENCIA_RAPIDA.md) | o que já foi aprendido na marra, por subsistema |
 | Specs | `specs/` | o que precisa continuar verdadeiro, e o que está aberto |
 
 - **[specs/invariantes.md](../specs/invariantes.md)** — 21 invariantes,
@@ -189,10 +193,9 @@ Três camadas com papéis diferentes, que não se repetem:
   trava.
 - **[specs/pendencias.md](../specs/pendencias.md)** — o que está aberto,
   com evidência levantada e próximo passo.
-- **`.claude/skills/`** — sete skills no padrão do InfraCore:
-  `deploy-faceops`, `dev-checklist`, `monitor-e-incidentes`,
-  `diagnostico-e-log`, `avisos-telegram`, `findface-licenca-ntls`,
-  `cerca-de-acoes`.
+- **[36_REFERENCIA_RAPIDA](36_REFERENCIA_RAPIDA.md)** — uma página com o
+  que custou caro em cada subsistema: deploy, cercas de ação, monitor,
+  diagnóstico, licença e avisos.
 
 ## Referência externa
 

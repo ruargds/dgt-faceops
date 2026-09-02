@@ -1,5 +1,8 @@
 # Regras de desenvolvimento
 
+> As lições que originaram estas regras, com o defeito que cada uma
+> custou, estão em [35_CONCEITO_E_LICOES](35_CONCEITO_E_LICOES.md).
+
 ## Regras de ouro
 
 ### Segredos

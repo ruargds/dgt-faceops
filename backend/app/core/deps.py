@@ -71,6 +71,15 @@ async def get_current_user(
     # Token emitido antes de sair, trocar senha ou ser desativado deixa de
     # valer. Sem esta checagem, "sair" seria só apagar o token do
     # navegador — quem tivesse copiado antes continuaria dentro.
+    # Sinal de que há alguém usando o painel. Fica aqui porque TODA rota
+    # autenticada passa por este ponto — não precisa de middleware novo
+    # nem de chamada espalhada. É o que decide a velocidade do coletor:
+    # sem ninguém olhando, ele desacelera (ver `MonitorService.modo`).
+    try:
+        request.app.state.monitor.registrar_atividade()
+    except Exception:
+        pass
+
     if int(payload.get("tv", 0)) != usuario.token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

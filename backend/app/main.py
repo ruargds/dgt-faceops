@@ -254,10 +254,21 @@ async def _semear_visao_log() -> None:
 
 
 async def _varredor_de_ociosas(app: FastAPI) -> None:
-    """Derruba sessões de terminal esquecidas abertas."""
+    """
+    Derruba sessões de terminal e streams de log esquecidos abertos.
+
+    Espera mais quando não há nada aberto: sem sessão viva não existe
+    ociosa para varrer, e acordar de minuto em minuto para não fazer nada
+    é exatamente o tipo de gasto parado que este painel não deve ter.
+    """
     while True:
         try:
-            await asyncio.sleep(60)
+            ativas = 0
+            try:
+                ativas = len(app.state.terminals.ativas() or [])
+            except Exception:
+                pass
+            await asyncio.sleep(60 if ativas else 300)
             encerradas = await app.state.terminals.varrer_ociosas()
             if encerradas:
                 log.info("%d sessao(oes) de terminal encerradas por inatividade", encerradas)

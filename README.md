@@ -224,7 +224,8 @@ para depois.
 - **`specs/`** — [invariantes](specs/invariantes.md) (o que precisa
   continuar verdadeiro, com o teste que trava cada um) e
   [pendências](specs/pendencias.md).
-- **`.claude/skills/`** — o que já foi aprendido na marra, por subsistema.
+- **[docs/36_REFERENCIA_RAPIDA](docs/36_REFERENCIA_RAPIDA.md)** — o que já
+  foi aprendido na marra, por subsistema, numa página só.
 
 Antes de commitar:
 

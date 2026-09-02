@@ -10,6 +10,10 @@ quebrados.
 
 ---
 
+> O conceito por trás disto — duas necessidades com cadências diferentes,
+> e por que o painel desacelera sozinho — está em
+> [35_CONCEITO_E_LICOES](35_CONCEITO_E_LICOES.md).
+
 ## Nos servidores do FindFace
 
 ### O ciclo de coleta — uma ida a cada 60 s
@@ -31,6 +35,24 @@ reaproveitam a sessão em vez de refazer o handshake.
 > ela saiu de `/proc/diskstats`, e não de `iostat`: medir E/S gastando
 > E/S seria contraditório. As duas leituras aproveitam a mesma janela que
 > a medição de CPU já usava — nenhuma ida a mais.
+
+### Duas velocidades
+
+O painel não fica aberto o dia inteiro. O coletor acompanha:
+
+| Situação | Intervalo | Idas/dia (4 servidores) |
+|---|---|---|
+| alguém usando o painel | `monitor.intervalo_s` (60 s) | 5.760 |
+| ninguém há `monitor.ocioso_apos_min` (10 min) | `monitor.intervalo_ocioso_s` (300 s) | **1.152** |
+
+Abrir o painel **acorda o coletor na hora**, então a primeira tela vem
+com leitura fresca em vez de dado de cinco minutos atrás. E a tela recebe
+do servidor de quanto em quanto tempo perguntar.
+
+Vigiar não precisa de 60 s: uma queda detectada em 5 min avisa igual no
+Telegram. O que **não** muda no modo econômico é o trabalho do ciclo —
+incidente, aviso, backup e faxina seguem idênticos. Há teste que falha se
+o ciclo passar a pular trabalho por causa do modo.
 
 ### O que **nunca** entra no ciclo
 

@@ -439,6 +439,21 @@ CATALOGO: list[ItemConfig] = [
                "Depois disso o texto do log é esvaziado, mas a linha do "
                "histórico permanece. O log é o que pesa; a linha, não.",
                minimo=0, maximo=3650),
+    ItemConfig("monitor.intervalo_ocioso_s", "monitor",
+               "Intervalo quando ninguém está usando (segundos)", "numero",
+               300,
+               "O painel não fica aberto o dia inteiro. Sem ninguém olhando, "
+               "o coletor desacelera: vigiar não precisa de 60 s — uma queda "
+               "detectada em 5 min avisa igual no Telegram. Abrir a tela "
+               "acorda o coletor na hora, então a primeira leitura vem "
+               "fresca.",
+               minimo=30, maximo=3600),
+    ItemConfig("monitor.ocioso_apos_min", "monitor",
+               "Considerar ocioso depois de (minutos sem uso)", "numero",
+               10,
+               "Tempo sem NENHUMA requisição ao painel até ele entrar em "
+               "modo econômico. Zero mantém sempre na velocidade normal.",
+               minimo=0, maximo=240),
     ItemConfig("alerta.disco_util_pct", "alerta",
                "Disco saturado acima de (% do tempo ocupado)", "numero",
                85,

@@ -6,7 +6,7 @@ repetem uma à outra de propósito:
 | Camada | Onde | Responde | Público |
 |---|---|---|---|
 | **Documentação** | `docs/` | como opera, como instalar, como resolver | quem usa e quem opera |
-| **Skills** | `.claude/skills/` | o que já foi aprendido na marra ao mexer no código | quem (ou o que) vai editar |
+| **Referência rápida** | [docs/36_REFERENCIA_RAPIDA](../docs/36_REFERENCIA_RAPIDA.md) | o que já foi aprendido na marra ao mexer no código | quem vai editar |
 | **Specs** | `specs/` | o que precisa continuar verdadeiro, e o que ainda está aberto | quem revisa e quem decide |
 
 Um spec aqui **não** descreve funcionalidade — para isso existe `docs/`.
