@@ -108,6 +108,10 @@
   e serviços receber, o formato da mensagem (o mesmo template do Zabbix, e
   por quê) e as travas contra virar spam.
 
+- **[34_PESO_DO_PAINEL](34_PESO_DO_PAINEL.md)** — auditoria de custo item
+  por item: o que roda nos servidores, o que roda na VM do painel, e os
+  quatro compromissos que impedem o FaceOps de pesar no que monitora.
+
 - **[33_SATURACAO_DE_DISCO](33_SATURACAO_DE_DISCO.md)** — por que um pico
   de IOPS derruba a máquina inteira, o que o painel passou a medir, e a
   auditoria honesta de quando o causador é o próprio backup.

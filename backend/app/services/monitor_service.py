@@ -83,6 +83,10 @@ class MonitorService:
         self._ultimo_erro: dict[int, str] = {}
         self._ciclos = 0
         self._ultimo_ciclo: datetime | None = None
+        # Versão do que a tela vê. Sobe quando o ciclo termina (dado novo)
+        # e quando alguém mexe em servidor ou limiar (configuração nova).
+        # É a chave do cache do resumo — ver `chave_cache`.
+        self._versao = 0
 
     def _cfg(self, chave: str, padrao):
         if self.config is None:
@@ -196,6 +200,7 @@ class MonitorService:
 
         self._ciclos += 1
         self._ultimo_ciclo = datetime.now(timezone.utc)
+        self._versao += 1
 
     async def _registrar_incidentes(
         self,
@@ -449,6 +454,32 @@ class MonitorService:
                 for a in selecionadas
             ],
         }
+
+    def chave_cache(self) -> str:
+        """
+        Identifica a versão atual do que a tela mostra.
+
+        O resumo do Monitor era recalculado a CADA poll de 10 s, por aba
+        aberta — cerca de 21 consultas ao banco, das quais cinco em cada
+        seis eram trabalho jogado fora: os dados só mudam quando o
+        coletor roda, a cada 60 s. Com três abas abertas, isso era mais
+        de 6 consultas por segundo, para sempre, sem nada ter mudado.
+
+        Com esta chave, N abas custam o mesmo que uma, e o recálculo
+        acontece uma vez por ciclo.
+        """
+        return f"{self._ciclos}:{self._versao}"
+
+    def invalidar(self) -> None:
+        """
+        Força o próximo resumo a ser recalculado.
+
+        Chamada por quem muda o que a tela mostra fora do ciclo: cadastrar
+        servidor, desativar, mexer em limiar. Sem isso, uma alteração
+        ficaria invisível até o coletor passar — e "salvei e não mudou
+        nada" é o tipo de dúvida que vira chamado.
+        """
+        self._versao += 1
 
     async def alertas(self, db) -> list[dict]:
         """

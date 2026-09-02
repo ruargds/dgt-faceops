@@ -140,6 +140,13 @@ async def criar(
     )
     db.add(host)
     await db.commit()
+    # O resumo do Monitor é cacheado por ciclo do coletor. Sem invalidar
+    # aqui, esta alteração só apareceria na próxima passada — e "salvei e
+    # não mudou nada" vira chamado.
+    try:
+        request.app.state.monitor.invalidar()
+    except Exception:
+        pass
     await db.refresh(host)
 
     await audit_service.registrar(
@@ -228,6 +235,13 @@ async def atualizar(
         alterados.append("ff_api_token")
 
     await db.commit()
+    # O resumo do Monitor é cacheado por ciclo do coletor. Sem invalidar
+    # aqui, esta alteração só apareceria na próxima passada — e "salvei e
+    # não mudou nada" vira chamado.
+    try:
+        request.app.state.monitor.invalidar()
+    except Exception:
+        pass
     await db.refresh(host)
 
     # Credencial ou endereço mudou: derruba a conexão em cache, senão a
@@ -260,6 +274,13 @@ async def remover(
     await request.app.state.ssh.disconnect(host_id)
     await db.delete(host)
     await db.commit()
+    # O resumo do Monitor é cacheado por ciclo do coletor. Sem invalidar
+    # aqui, esta alteração só apareceria na próxima passada — e "salvei e
+    # não mudou nada" vira chamado.
+    try:
+        request.app.state.monitor.invalidar()
+    except Exception:
+        pass
 
     await audit_service.registrar(
         db,

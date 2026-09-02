@@ -76,9 +76,27 @@ async def resumo(
     """
     Última amostra de cada servidor, para a visão geral.
 
-    Uma consulta só: a tela precisa de todos os cartões de uma vez, e N+1
-    aqui seria N+1 a cada poucos segundos.
+    **Cacheado por ciclo do coletor.** Esta rota é chamada a cada 10 s
+    por cada aba aberta, e monta ~21 consultas: hosts, a última amostra
+    de cada um, os alertas (que releem host e amostra, mais limiar e
+    incidente por host), os incidentes abertos e o resumo do painel.
+
+    Os dados só mudam quando o coletor roda — a cada 60 s por padrão.
+    Recalcular a cada poll era repetir cinco de cada seis vezes o mesmo
+    trabalho, multiplicado pelo número de abas abertas. Com o cache, N
+    abas custam o mesmo que uma, e o recálculo acontece uma vez por
+    ciclo.
+
+    A chave vem de `MonitorService.chave_cache()`, que muda quando o
+    ciclo termina E quando alguém mexe em servidor ou limiar — então
+    alteração feita na tela aparece na hora, sem esperar o coletor.
     """
+    monitor = request.app.state.monitor
+    chave = monitor.chave_cache()
+    cache = getattr(request.app.state, "cache_resumo", None)
+    if cache is not None and cache[0] == chave:
+        return cache[1]
+
     resultado = await db.execute(select(Host).order_by(Host.name))
     hosts = list(resultado.scalars().all())
 
@@ -134,9 +152,9 @@ async def resumo(
     if hasattr(request.app.state, "incidentes"):
         incidentes_abertos = await request.app.state.incidentes.listar_abertos(db)
 
-    return {
+    saida = {
         "servidores": cartoes,
-        "alertas": await request.app.state.monitor.alertas(db),
+        "alertas": await monitor.alertas(db),
         "coletor": request.app.state.monitor.estado(),
         # Serviço por máquina, já com causa provável e desde quando — a
         # tela desenha o painel de indisponibilidade sem outra ida ao
@@ -144,6 +162,9 @@ async def resumo(
         "incidentes_abertos": incidentes_abertos,
         "painel": await _resumo_do_painel(db),
     }
+
+    request.app.state.cache_resumo = (chave, saida)
+    return saida
 
 
 async def _resumo_do_painel(db: AsyncSession) -> dict:

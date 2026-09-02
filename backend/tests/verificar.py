@@ -701,6 +701,92 @@ async def cenario_apuracao_correlaciona_pico_de_recurso():
     await engine.dispose()
 
 
+async def cenario_painel_nao_pesa_no_que_monitora():
+    """
+    O painel não pode ser motivo de lentidão em nada — nem nos servidores
+    do FindFace, nem na VM onde ele mesmo roda.
+
+    Esta trava guarda os quatro compromissos que sustentam isso, cada um
+    com um jeito conhecido de ser quebrado sem ninguém notar.
+    """
+    import inspect
+
+    from app.services.monitor_service import MonitorService
+
+    # ── 1. Uma ida ao servidor por ciclo, e leitura de arquivo virtual ──
+    #
+    # /proc e /sys são memória: lê-los não gera E/S de disco nenhuma. Foi
+    # essa a razão de medir IOPS por /proc/diskstats em vez de chamar
+    # `iostat` — medir saturação de disco não pode custar disco.
+    from app.services.metrics_service import COLLECT_SCRIPT as script
+    assert "/proc/diskstats" in script, "a medição de IOPS sumiu"
+    for caro in ("iostat", "du -", "find /", "docker logs"):
+        assert caro not in script, (
+            f"a coleta de cada ciclo passou a rodar '{caro}' — isso é caro "
+            "e não pode entrar no caminho de 60 em 60 segundos"
+        )
+    # `docker stats` é aceitável (cgroup, sem disco), mas sem stream.
+    if "docker stats" in script:
+        assert "--no-stream" in script, "docker stats em modo contínuo"
+
+    # ── 2. O resumo da tela é cacheado por ciclo ────────────────────────
+    #
+    # A rota é chamada a cada 10 s por CADA aba aberta e monta ~21
+    # consultas. Sem cache, três abas = mais de 6 consultas por segundo,
+    # para sempre, sem nada ter mudado.
+    rota = (pathlib.Path(__file__).resolve().parents[1]
+            / "app" / "api" / "routes" / "monitor.py").read_text(encoding="utf-8")
+    trecho = rota[rota.index("async def resumo("):]
+    trecho = trecho[:trecho.index("@router", 10)]
+    assert "chave_cache()" in trecho, "o resumo voltou a ser recalculado a cada poll"
+    assert "cache_resumo" in trecho
+
+    # A chave muda quando o ciclo roda...
+    m = MonitorService(metrics=None, stack=None)
+    antes = m.chave_cache()
+    m._ciclos += 1
+    m._versao += 1
+    assert m.chave_cache() != antes, "dado novo não invalida o cache"
+
+    # ...e quando alguém muda configuração, senão a alteração ficaria
+    # invisível até a próxima passada do coletor.
+    depois = m.chave_cache()
+    m.invalidar()
+    assert m.chave_cache() != depois, "configuração nova não invalida o cache"
+
+    # E as rotas que mudam configuração realmente invalidam.
+    for arquivo in ("hosts.py", "limiares.py"):
+        fonte = (pathlib.Path(__file__).resolve().parents[1]
+                 / "app" / "api" / "routes" / arquivo).read_text(encoding="utf-8")
+        assert "monitor.invalidar()" in fonte, (
+            f"{arquivo} muda o que a tela mostra e não invalida o cache"
+        )
+
+    # ── 3. Log de produção não é lido por conta própria ─────────────────
+    from app.services.log_analise_service import LogAnaliseService
+
+    fonte = inspect.getsource(LogAnaliseService)
+    assert "MAX_SERVICOS_CICLO" in fonte or "max" in fonte.lower()
+    ciclo = inspect.getsource(MonitorService._analisar_logs)
+    assert "listar_abertos" in ciclo, (
+        "a análise de log deixou de depender de incidente aberto — o "
+        "painel passaria a varrer log de produção por conta própria"
+    )
+
+    # ── 4. Toda escrita tem prazo ──────────────────────────────────────
+    #
+    # Tabela que cresce sem retenção enche o disco da VM do painel, que é
+    # pequena de propósito.
+    from app.services.config_service import POR_CHAVE
+
+    for chave in ("monitor.retencao_dias", "incidentes.retencao_dias",
+                  "analise.retencao_dias", "notificacao.retencao_dias",
+                  "faxina.licenca_dias", "faxina.auditoria_dias",
+                  "faxina.execucoes_dias", "faxina.gravacoes_dias"):
+        assert chave in POR_CHAVE, f"retenção sumiu do catálogo: {chave}"
+        assert POR_CHAVE[chave].padrao, f"{chave} veio sem prazo padrão"
+
+
 async def cenario_saturacao_de_disco_e_medida():
     """
     Um pico de E/S derrubou um servidor de produção e o painel não tinha
@@ -2765,6 +2851,7 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_painel_nao_pesa_no_que_monitora,
     cenario_saturacao_de_disco_e_medida,
     cenario_backup_do_painel_nao_disputa_disco,
     cenario_erro_de_conexao_diz_onde_procurar,

@@ -61,6 +61,13 @@ async def salvar(
         detail=resultado,
     )
     await db.commit()
+    # O resumo do Monitor é cacheado por ciclo do coletor. Sem invalidar
+    # aqui, esta alteração só apareceria na próxima passada — e "salvei e
+    # não mudou nada" vira chamado.
+    try:
+        request.app.state.monitor.invalidar()
+    except Exception:
+        pass
     return {"ok": True, **resultado}
 
 
@@ -81,4 +88,11 @@ async def restaurar_padrao(
         target=str(override_id),
     )
     await db.commit()
+    # O resumo do Monitor é cacheado por ciclo do coletor. Sem invalidar
+    # aqui, esta alteração só apareceria na próxima passada — e "salvei e
+    # não mudou nada" vira chamado.
+    try:
+        request.app.state.monitor.invalidar()
+    except Exception:
+        pass
     return {"ok": True}
