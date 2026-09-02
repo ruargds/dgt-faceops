@@ -108,6 +108,10 @@
   e serviços receber, o formato da mensagem (o mesmo template do Zabbix, e
   por quê) e as travas contra virar spam.
 
+- **[32_SESSAO_E_PERFIS](32_SESSAO_E_PERFIS.md)** — os dois relógios da
+  sessão (20 min parada, teto de 24 h), por que a renovação não pode vir
+  do polling do painel, e o que cada um dos quatro perfis pode fazer.
+
 - **[31_REVISAO_SEGURANCA](31_REVISAO_SEGURANCA.md)** — o que foi
   verificado, o que foi corrigido e o que é aceito com ressalva. Inclui
   por que cifrar a senha no JavaScript não protege nada.

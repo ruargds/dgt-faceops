@@ -20,7 +20,7 @@ import { IconOlho, IconOlhoCortado } from "../components/Icons";
  * O rodapé pertence à marca de quem USA o painel. Quem o DESENVOLVEU fica
  * a cinco cliques dali — ver components/SobreOSistema.js.
  */
-export default function Login({ onEntrar, marca }) {
+export default function Login({ onEntrar, marca, aviso }) {
   const m = marca || MARCA_PADRAO;
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
@@ -65,6 +65,14 @@ export default function Login({ onEntrar, marca }) {
         </div>
 
         <form className="login-card" onSubmit={enviar}>
+          {/* Por que a sessão caiu. Voltar ao login sem explicação faz a
+              pessoa achar que o painel quebrou — e tentar de novo no mesmo
+              minuto, achando que foi falha. */}
+          {aviso && !erro && (
+            <div className="login-err" style={{ background: "var(--amber-bg)", borderColor: "var(--amber-bd)", color: "var(--amber-fg)" }}>
+              {aviso}
+            </div>
+          )}
           {erro && <div className="login-err">{erro}</div>}
 
           <div className="field">

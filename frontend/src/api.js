@@ -56,17 +56,61 @@ async function request(caminho, opcoes = {}) {
     : await resposta.text();
 
   if (!resposta.ok) {
-    const detalhe =
-      (corpo && corpo.detail) ||
-      (typeof corpo === "string" && corpo) ||
-      `Erro ${resposta.status}`;
-    throw new ApiError(
-      Array.isArray(detalhe) ? detalhe.map((d) => d.msg || d).join("; ") : detalhe,
-      resposta.status,
-      corpo
-    );
+    throw new ApiError(mensagemDeErro(resposta.status, corpo), resposta.status, corpo);
   }
   return corpo;
+}
+
+// O que dizer quando o corpo do erro não é nosso.
+//
+// 502/503/504 vêm do proxy, não do painel — e durante `atualizar.sh` o
+// backend REINICIA, então esse erro é esperado por alguns segundos.
+const MENSAGEM_POR_STATUS = {
+  400: "Requisição inválida.",
+  403: "Você não tem permissão para isso.",
+  404: "Não encontrado.",
+  409: "Conflito: alguém alterou isso antes.",
+  413: "Arquivo grande demais.",
+  429: "Muitas tentativas seguidas. Espere um pouco.",
+  500: "Erro interno do painel. O detalhe está no log do backend.",
+  502: "O painel está reiniciando ou fora do ar. Durante uma atualização isso é esperado — tente de novo em alguns segundos.",
+  503: "O painel está indisponível no momento. Tente de novo em alguns segundos.",
+  504: "O painel demorou demais para responder.",
+};
+
+/**
+ * Mensagem curta para um erro de API.
+ *
+ * Nasceu de um defeito real: o corpo do erro era usado como mensagem sem
+ * conferir NADA. Quando a Cloudflare devolveu um 502, os 4 KB de HTML da
+ * página de erro dela viraram a "mensagem" — e as telas, que exibem a
+ * mensagem onde vai o conteúdo, mostraram uma página de erro inteira
+ * dentro do cartão "Rotatividade do FindFace", como se fosse a leitura
+ * do servidor.
+ *
+ * É a mesma família de "serviço travado" e "câmera sem evento": o painel
+ * apresentando uma falha de leitura como se fosse o dado lido. Aqui a
+ * regra é explícita — só vira mensagem o que for JSON nosso, ou texto
+ * curto que não pareça documento.
+ */
+export function mensagemDeErro(status, corpo) {
+  const detalhe = corpo && typeof corpo === "object" ? corpo.detail : null;
+  if (detalhe) {
+    return Array.isArray(detalhe)
+      ? detalhe.map((d) => d.msg || d).join("; ")
+      : String(detalhe);
+  }
+
+  if (typeof corpo === "string") {
+    const limpo = corpo.trim();
+    const pareceDocumento =
+      limpo.startsWith("<") || /<\/?(html|body|head|!doctype)/i.test(limpo.slice(0, 500));
+    // Teto de tamanho junto com a checagem de HTML: mensagem de erro que
+    // não cabe numa linha não é mensagem, é despejo.
+    if (limpo && !pareceDocumento && limpo.length <= 300) return limpo;
+  }
+
+  return MENSAGEM_POR_STATUS[status] || `Erro ${status} ao falar com o painel.`;
 }
 
 const get = (c, opts) => request(c, opts);
@@ -381,6 +425,11 @@ export const api = {
   baixarBackup,
 
   // Auditoria
+  // Sessão: prazos em vigor e renovação. A renovação é pedida pela tela
+  // SÓ quando houve interação de gente — ver `useSessaoViva`.
+  politicaSessao: () => get("/auth/sessao"),
+  renovarSessao: () => post("/auth/renovar", {}),
+  perfis: () => get("/auth/perfis"),
   auditoria: (params = "") => get(`/auditoria${params}`),
   filtrosAuditoria: (dias = 90) => get(`/auditoria/filtros?dias=${dias}`),
   resumoAuditoria: () => get("/auditoria/resumo"),

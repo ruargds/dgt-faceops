@@ -664,12 +664,17 @@ function Retencao({ hostId, hostNome }) {
   if (carregando && !dados) return <Carregando texto="Lendo a política do FindFace…" />;
 
   if (erro) {
+    // O erro sai no componente de erro, com tarja e botão de tentar de
+    // novo — não como texto comum dentro do cartão. Quando a leitura
+    // falhava, a mensagem aparecia exatamente onde vai o conteúdo, e o
+    // painel exibiu uma página de erro 502 da Cloudflare como se fosse a
+    // política lida do servidor.
     return (
       <div className="card card-tight">
-        <div className="section-title" style={{ marginBottom: 4 }}>
+        <div className="section-title" style={{ marginBottom: 10 }}>
           Rotatividade do FindFace
         </div>
-        <div className="small muted">{erro}</div>
+        <Erro mensagem={erro} onTentar={carregar} />
       </div>
     );
   }
@@ -914,12 +919,17 @@ function ConfigFindFace({ hostId, hostNome }) {
 
   if (carregando && !dados) return null;
   if (erro) {
+    // O erro sai no componente de erro, com tarja e botão de tentar de
+    // novo — não como texto comum dentro do cartão. Quando a leitura
+    // falhava, a mensagem aparecia exatamente onde vai o conteúdo, e o
+    // painel exibiu uma página de erro 502 da Cloudflare como se fosse a
+    // política lida do servidor.
     return (
       <div className="card card-tight">
-        <div className="section-title" style={{ marginBottom: 4 }}>
+        <div className="section-title" style={{ marginBottom: 10 }}>
           Configuração em arquivo do FindFace
         </div>
-        <div className="small muted">{erro}</div>
+        <Erro mensagem={erro} onTentar={carregar} />
       </div>
     );
   }

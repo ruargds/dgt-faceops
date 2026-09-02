@@ -110,6 +110,11 @@ CATEGORIAS = {
         "Nome e descrição que aparecem no painel. Trocar aqui adapta a "
         "instalação para outro cliente ou outro ambiente.",
     ),
+    "seguranca": (
+        "Sessão e acesso",
+        "Por quanto tempo uma sessão vale. Prazo curto protege a estação "
+        "esquecida aberta; prazo longo evita atrapalhar quem trabalha.",
+    ),
     "servidores": (
         "Padrões dos servidores",
         "Valores usados quando o servidor não define o seu. O caminho de "
@@ -434,6 +439,21 @@ CATALOGO: list[ItemConfig] = [
                "Depois disso o texto do log é esvaziado, mas a linha do "
                "histórico permanece. O log é o que pesa; a linha, não.",
                minimo=0, maximo=3650),
+    ItemConfig("sessao.inatividade_min", "seguranca",
+               "Encerrar sessão parada por (minutos)", "numero",
+               20,
+               "Tempo sem NENHUMA interação de teclado ou mouse até a sessão "
+               "cair. O painel se atualizando sozinho não conta como "
+               "interação — se contasse, uma tela esquecida aberta ficaria "
+               "logada para sempre.",
+               minimo=5, maximo=480),
+    ItemConfig("sessao.maxima_h", "seguranca",
+               "Tempo máximo de uma sessão (horas)", "numero",
+               24,
+               "Teto absoluto, contado do login. Passado ele é preciso "
+               "entrar de novo, mesmo com uso contínuo — é o que impede uma "
+               "sessão de se renovar indefinidamente.",
+               minimo=1, maximo=720),
     ItemConfig("apuracao.ativa", "monitor",
                "Apurar a causa quando o incidente fecha", "booleano",
                True,

@@ -701,6 +701,171 @@ async def cenario_apuracao_correlaciona_pico_de_recurso():
     await engine.dispose()
 
 
+async def cenario_sessao_cai_parada_e_tem_teto():
+    """
+    Duas regras, e a diferença entre elas é o ponto:
+
+    * **inatividade** — sem uso, a sessão cai. Protege a estação
+      esquecida aberta.
+    * **teto absoluto** — contado do login e nunca estendido. Impede uma
+      sessão de se renovar para sempre.
+
+    Guardar só a primeira daria sessão eterna para quem ficasse mexendo;
+    só a segunda mataria alguém no meio do trabalho.
+    """
+    import time
+
+    from app.core.security import (
+        create_access_token, decode_access_token, sessao_expirada,
+    )
+
+    # A janela curta é respeitada na emissão.
+    curto = create_access_token("admin", {"tv": 1}, minutos=1)
+    payload = decode_access_token(curto)
+    assert payload is not None
+    resta = payload["exp"] - time.time()
+    assert 0 < resta <= 61, resta
+
+    # O carimbo de início existe e é agora.
+    assert abs(payload["ini"] - time.time()) < 5, payload
+
+    # RENOVAR CARREGA O `ini`: é isso que faz o teto ser um teto, e não
+    # um horizonte que se afasta a cada renovação.
+    inicio_antigo = int(time.time()) - 23 * 3600
+    renovado = decode_access_token(
+        create_access_token("admin", {"tv": 1}, minutos=20, inicio_sessao=inicio_antigo)
+    )
+    assert renovado["ini"] == inicio_antigo, "a renovação reiniciou o relógio absoluto"
+    # Ainda dentro das 24 h: vale.
+    assert not sessao_expirada(renovado, 24)
+
+    # Passadas as 24 h, nem token com `exp` válido segura.
+    velho = decode_access_token(
+        create_access_token(
+            "admin", {"tv": 1}, minutos=20,
+            inicio_sessao=int(time.time()) - 25 * 3600,
+        )
+    )
+    assert velho is not None, "o token em si continua íntegro"
+    assert velho["exp"] > time.time(), "a janela curta ainda está aberta"
+    assert sessao_expirada(velho, 24), "o teto absoluto não pegou"
+
+    # Teto zero desliga a regra (para quem quiser sessão sem limite).
+    assert not sessao_expirada(velho, 0)
+
+    # Token da versão anterior, sem `ini`: não derruba quem já estava
+    # dentro. A próxima renovação passa a carregar o carimbo.
+    assert not sessao_expirada({"sub": "admin"}, 24)
+
+    # O teto é conferido em TODA requisição, não só na renovação: regra
+    # de segurança que depende do cliente pedir não é regra.
+    deps = (pathlib.Path(__file__).resolve().parents[1]
+            / "app" / "core" / "deps.py").read_text(encoding="utf-8")
+    assert "sessao_expirada" in deps, "o teto só vale se o cliente pedir renovação"
+
+    # E a renovação NÃO pode ser disparada por tráfego de fundo: o painel
+    # se atualiza sozinho a cada 10s, e isso seguraria a sessão viva para
+    # sempre. A tela renova a partir de evento de entrada do navegador.
+    hook = (pathlib.Path(__file__).resolve().parents[2]
+            / "frontend" / "src" / "useSessaoViva.js").read_text(encoding="utf-8")
+    assert "houveInteracao" in hook, "a renovação não depende de interação"
+    assert "pointerdown" in hook and "keydown" in hook, hook[:200]
+    assert "mousemove" not in hook.replace("`mousemove`", ""), (
+        "mousemove conta como interação — mesa esbarrada seguraria a sessão"
+    )
+
+
+async def cenario_perfis_descrevem_o_que_cada_um_pode():
+    """
+    A gestão dos perfis só serve se alguém entender o que está
+    concedendo. `backups.restore` não diz a ninguém que aquilo sobrescreve
+    o banco de produção.
+
+    A matriz é montada a partir do MESMO catálogo que autoriza — uma
+    segunda lista na tela diria uma coisa enquanto o servidor faz outra.
+    """
+    from app.core.permissions import (
+        AREAS, DESTRUCTIVE_PERMISSIONS, PERMISSION_CATALOG, PERMISSION_INFO,
+        ROLE_INFO, ROLE_PERMISSIONS, matriz_perfis, permissions_for,
+    )
+
+    # Toda permissão tem área e explicação. Sem isso ela aparece na tela
+    # como código solto, que é o que a matriz existe para evitar.
+    faltando = set(PERMISSION_CATALOG) - set(PERMISSION_INFO)
+    assert not faltando, f"permissão sem área/descrição: {sorted(faltando)}"
+
+    chaves_area = {c for c, _r, _a in AREAS}
+    for codigo, (area, detalhe) in PERMISSION_INFO.items():
+        assert area in chaves_area, f"{codigo} aponta para área inexistente: {area}"
+        assert len(detalhe) > 30, f"{codigo}: explicação curta demais"
+
+    # Todo perfil tem para-quem e o-que-não-pode. O que NÃO pode costuma
+    # ser mais decisivo que o que pode.
+    for codigo in ROLE_PERMISSIONS:
+        info = ROLE_INFO.get(codigo)
+        assert info, f"perfil {codigo} sem descrição"
+        for campo in ("resumo", "para_quem", "nao_pode"):
+            assert info.get(campo), f"{codigo}: falta '{campo}'"
+
+    m = matriz_perfis()
+
+    # Nada some no caminho: o que está no catálogo está na matriz.
+    na_matriz = {i["codigo"] for a in m["areas"] for i in a["itens"]}
+    assert na_matriz == set(PERMISSION_CATALOG), (
+        f"a matriz esconde: {sorted(set(PERMISSION_CATALOG) - na_matriz)}"
+    )
+
+    # A matriz concorda com quem AUTORIZA — é o ponto todo dela.
+    for area in m["areas"]:
+        for item in area["itens"]:
+            for perfil in ROLE_PERMISSIONS:
+                tem = item["codigo"] in permissions_for(perfil)
+                marcado = perfil in item["perfis"]
+                assert tem == marcado, (
+                    f"a tela diz que {perfil} {'tem' if marcado else 'não tem'} "
+                    f"{item['codigo']}, e o servidor diz o contrário"
+                )
+            assert item["destrutiva"] == (item["codigo"] in DESTRUCTIVE_PERMISSIONS)
+
+    # A escada de poder é crescente: cada perfil contém o anterior. Se um
+    # dia deixar de ser, é decisão de projeto — e tem de ser deliberada,
+    # não um efeito colateral de mexer numa lista.
+    ordem = ["observador", "operador", "tecnico", "admin"]
+    for menor, maior in zip(ordem, ordem[1:]):
+        a, b = permissions_for(menor), permissions_for(maior)
+        assert a <= b, f"{maior} não contém tudo de {menor}: falta {sorted(a - b)}"
+
+    # Observador não executa NADA. É o perfil de tela em parede.
+    so_leitura = permissions_for("observador")
+    assert all(c.endswith(".view") for c in so_leitura), sorted(so_leitura)
+    assert not (so_leitura & DESTRUCTIVE_PERMISSIONS)
+
+    # Plantão destrava, não destrói.
+    op = permissions_for("operador")
+    assert "services.restart" in op
+    assert not (op & DESTRUCTIVE_PERMISSIONS), sorted(op & DESTRUCTIVE_PERMISSIONS)
+    for proibida in ("backups.restore", "backups.delete", "services.stack",
+                     "terminal.sudo", "users.manage", "hosts.manage"):
+        assert proibida not in op, f"plantão ganhou {proibida}"
+
+    # Técnico opera, mas o que não tem volta fica com o admin.
+    tec = permissions_for("tecnico")
+    for proibida in ("backups.restore", "backups.delete", "services.stack",
+                     "users.manage", "hosts.manage", "cleanup.run"):
+        assert proibida not in tec, f"técnico ganhou {proibida}"
+
+    # Admin tem tudo — e é por isso que os destrutivos pedem confirmação.
+    assert permissions_for("admin") == set(PERMISSION_CATALOG)
+
+    # Os contadores da tela batem.
+    por_codigo = {p["codigo"]: p for p in m["perfis"]}
+    for codigo in ROLE_PERMISSIONS:
+        assert por_codigo[codigo]["total"] == len(permissions_for(codigo))
+        assert por_codigo[codigo]["destrutivas"] == len(
+            permissions_for(codigo) & DESTRUCTIVE_PERMISSIONS
+        )
+
+
 async def cenario_chave_fraca_impede_a_subida():
     """
     A SECRET_KEY assina o token de sessão E deriva a chave do cofre que
@@ -2330,6 +2495,8 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_sessao_cai_parada_e_tem_teto,
+    cenario_perfis_descrevem_o_que_cada_um_pode,
     cenario_chave_fraca_impede_a_subida,
     cenario_jwt_nao_aceita_algoritmo_trocado,
     cenario_url_da_api_nao_alcanca_o_metadados,

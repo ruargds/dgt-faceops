@@ -4,6 +4,8 @@ import AppShell from "./pages/AppShell";
 import Login from "./pages/Login";
 import { carregarMarca } from "./marca";
 import { SessaoContext } from "./usePermissions";
+import { useSessaoViva } from "./useSessaoViva";
+import { AvisoSessao } from "./components/AvisoSessao";
 
 export default function App() {
   const [sessao, setSessao] = useState({ usuario: null, permissoes: [] });
@@ -38,6 +40,17 @@ export default function App() {
     carregar();
   }, [carregar]);
 
+  // Encerramento por inatividade ou por teto de sessão. A mensagem é
+  // guardada para a tela de login explicar POR QUE caiu — cair sem
+  // motivo faz a pessoa achar que o painel quebrou.
+  const [motivoSaida, setMotivoSaida] = useState("");
+
+  const encerrar = useCallback((motivo) => {
+    setMotivoSaida(motivo || "");
+    clearToken();
+    setSessao({ usuario: null, permissoes: [] });
+  }, []);
+
   const sair = useCallback(async () => {
     // Avisa o servidor ANTES de limpar: ele incrementa a versão do token,
     // o que invalida qualquer cópia que já tenha sido feita. Só apagar do
@@ -51,6 +64,13 @@ export default function App() {
     setSessao({ usuario: null, permissoes: [] });
   }, []);
 
+  // Sempre chamado, mesmo deslogado (regra dos hooks): o `logado`
+  // decide se ele faz algo.
+  const { avisando, continuar, politica } = useSessaoViva({
+    logado: Boolean(sessao.usuario),
+    aoEncerrar: encerrar,
+  });
+
   if (carregando) {
     return (
       <div className="login-bg">
@@ -60,14 +80,19 @@ export default function App() {
   }
 
   if (!sessao.usuario) {
-    return <Login onEntrar={carregar} marca={marca} />;
+    return <Login onEntrar={carregar} marca={marca} aviso={motivoSaida} />;
   }
 
   return (
+    <>
+    {avisando > 0 && (
+      <AvisoSessao segundos={avisando} minutos={politica.inatividade_min} onContinuar={continuar} />
+    )}
     <SessaoContext.Provider
       value={{ ...sessao, recarregar: carregar, sair, marca }}
     >
       <AppShell />
     </SessaoContext.Provider>
+    </>
   );
 }

@@ -5,10 +5,21 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import client_ip, get_current_user, require_permission
-from app.core.permissions import PERMISSION_CATALOG, ROLE_LABELS, permissions_for
+from app.core.deps import bearer, client_ip, get_current_user, require_permission
+from app.core.permissions import (
+    PERMISSION_CATALOG,
+    ROLE_LABELS,
+    matriz_perfis,
+    permissions_for,
+)
 from app.core.rate_limit import freio
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    sessao_expirada,
+    verify_password,
+)
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas import (
@@ -24,6 +35,21 @@ from app.services import audit_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+
+
+def _inatividade_min(request: Request) -> int:
+    """Janela de inatividade, do catálogo."""
+    try:
+        return int(request.app.state.config.get("sessao.inatividade_min"))
+    except Exception:
+        return 20
+
+
+def _maxima_h(request: Request) -> float:
+    try:
+        return float(request.app.state.config.get("sessao.maxima_h"))
+    except Exception:
+        return 24.0
 
 @router.post("/login", response_model=TokenOut)
 async def login(
@@ -95,6 +121,7 @@ async def login(
         access_token=create_access_token(
             usuario.username,
             {"role": usuario.role, "tv": usuario.token_version},
+            minutos=_inatividade_min(request),
         ),
         usuario=UsuarioOut.model_validate(usuario),
     )
@@ -175,6 +202,7 @@ async def trocar_senha(
         "access_token": create_access_token(
             usuario.username,
             {"role": usuario.role, "tv": usuario.token_version},
+            minutos=_inatividade_min(request),
         ),
     }
 
@@ -312,3 +340,80 @@ async def remover_usuario(
         detail={"acao": "remover"},
     )
     return {"ok": True}
+
+
+@router.post("/renovar")
+async def renovar(
+    request: Request,
+    autor: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Estende a sessão por mais uma janela de inatividade.
+
+    Chamada pela TELA, e só quando houve interação de gente desde a
+    última renovação. Essa condição é o coração da regra: o painel se
+    atualiza sozinho a cada 10 s, e se qualquer requisição renovasse a
+    sessão, uma tela esquecida aberta ficaria logada para sempre — o
+    tempo de inatividade nunca chegaria ao fim.
+
+    O `ini` do token atual é COPIADO para o novo, nunca recalculado: é
+    ele que faz o teto de 24 h ser um teto, e não um horizonte que se
+    afasta a cada renovação.
+    """
+    credenciais = await bearer(request)
+    payload = decode_access_token(credenciais.credentials) if credenciais else None
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Sessão inválida.")
+
+    maxima = _maxima_h(request)
+    if sessao_expirada(payload, maxima):
+        raise HTTPException(
+            status_code=401,
+            detail=f"Sessão atingiu o limite de {maxima:.0f}h. Entre novamente.",
+        )
+
+    inicio = int(payload.get("ini") or datetime.now(timezone.utc).timestamp())
+    restante_h = max(0.0, maxima - (datetime.now(timezone.utc).timestamp() - inicio) / 3600)
+
+    return {
+        "access_token": create_access_token(
+            autor.username,
+            {"role": autor.role, "tv": autor.token_version},
+            minutos=_inatividade_min(request),
+            inicio_sessao=inicio,
+        ),
+        "inatividade_min": _inatividade_min(request),
+        "maxima_h": maxima,
+        # Quanto ainda resta do teto — a tela avisa antes de derrubar, em
+        # vez de encerrar no meio de um formulário sem explicação.
+        "restante_h": round(restante_h, 2),
+    }
+
+
+@router.get("/sessao")
+async def politica_sessao(
+    request: Request,
+    _: User = Depends(get_current_user),
+):
+    """
+    Os prazos em vigor, para a tela não ter os números repetidos no
+    JavaScript. Configuração que existe em dois lugares diverge no
+    primeiro ajuste.
+    """
+    return {
+        "inatividade_min": _inatividade_min(request),
+        "maxima_h": _maxima_h(request),
+    }
+
+
+@router.get("/perfis")
+async def perfis(_: User = Depends(get_current_user)):
+    """
+    O que cada perfil pode ver e fazer.
+
+    Aberta a qualquer usuário autenticado de propósito: saber o que o
+    PRÓPRIO perfil permite não é informação privilegiada, e esconder isso
+    só gera a pergunta "por que não aparece o botão?" — que vira chamado.
+    """
+    return matriz_perfis()

@@ -173,3 +173,10 @@ diretório base. A gravação de terminal passa pela mesma checagem.
 `require_permission` **levanta erro na subida** se o código não estiver no
 catálogo — erro de digitação não passa para produção como permissão que
 ninguém tem.
+
+## A tela que explica isso
+
+**Usuários → O que cada perfil pode** mostra a matriz completa, agrupada
+por área, com o que cada permissão faz na prática e quais são
+destrutivas. Ela vem de `/auth/perfis`, montada do mesmo catálogo que
+autoriza — ver [32_SESSAO_E_PERFIS](32_SESSAO_E_PERFIS.md).

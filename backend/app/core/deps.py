@@ -5,14 +5,33 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import PERMISSION_CATALOG, permissions_for
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, sessao_expirada
 from app.db.database import get_db
 from app.models.user import User
 
 bearer = HTTPBearer(auto_error=False)
 
+# Padrões da sessão. Ficam aqui como fallback porque `deps` é carregado
+# antes da configuração existir; o valor real vem de `ConfigService`.
+SESSAO_INATIVIDADE_MIN = 20
+SESSAO_MAXIMA_H = 24
+
+
+def _cfg(request: Request, chave: str, padrao):
+    """
+    Valor do catálogo, pelo `app.state`. Sem singleton global: a
+    configuração vive na aplicação, e `deps` recebe a requisição de
+    graça — inventar um acessor de módulo só criaria um segundo lugar
+    onde ela existe.
+    """
+    try:
+        return request.app.state.config.get(chave)
+    except Exception:
+        return padrao
+
 
 async def get_current_user(
+    request: Request,
     credenciais: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -28,6 +47,16 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sessão expirada ou token inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Teto absoluto de sessão. Conferido AQUI, e não só na renovação:
+    # a renovação é um pedido do navegador, e regra de segurança que
+    # depende do cliente pedir não é regra.
+    if sessao_expirada(payload, float(_cfg(request, "sessao.maxima_h", SESSAO_MAXIMA_H))):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessão atingiu o tempo máximo. Entre novamente.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
