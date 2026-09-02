@@ -47,6 +47,33 @@ log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 emit() { echo "FACEOPS:$1=$2"; }
 die()  { log "ERRO: $*"; emit status "falha"; emit erro "$*"; cleanup_stack; exit 1; }
 
+# ── Tetos de tempo ─────────────────────────────────────────────────────────
+#
+# Nenhum comando deste script tinha teto. Um `docker exec` que bloqueia
+# espera para SEMPRE, e o backup fica pendurado numa etapa sem nunca falhar
+# nem terminar — foi o que aconteceu em 01/09/2026: o perfil `essencial` do
+# dbserver parou em "Snapshot do Tarantool · 55%" e ficou lá.
+#
+# O dbserver tem 16 shards + 16 réplicas de findface-tarantool-server, e o
+# box.snapshot() rodava em cada um, em série, sem limite. Um shard travado
+# pendurava a execução inteira.
+#
+# Cada teto abaixo é generoso para a operação normal e curto o bastante
+# para um travamento virar AVISO em vez de execução eterna. Quando o
+# snapshot não sai, o script segue copiando os .snap existentes — que são
+# consistentes por construção, só podem estar algumas horas atrás.
+T_RAPIDO=30       # ler variável de ambiente, listar banco, checar estado
+T_SNAPSHOT=120    # box.snapshot()/BGSAVE por instância
+T_FASE_SNAP=600   # orçamento total da fase de snapshot, somando instâncias
+T_DUMP=3600       # pg_dump/mongodump de banco grande
+
+# `timeout` existe em coreutils; se faltar, roda sem teto em vez de falhar.
+if command -v timeout >/dev/null 2>&1; then
+  com_teto() { timeout "$@"; }
+else
+  com_teto() { shift; "$@"; }
+fi
+
 # ── Descoberta do ambiente ─────────────────────────────────────────────────
 
 compose_bin() {
@@ -188,17 +215,17 @@ backup_postgres() {
 
     # Usuario vem do ambiente do proprio container — nao adivinhar
     local PGUSER
-    PGUSER="$(docker exec "$c" sh -c 'echo -n "$POSTGRES_USER"' 2>/dev/null)"
+    PGUSER="$(com_teto "$T_RAPIDO" docker exec "$c" sh -c 'echo -n "$POSTGRES_USER"' 2>/dev/null)"
     [ -z "$PGUSER" ] && PGUSER="postgres"
 
     # Papeis e permissoes: pg_dump por banco NAO leva isso, e sem eles o
     # restore falha com erro de permissao que parece corrupcao.
-    docker exec "$c" pg_dumpall -U "$PGUSER" --globals-only       > "$WORK/postgres/$svc/globals.sql" 2>"$WORK/postgres/$svc/globals.err"       || log "    AVISO: pg_dumpall --globals-only falhou"
+    com_teto "$T_DUMP" docker exec "$c" pg_dumpall -U "$PGUSER" --globals-only       > "$WORK/postgres/$svc/globals.sql" 2>"$WORK/postgres/$svc/globals.err"       || log "    AVISO: pg_dumpall --globals-only falhou"
 
     # Enumera os bancos em vez de chutar nomes: a lista muda conforme os
     # modulos habilitados do FindFace.
     local bancos
-    bancos="$(docker exec "$c" psql -U "$PGUSER" -tAc       "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres';" 2>/dev/null)"
+    bancos="$(com_teto "$T_RAPIDO" docker exec "$c" psql -U "$PGUSER" -tAc       "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres';" 2>/dev/null)"
 
     if [ -z "$bancos" ]; then
       log "    AVISO: nenhum banco listado em $svc"
@@ -206,7 +233,7 @@ backup_postgres() {
     fi
 
     for db in $bancos; do
-      if docker exec "$c" pg_dump -U "$PGUSER" -Fc --no-password "$db"            > "$WORK/postgres/$svc/${db}.dump" 2>>"$WORK/postgres/$svc/dump.err"; then
+      if com_teto "$T_DUMP" docker exec "$c" pg_dump -U "$PGUSER" -Fc --no-password "$db"            > "$WORK/postgres/$svc/${db}.dump" 2>>"$WORK/postgres/$svc/dump.err"; then
         local sz; sz="$(stat -c %s "$WORK/postgres/$svc/${db}.dump")"
         if [ "$sz" -lt 100 ]; then
           log "    AVISO: dump de $db saiu vazio ($sz bytes)"
@@ -241,8 +268,8 @@ backup_mongodb() {
 
   mkdir -p "$WORK/mongodb"
   local UZ PZ ARGS=""
-  UZ="$(docker exec "$c" sh -c 'echo -n "$MONGO_INITDB_ROOT_USERNAME"' 2>/dev/null)"
-  PZ="$(docker exec "$c" sh -c 'echo -n "$MONGO_INITDB_ROOT_PASSWORD"' 2>/dev/null)"
+  UZ="$(com_teto "$T_RAPIDO" docker exec "$c" sh -c 'echo -n "$MONGO_INITDB_ROOT_USERNAME"' 2>/dev/null)"
+  PZ="$(com_teto "$T_RAPIDO" docker exec "$c" sh -c 'echo -n "$MONGO_INITDB_ROOT_PASSWORD"' 2>/dev/null)"
   if [ -n "$UZ" ]; then
     ARGS="-u $UZ -p $PZ --authenticationDatabase admin"
     log "  usando credencial do proprio container"
@@ -250,7 +277,7 @@ backup_mongodb() {
 
   # --archive --gzip sai por stdout: nao precisa de espaco temporario
   # dentro do container, que pode ter volume pequeno.
-  if docker exec "$c" sh -c "mongodump $ARGS --archive --gzip"        > "$WORK/mongodb/mongodump.gz" 2>"$WORK/mongodb/mongodump.err"; then
+  if com_teto "$T_DUMP" docker exec "$c" sh -c "mongodump $ARGS --archive --gzip"        > "$WORK/mongodb/mongodump.gz" 2>"$WORK/mongodb/mongodump.err"; then
     local sz; sz="$(stat -c %s "$WORK/mongodb/mongodump.gz")"
     if [ "$sz" -lt 100 ]; then
       log "  AVISO: dump vazio — ver mongodump.err"
@@ -278,7 +305,7 @@ backup_etcd() {
   fi
 
   mkdir -p "$WORK/etcd"
-  if docker exec -e ETCDCTL_API=3 "$c"        etcdctl snapshot save /tmp/faceops-etcd.db >/dev/null 2>&1      && docker cp "$c:/tmp/faceops-etcd.db" "$WORK/etcd/snapshot.db" >/dev/null 2>&1; then
+  if com_teto "$T_SNAPSHOT" docker exec -e ETCDCTL_API=3 "$c"        etcdctl snapshot save /tmp/faceops-etcd.db >/dev/null 2>&1      && docker cp "$c:/tmp/faceops-etcd.db" "$WORK/etcd/snapshot.db" >/dev/null 2>&1; then
     docker exec "$c" rm -f /tmp/faceops-etcd.db 2>/dev/null
     local sz; sz="$(stat -c %s "$WORK/etcd/snapshot.db" 2>/dev/null || echo 0)"
     emit etcd_bytes "$sz"
@@ -327,22 +354,54 @@ backup_tarantool() {
 
   local metodo="copia-direta"
   local disparados=0
+  local travados=0
+  local i=0
+  local inicio_fase; inicio_fase="$(date +%s)"
 
   for c in $conts; do
+    i=$(( i + 1 ))
+
+    # Orcamento da fase inteira. Com 32 instancias, um teto por instancia
+    # nao basta: 32 x 120s daria mais de uma hora so aqui.
+    local gasto=$(( $(date +%s) - inicio_fase ))
+    if [ "$gasto" -ge "$T_FASE_SNAP" ]; then
+      log "  AVISO: orcamento de ${T_FASE_SNAP}s da fase de snapshot esgotado"
+      log "  na instancia $i de $qtd — seguindo com os .snap existentes."
+      travados=$(( travados + (qtd - i + 1) ))
+      break
+    fi
+
+    # Progresso por instancia: uma fase longa precisa parecer longa, e nao
+    # parecer travada. Sem isto, 32 shards viram um "55%" imovel.
+    log "  snapshot $i/$qtd ($c)"
+    emit tarantool_progresso "$i/$qtd"
+
     # box.snapshot() forca um .snap consistente AGORA. tarantoolctl eval
     # roda o codigo no processo sem depender de socket de console.
-    if docker exec -i "$c" tarantoolctl eval /dev/stdin >/dev/null 2>&1 <<'LUAEOF'
+    if com_teto "$T_SNAPSHOT" docker exec -i "$c" tarantoolctl eval /dev/stdin >/dev/null 2>&1 <<'LUAEOF'
 box.snapshot()
 return true
 LUAEOF
     then
       disparados=$(( disparados + 1 ))
       metodo="tarantoolctl-eval"
-    elif docker exec "$c" sh -c 'echo "box.snapshot()" | tarantool' >/dev/null 2>&1; then
+    elif com_teto "$T_SNAPSHOT" docker exec "$c" sh -c 'echo "box.snapshot()" | tarantool' >/dev/null 2>&1; then
       disparados=$(( disparados + 1 ))
       metodo="tarantool-stdin"
+    else
+      # Pode ser instancia sem tarantoolctl, ou instancia que travou no
+      # teto. As duas seguem para a copia direta, que e o plano B.
+      travados=$(( travados + 1 ))
     fi
   done
+
+  emit tarantool_sem_snapshot "$travados"
+
+  if [ "$travados" -gt 0 ]; then
+    log "  AVISO: $travados de $qtd instancia(s) nao produziram snapshot novo"
+    log "  (sem tarantoolctl ou estouro do teto de ${T_SNAPSHOT}s). Para essas,"
+    log "  vale o .snap que o Tarantool ja tinha gravado."
+  fi
 
   if [ "$disparados" -gt 0 ]; then
     log "  box.snapshot() disparado em $disparados de $qtd instancia(s) ($metodo)"
@@ -421,7 +480,7 @@ backup_redis() {
     log "  container: $c"
     # BGSAVE grava em segundo plano; esperamos o rdb_bgsave_in_progress
     # voltar a 0 antes de copiar, senao pegamos arquivo pela metade.
-    if docker exec "$c" redis-cli BGSAVE >/dev/null 2>&1; then
+    if com_teto "$T_SNAPSHOT" docker exec "$c" redis-cli BGSAVE >/dev/null 2>&1; then
       local espera=0
       while [ "$espera" -lt 60 ]; do
         if docker exec "$c" redis-cli INFO persistence 2>/dev/null \

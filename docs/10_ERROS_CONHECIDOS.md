@@ -227,6 +227,30 @@ a sua instalação usa outro caminho, ajuste
 `backup_tarantool()` em `scripts/ffmulti-backup.sh` — e registre aqui o que
 funcionou.
 
+### Backup parado em "Snapshot do Tarantool · 55%"
+
+**Sintoma:** perfil `essencial` no dbserver fica na etapa do Tarantool sem
+avançar nem falhar, por muito tempo.
+
+**Causa:** nenhum comando do `ffmulti-backup.sh` tinha teto de tempo. O
+`box.snapshot()` roda **por instância, em série** — e o dbserver tem 16
+shards + 16 réplicas de `findface-tarantool-server`. Um `docker exec` que
+bloqueia espera para sempre, e a fase inteira fica pendurada. O painel
+ainda falharia no teto global (`backup.timeout_essencial_h`, padrão 2h),
+mas passa duas horas parecendo que está trabalhando.
+
+**Corrigido em 02/09/2026:** cada comando ganhou teto
+(`T_SNAPSHOT=120s` por instância, `T_FASE_SNAP=600s` para a fase toda,
+`T_DUMP=3600s` para dump, `T_RAPIDO=30s` para leitura). Instância que
+estoura o teto vira AVISO e cai na cópia direta do `.snap` existente — que
+é consistente por construção, só pode estar algumas horas atrás. A etapa
+também passou a registrar `snapshot i/N`, para fase longa parecer longa em
+vez de parecer travada.
+
+**Se acontecer de novo:** o botão vermelho de parar funciona — ele fecha o
+canal SSH e derruba o script no servidor. O staging que sobrar é limpo na
+execução seguinte e pela faxina.
+
 ### `checksum nao confere apos a transferencia`
 
 Transferência corrompida. Não é bug do backup: o artefato no servidor estava
