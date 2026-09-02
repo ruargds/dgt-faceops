@@ -628,6 +628,160 @@ async def cenario_notificacao_espera_antes_de_avisar():
     assert len(NS.rotear([regra], destinos, volta)) == 1, "retorno não deveria esperar"
 
 
+async def cenario_parar_servico_tem_cerca_e_confirmacao():
+    """
+    Parar um container é diferente de reiniciar: reiniciar volta sozinho,
+    parar FICA parado. Um `findface-video-worker` parado por descuido é
+    reconhecimento facial fora do ar até alguém notar — e ninguém nota,
+    porque não há erro, só ausência.
+
+    Três garantias, e nenhuma delas pode se perder num refactor:
+    a cerca do projeto compose vale para os três verbos, o plantão não
+    ganha o poder de deixar parado, e `stop` exige o nome digitado.
+    """
+    import inspect
+
+    from app.core.permissions import (
+        DESTRUCTIVE_PERMISSIONS, PERMISSION_CATALOG, ROLE_PERMISSIONS,
+    )
+    from app.services.stack_service import StackService
+
+    # A permissão existe, é destrutiva (auditoria em nível crítico) e o
+    # perfil de plantão NÃO a tem — ele reinicia, não deixa parado.
+    assert "services.power" in PERMISSION_CATALOG
+    assert "services.power" in DESTRUCTIVE_PERMISSIONS
+    assert "services.power" not in ROLE_PERMISSIONS["operador"], (
+        "plantão ganhou o poder de deixar serviço parado"
+    )
+    assert "services.restart" in ROLE_PERMISSIONS["operador"], (
+        "plantão perdeu o reiniciar, que é o que ele precisa"
+    )
+    assert "services.power" in ROLE_PERMISSIONS["tecnico"]
+    assert "services.power" in ROLE_PERMISSIONS["admin"]
+
+    # Os três verbos passam pela MESMA função — logo, pela mesma cerca.
+    # Em funções separadas, a próxima correção de cerca entraria em uma e
+    # faltaria nas outras.
+    assert set(StackService.VERBOS) == {"restart", "stop", "start"}
+    # Só o CORPO, sem a docstring: ela cita as três proteções para
+    # explicá-las, e conferir o texto junto faria a trava passar por
+    # causa da própria explicação — teste que se satisfaz com o comentário
+    # não guarda nada. (Verificado: removendo a cerca do código, esta
+    # asserção falha.)
+    fonte = inspect.getsource(StackService.container_action)
+    corpo = fonte.split('"""')[2] if fonte.count('"""') >= 2 else fonte
+    assert "_garantir_do_projeto" in corpo, "ação sem a cerca do projeto"
+    assert "_recusar_se_limpando" in corpo, (
+        "ação sem a recusa durante limpeza de eventos — o manual da "
+        "NtechLab diz que reiniciar container na limpeza corrompe o banco"
+    )
+    assert "_validar_nome" in corpo, "ação sem validação do nome"
+
+    # E `restart_container` continua existindo, delegando: os chamadores
+    # antigos não podem ter quebrado.
+    assert "container_action" in inspect.getsource(StackService.restart_container)
+
+    # A rota exige o nome digitado para parar, e não para subir.
+    rota = (pathlib.Path(__file__).resolve().parents[1]
+            / "app" / "api" / "routes" / "ops.py").read_text(encoding="utf-8")
+    trecho = rota[rota.index("async def parar_ou_subir_container"):]
+    trecho = trecho[:trecho.index("@router.post", 10)]
+    assert 'dados.acao == "stop" and dados.confirmar.strip() != dados.container' in trecho, (
+        "parar serviço sem confirmação digitada"
+    )
+    assert 'require_permission("services.power")' in trecho
+
+    # O schema só aceita os dois verbos da rota. "restart" aqui seria um
+    # segundo caminho para a mesma ação, com outra permissão.
+    from pydantic import ValidationError
+
+    from app.schemas import PowerContainerIn
+
+    assert PowerContainerIn(container="x", acao="stop").acao == "stop"
+    assert PowerContainerIn(container="x", acao="start").acao == "start"
+    for invalida in ("restart", "kill", "rm", ""):
+        try:
+            PowerContainerIn(container="x", acao=invalida)
+        except ValidationError:
+            continue
+        raise AssertionError(f"aceitou ação inválida: {invalida!r}")
+
+
+async def cenario_historico_do_servico_nao_toca_no_servidor():
+    """
+    O histórico por serviço na tela de Serviços sai da tabela de
+    `incidentes`, que o ciclo do monitor já preenche.
+
+    É o que o torna barato: nenhum SSH, nenhuma tabela nova e nenhuma
+    retenção nova — a de incidentes (padrão 30 dias) já recicla. Abrir a
+    aba não pode virar uma ida ao servidor de produção.
+    """
+    import inspect
+
+    import sqlalchemy as sa
+
+    from app.services.incidente_service import IncidenteService
+
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        host = await com_host(db)
+        servico = IncidenteService(config=ConfigFalsa())
+
+        agora = AGORA
+        db.add_all([
+            Incidente(host_id=host.id, tipo="servico", servico="findface-video-worker",
+                      nivel="critico", texto="o serviço parou",
+                      inicio=agora - timedelta(hours=5),
+                      fim=agora - timedelta(hours=4), duracao_s=3600),
+            Incidente(host_id=host.id, tipo="servico", servico="findface-video-worker",
+                      nivel="atencao", texto="reiniciando em laço",
+                      inicio=agora - timedelta(hours=2),
+                      fim=agora - timedelta(hours=1), duracao_s=3600),
+            Incidente(host_id=host.id, tipo="servico", servico="findface-sf-api",
+                      nivel="critico", texto="o serviço parou",
+                      inicio=agora - timedelta(hours=3),
+                      fim=agora - timedelta(hours=2), duracao_s=3600),
+            # Queda do host inteiro: não é histórico de serviço nenhum.
+            Incidente(host_id=host.id, tipo="host", servico="",
+                      nivel="critico", texto="o servidor não respondeu",
+                      inicio=agora - timedelta(hours=6),
+                      fim=agora - timedelta(hours=5), duracao_s=3600),
+        ])
+        await db.commit()
+
+        # Filtrado por serviço: só as duas daquele serviço.
+        so_dele = await servico.listar_recentes(
+            db, dias=7, host_id=host.id, servico="findface-video-worker"
+        )
+        assert len(so_dele) == 2, so_dele
+        assert all(i["servico"] == "findface-video-worker" for i in so_dele)
+
+        # Serviço que nunca caiu: lista vazia, não a lista inteira. Filtro
+        # que "falha aberto" mostraria a queda de outro serviço na aba
+        # deste — e alguém agiria no serviço errado.
+        assert await servico.listar_recentes(
+            db, dias=7, host_id=host.id, servico="findface-ntls"
+        ) == []
+
+        # Sem filtro, tudo do host continua vindo (a tela de "serviços por
+        # máquina" depende disso).
+        todos = await servico.listar_recentes(db, dias=7, host_id=host.id)
+        assert len(todos) == 4, todos
+
+    await engine.dispose()
+
+    # E a consulta é local. A verificação olha só o CÓDIGO: a docstring
+    # da função fala de SSH justamente para dizer que não usa, e conferir
+    # o texto junto faria o teste falhar por causa da própria explicação.
+    fonte = inspect.getsource(IncidenteService.listar_recentes)
+    corpo = fonte.split('"""')[2] if fonte.count('"""') >= 2 else fonte
+    for proibido in ("ssh", "stack", "docker", "subprocess"):
+        assert proibido not in corpo.lower(), (
+            f"o histórico passou a depender de '{proibido}' — abrir a aba "
+            "voltaria a custar uma ida ao servidor de produção"
+        )
+
+
 async def cenario_faxina_nao_oferece_categoria_que_nao_age():
     """
     `CATEGORIAS_PONTUAIS` é o que a rota aceita e a tela oferece. Cada
@@ -1713,6 +1867,8 @@ CENARIOS = [
     cenario_notificacao_roteia_para_os_destinos_certos,
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
+    cenario_parar_servico_tem_cerca_e_confirmacao,
+    cenario_historico_do_servico_nao_toca_no_servidor,
     cenario_faxina_nao_oferece_categoria_que_nao_age,
     cenario_previa_da_faxina_nao_esconde_categoria,
     cenario_faxina_poupa_execucao_com_artefato,

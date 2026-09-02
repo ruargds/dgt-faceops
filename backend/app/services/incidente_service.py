@@ -320,14 +320,31 @@ class IncidenteService:
             saida.append(_serializar(i, aberto_ha_s=(agora - inicio).total_seconds()))
         return saida
 
-    async def listar_recentes(self, db, dias: int = 3, host_id: int | None = None) -> list[dict]:
-        """Abertos + fechados na janela — para o painel 'serviços por máquina'."""
+    async def listar_recentes(
+        self,
+        db,
+        dias: int = 3,
+        host_id: int | None = None,
+        servico: str | None = None,
+    ) -> list[dict]:
+        """
+        Abertos + fechados na janela — para o painel 'serviços por
+        máquina' e para o histórico de um serviço na tela de Serviços.
+
+        O filtro por serviço existe para a tela de Serviços poder mostrar
+        histórico SEM tocar no servidor: a janela de indisponibilidade já
+        está gravada aqui pelo ciclo do monitor, então é uma consulta
+        local — nenhum SSH, nenhuma tabela nova e nenhuma retenção nova
+        (a de `incidentes` já cobre, padrão 30 dias).
+        """
         desde = datetime.now(timezone.utc) - timedelta(days=max(1, dias))
         condicoes = [
             (Incidente.fim.is_(None)) | (Incidente.fim >= desde),
         ]
         if host_id is not None:
             condicoes.append(Incidente.host_id == host_id)
+        if servico:
+            condicoes.append(Incidente.servico == servico)
         r = await db.execute(
             select(Incidente).where(*condicoes).order_by(Incidente.inicio.desc())
         )

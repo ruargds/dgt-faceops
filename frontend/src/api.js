@@ -201,6 +201,10 @@ export const api = {
   servicos: (id) => get(`/services/${id}`),
   logsContainer: (id, container, linhas = 200) =>
     get(`/services/${id}/logs/${encodeURIComponent(container)}?linhas=${linhas}`),
+  // Parar/subir um container. `confirmar` é o nome do container, exigido
+  // só em "stop": o risco não é errar a ação, é errar qual serviço.
+  powerContainer: (hostId, container, acao, confirmar = "") =>
+    post(`/services/${hostId}/power`, { container, acao, confirmar }),
   reiniciarContainer: (id, container) => post(`/services/${id}/restart`, { container }),
   acaoStack: (id, acao, confirmar_host) => post(`/services/${id}/stack`, { acao, confirmar_host }),
 

@@ -226,6 +226,16 @@ input[type="checkbox"] { width: auto; }
 .form-ajuda {
   font-size: 12px; color: var(--text-3); margin-top: 8px; line-height: 1.5;
 }
+/* Botão que parece texto, para número clicável dentro de tabela. Nasceu
+   na coluna de histórico da tela de Serviços: um <button> é o elemento
+   certo (é ação, não navegação), mas com cara de botão a tabela ficaria
+   com uma parede deles. */
+.link-inline {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer; text-align: left;
+}
+.link-inline:hover { text-decoration: underline; }
+
 /* Barra de filtros. Envolve em várias linhas no notebook e no tablet em
    vez de espremer os campos, e a busca cresce para ocupar o que sobra —
    é ela que recebe texto longo. */

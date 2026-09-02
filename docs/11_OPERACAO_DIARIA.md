@@ -169,6 +169,53 @@ inconsistente entre serviços.
 
 Prefira `restart` a `stop` + `up`: menos tempo fora.
 
+## Agir num serviço, e ver o histórico dele
+
+Cada linha da tela **Serviços** tem quatro ações, na ordem do menos para
+o mais invasivo:
+
+| Ação | O que faz | Quem pode |
+|---|---|---|
+| log | últimas linhas do container | `services.view` |
+| histórico | as quedas dos últimos 7 dias | `metrics.view` |
+| play / stop | sobe ou para **aquele** serviço | `services.power` |
+| Reiniciar | derruba e sobe de novo | `services.restart` |
+
+**Parar pede o nome do container digitado.** O risco aqui não é errar a
+ação, é errar *qual serviço* — digitar o nome prova que o dedo estava na
+linha certa. Subir não pede nada: religar o que estava parado não tem
+como piorar a situação.
+
+E parar um serviço **vai** gerar aviso: o monitor registra a queda como
+qualquer outra e, se houver regra de notificação, manda no Telegram. É o
+comportamento certo — parada planejada que não avisa ninguém é
+indistinguível de queda real para quem está de plantão.
+
+O perfil de plantão (`operador`) **não** tem `services.power`, e isso é
+deliberado: o plantão precisa destravar serviço travado (reiniciar), não
+deixar serviço parado. São riscos de ordem diferente.
+
+### O histórico não custa nada ao servidor
+
+A coluna "Histórico (7d)" e a aba que ela abre saem da tabela de
+`incidentes`, que o ciclo do monitor **já** preenche a cada passada.
+Consequências práticas:
+
+* **nenhum SSH** — abrir o histórico não toca no servidor de produção;
+* **nenhuma tabela nova** e nenhuma retenção nova — a de incidentes
+  (`incidentes.retencao_dias`, padrão 30 dias) já recicla, e a faxina
+  diária já a aplica;
+* **nenhuma requisição extra** — os itens vêm junto com a lista de
+  serviços, então a aba abre instantânea.
+
+Há teste que falha se essa consulta passar a depender de SSH, stack ou
+docker: `historico do servico nao toca no servidor`.
+
+O que **não** está nessa aba: quem parou, subiu ou reiniciou pelo painel.
+Isso é auditoria, tem tela própria com busca e filtro, e repetir aqui
+seria um segundo lugar contando a mesma coisa — que divergiria. O rodapé
+da aba aponta para lá.
+
 ## Espaço em disco — antes de virar incidente
 
 O `data/findface-upload` cresce com cada evento. Em servidor movimentado são

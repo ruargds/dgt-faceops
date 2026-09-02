@@ -9,7 +9,7 @@ from app.core.deps import client_ip, require_permission
 from app.db.database import get_db
 from app.models.host import Host
 from app.models.user import User
-from app.schemas import AcaoContainerIn, AcaoStackIn
+from app.schemas import AcaoContainerIn, AcaoStackIn, PowerContainerIn
 from app.services import audit_service
 from app.services.ssh_service import SSHError
 from app.services.stack_service import StackError
@@ -169,6 +169,63 @@ async def reiniciar_container(
         db,
         usuario=autor.username,
         action="services.restart",
+        target=f"{host.name}/{dados.container}",
+        ip=client_ip(request),
+        detail=saida,
+    )
+    return saida
+
+
+@router.post("/services/{host_id}/power")
+async def parar_ou_subir_container(
+    host_id: int,
+    dados: PowerContainerIn,
+    request: Request,
+    autor: User = Depends(require_permission("services.power")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Para ou sobe UM container do FindFace.
+
+    Separada do `restart` por permissão, e não por capricho: reiniciar
+    volta sozinho, parar FICA parado. Um `findface-video-worker` parado
+    por descuido é reconhecimento fora do ar até alguém notar — e ninguém
+    nota, porque não há erro, só ausência.
+
+    Daí a confirmação digitada em `stop`: o risco aqui não é errar a
+    ação, é errar QUAL serviço. Digitar o nome prova que o dedo estava na
+    linha certa. `start` não pede nada — subir o que estava parado não
+    tem como piorar a situação.
+    """
+    host = await _host_ou_404(db, host_id)
+
+    if dados.acao == "stop" and dados.confirmar.strip() != dados.container:
+        raise HTTPException(
+            status_code=400,
+            detail="para parar um serviço, confirme digitando o nome do "
+                   f"container: '{dados.container}'",
+        )
+
+    try:
+        saida = await request.app.state.stack.container_action(
+            host, dados.container, acao=dados.acao
+        )
+    except (SSHError, StackError) as exc:
+        await audit_service.registrar(
+            db,
+            usuario=autor.username,
+            action="services.power",
+            target=f"{host.name}/{dados.container}",
+            ip=client_ip(request),
+            success=False,
+            detail={"acao": dados.acao, "erro": str(exc)[:500]},
+        )
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="services.power",
         target=f"{host.name}/{dados.container}",
         ip=client_ip(request),
         detail=saida,

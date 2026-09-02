@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { api, formatData } from "../../api";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { api, formatData, formatDuracao } from "../../api";
 import { t } from "../../i18n";
 import { usePermissions } from "../../usePermissions";
 import {
@@ -19,7 +19,124 @@ import {
   IconLogs,
   IconPlay,
   IconStop,
+  IconAuditoria,
 } from "../Icons";
+
+/**
+ * Histórico de quedas de UM serviço.
+ *
+ * Sai da tabela de `incidentes`, que o ciclo do monitor já preenche a
+ * cada passada. Isso é o que torna esta aba barata: ela não abre SSH,
+ * não consulta o servidor e não cria tabela nem retenção nova — a
+ * retenção de incidentes (padrão 30 dias) já recicla. Os itens chegam
+ * junto com a lista de serviços, então abrir aqui é instantâneo e não
+ * faz uma requisição nova.
+ *
+ * O que NÃO está aqui, e por quê: histórico de start/stop manual. Isso é
+ * auditoria, e auditoria tem tela própria, com busca e filtro — repetir
+ * aqui seria um segundo lugar contando a mesma coisa, que divergiria.
+ * O rodapé aponta para lá.
+ */
+function HistoricoServico({ servico, dias, itens, onFechar }) {
+  const fechadas = itens.filter((i) => !i.aberto);
+  const totalFora = itens.reduce((acc, i) => acc + (i.duracao_s || 0), 0);
+  const aberta = itens.find((i) => i.aberto);
+
+  return (
+    <div className="modal-bg" {...fecharSeForaLimpo(onFechar)}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-title mono">{servico.servico}</div>
+            <div className="small muted">
+              {t("Quedas nos últimos")} {dias} {t("dias")} · {t("do histórico do monitor")}
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onFechar}>{t("Fechar")}</button>
+        </div>
+        <div className="modal-body">
+          {itens.length === 0 ? (
+            <Vazio titulo={t("Nenhuma queda registrada")}>
+              <div className="small muted" style={{ marginTop: 6 }}>
+                {t("Este serviço não saiu do ar na janela — ou o monitor ainda não o observou cair.")}
+              </div>
+            </Vazio>
+          ) : (
+            <>
+              <div className="stack-h" style={{ gap: 18, marginBottom: 14, flexWrap: "wrap" }}>
+                <div>
+                  <div className="small muted">{t("Quedas")}</div>
+                  <strong style={{ fontSize: 18 }}>{itens.length}</strong>
+                </div>
+                <div>
+                  <div className="small muted">{t("Tempo fora somado")}</div>
+                  <strong style={{ fontSize: 18 }}>{formatDuracao(totalFora)}</strong>
+                </div>
+                <div>
+                  <div className="small muted">{t("Já normalizadas")}</div>
+                  <strong style={{ fontSize: 18 }}>{fechadas.length}</strong>
+                </div>
+              </div>
+
+              {aberta && (
+                <div
+                  className="card card-tight"
+                  style={{ background: "var(--red-bg)", borderColor: "var(--red-bd)", marginBottom: 14 }}
+                >
+                  <span className="small" style={{ color: "var(--red-fg)" }}>
+                    <IconAlerta size={13} /> {t("Está fora agora, desde")}{" "}
+                    {formatData(aberta.inicio)}
+                    {aberta.duracao_s ? ` (${formatDuracao(aberta.duracao_s)})` : ""}
+                  </span>
+                </div>
+              )}
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t("Caiu")}</th>
+                      <th>{t("Voltou")}</th>
+                      <th className="right">{t("Ficou fora")}</th>
+                      <th>{t("O que foi")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itens.map((i) => (
+                      <tr key={i.id}>
+                        <td className="small">{formatData(i.inicio)}</td>
+                        <td className="small">
+                          {i.fim ? (
+                            formatData(i.fim)
+                          ) : (
+                            <span className="pill pill-err">{t("ainda fora")}</span>
+                          )}
+                        </td>
+                        <td className="right mono small">{formatDuracao(i.duracao_s)}</td>
+                        <td className="small">
+                          {i.texto}
+                          {i.causa_provavel && (
+                            <div className="muted" style={{ marginTop: 2 }}>
+                              {i.causa_provavel}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          <div className="small muted" style={{ marginTop: 12 }}>
+            {t("Quem parou, subiu ou reiniciou este serviço pelo painel fica em Auditoria, com busca e filtro. Aqui só o que o monitor observou.")}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ServicosView({ alvo }) {
   const { has } = usePermissions();
@@ -32,6 +149,16 @@ export default function ServicosView({ alvo }) {
   const [logs, setLogs] = useState(null);
   const [acaoStack, setAcaoStack] = useState(null);
   const [aviso, setAviso] = useState("");
+  // Histórico de indisponibilidade do host, para a coluna e a aba de
+  // histórico por serviço. Vem da tabela de incidentes, que o ciclo do
+  // monitor já preenche: nenhum SSH, nenhuma tabela nova e nenhuma
+  // retenção nova — `incidentes.retencao_dias` (padrão 30) já limpa.
+  const [historico, setHistorico] = useState([]);
+  const [verHistorico, setVerHistorico] = useState(null);
+  const [parando, setParando] = useState(null);
+  const [confirmarParada, setConfirmarParada] = useState(null);
+
+  const JANELA_DIAS = 7;
 
   // Chegou de um atalho de alerta ("ir para Serviços") — abre já no host
   // certo, em vez do primeiro host ativo que useHosts escolheria sozinho.
@@ -44,7 +171,14 @@ export default function ServicosView({ alvo }) {
     setCarregando(true);
     setErro("");
     try {
-      setDados(await api.servicos(hostId));
+      // Duas chamadas em paralelo: os serviços (que abrem SSH) e o
+      // histórico (consulta local). O histórico não atrasa a tela.
+      const [servicos, inc] = await Promise.all([
+        api.servicos(hostId),
+        api.incidentesRecentes(JANELA_DIAS, hostId).catch(() => ({ incidentes: [] })),
+      ]);
+      setDados(servicos);
+      setHistorico(inc.incidentes || []);
     } catch (ex) {
       setErro(ex.message);
       setDados(null);
@@ -52,6 +186,22 @@ export default function ServicosView({ alvo }) {
       setCarregando(false);
     }
   }, [hostId]);
+
+  // Resumo por serviço, calculado uma vez. Sem isto, cada linha da
+  // tabela varreria o histórico inteiro a cada render.
+  const resumoPorServico = useMemo(() => {
+    const mapa = new Map();
+    for (const i of historico) {
+      if (i.tipo !== "servico" || !i.servico) continue;
+      const atual = mapa.get(i.servico) || { quedas: 0, fora_s: 0, aberto: false, ultima: null };
+      atual.quedas += 1;
+      atual.fora_s += i.duracao_s || 0;
+      atual.aberto = atual.aberto || i.aberto;
+      if (!atual.ultima || i.inicio > atual.ultima) atual.ultima = i.inicio;
+      mapa.set(i.servico, atual);
+    }
+    return mapa;
+  }, [historico]);
 
   useEffect(() => {
     if (hostId) carregar();
@@ -69,6 +219,26 @@ export default function ServicosView({ alvo }) {
       setErro(ex.message);
     } finally {
       setReiniciando(null);
+    }
+  }
+
+  async function power(container, acao, confirmar = "") {
+    setParando(container);
+    setAviso("");
+    setErro("");
+    try {
+      const r = await api.powerContainer(hostId, container, acao, confirmar);
+      setAviso(
+        acao === "stop"
+          ? `${container} parado — estado atual: ${r.estado}. O monitor vai registrar isto como queda.`
+          : `${container} iniciado — estado atual: ${r.estado}.`,
+      );
+      await carregar();
+    } catch (ex) {
+      setErro(ex.message);
+      throw ex;
+    } finally {
+      setParando(null);
     }
   }
 
@@ -152,6 +322,9 @@ export default function ServicosView({ alvo }) {
                   <th>{t("Saúde")}</th>
                   <th className="right">{t("Reinícios")}</th>
                   <th>{t("Desde")}</th>
+                  <th title={t("Quedas registradas nos últimos 7 dias")}>
+                    {t("Histórico (7d)")}
+                  </th>
                   <th style={{ width: 1 }}></th>
                 </tr>
               </thead>
@@ -208,6 +381,33 @@ export default function ServicosView({ alvo }) {
                       </span>
                     </td>
                     <td className="small muted">{formatData(s.iniciado_em)}</td>
+                    <td className="small">
+                      {(() => {
+                        const h = resumoPorServico.get(s.servico);
+                        if (!h) {
+                          return (
+                            <span className="muted" title={t("Nenhuma queda registrada na janela")}>
+                              {t("estável")}
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            type="button"
+                            className="link-inline"
+                            onClick={() => setVerHistorico(s)}
+                            title={t("Ver as quedas deste serviço")}
+                          >
+                            <strong style={{ color: h.quedas > 3 ? "var(--red)" : "var(--amber)" }}>
+                              {h.quedas}×
+                            </strong>
+                            {h.fora_s > 0 && (
+                              <span className="muted"> · {formatDuracao(h.fora_s)} {t("fora")}</span>
+                            )}
+                          </button>
+                        );
+                      })()}
+                    </td>
                     <td>
                       <div className="stack-h" style={{ gap: 6, flexWrap: "nowrap" }}>
                         <button
@@ -217,6 +417,37 @@ export default function ServicosView({ alvo }) {
                         >
                           <IconLogs size={14} />
                         </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setVerHistorico(s)}
+                          title={t("Histórico de quedas deste serviço")}
+                        >
+                          <IconAuditoria size={14} />
+                        </button>
+                        {/* Parar e subir. Job não entra: ele roda na
+                            subida e sai — "parar" um job concluído não
+                            significa nada. */}
+                        {has("services.power") && !s.e_job && (
+                          s.estado === "running" ? (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setConfirmarParada(s)}
+                              disabled={parando === s.nome}
+                              title={t("Parar este serviço")}
+                            >
+                              <IconStop size={13} />
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => power(s.nome, "start").catch(() => {})}
+                              disabled={parando === s.nome}
+                              title={t("Subir este serviço")}
+                            >
+                              {parando === s.nome ? "…" : <IconPlay size={13} />}
+                            </button>
+                          )
+                        )}
                         {has("services.restart") && !s.e_job && (
                           <button
                             className="btn btn-secondary btn-sm"
@@ -234,6 +465,34 @@ export default function ServicosView({ alvo }) {
             </table>
           </div>
         </div>
+      )}
+
+      {verHistorico && (
+        <HistoricoServico
+          servico={verHistorico}
+          dias={JANELA_DIAS}
+          itens={historico.filter(
+            (i) => i.tipo === "servico" && i.servico === verHistorico.servico,
+          )}
+          onFechar={() => setVerHistorico(null)}
+        />
+      )}
+
+      {confirmarParada && (
+        <ConfirmarDigitando
+          titulo={`${t("Parar")} ${confirmarParada.servico}`}
+          aviso={
+            `Isto PARA o container ${confirmarParada.nome} e ele FICA parado — ` +
+            "reiniciar volta sozinho, parar não. " +
+            "O monitor vai registrar como queda e, se houver regra de aviso, " +
+            "mandar no Telegram. Para subir de novo, use o botão de play na " +
+            "mesma linha."
+          }
+          palavra={confirmarParada.nome}
+          rotuloBotao={t("Parar serviço")}
+          onConfirmar={(texto) => power(confirmarParada.nome, "stop", texto)}
+          onFechar={() => setConfirmarParada(null)}
+        />
       )}
 
       {logs && (

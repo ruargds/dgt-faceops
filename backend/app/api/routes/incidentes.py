@@ -25,12 +25,19 @@ async def recentes(
     request: Request,
     dias: int = Query(default=3, ge=1, le=30),
     host_id: int | None = Query(default=None),
+    servico: str | None = Query(default=None, max_length=120),
     _: User = Depends(require_permission("metrics.view")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Abertos + fechados na janela — para 'serviços por máquina' mostrar quem já voltou."""
+    """
+    Abertos + fechados na janela — para 'serviços por máquina' mostrar
+    quem já voltou, e para o histórico de um serviço na tela de Serviços.
+
+    Consulta local: a janela já foi gravada pelo ciclo do monitor. Abrir
+    este histórico não abre SSH nenhum.
+    """
     return {
         "incidentes": await request.app.state.incidentes.listar_recentes(
-            db, dias=dias, host_id=host_id
+            db, dias=dias, host_id=host_id, servico=servico
         )
     }

@@ -15,6 +15,7 @@ PERMISSION_CATALOG: dict[str, str] = {
     # Serviços do FindFace
     "services.view": "Ver status dos containers do FindFace Multi",
     "services.restart": "Reiniciar um container individual",
+    "services.power": "Parar ou subir um container individual",
     "services.stack": "Parar/subir o stack inteiro do FindFace Multi",
     # Manutenção de disco e log
     "maintenance.view": "Ver diagnóstico de disco e crescimento de log",
@@ -43,6 +44,11 @@ PERMISSION_CATALOG: dict[str, str] = {
 # registro de auditoria com nível "critical".
 DESTRUCTIVE_PERMISSIONS: frozenset[str] = frozenset({
     "services.stack",
+    # Parar um serviço é diferente de reiniciar: reiniciar volta sozinho,
+    # parar FICA parado. Um `findface-video-worker` parado por descuido é
+    # reconhecimento facial fora do ar até alguém perceber — e ninguém
+    # percebe, porque não há erro, só ausência.
+    "services.power",
     # Escreve configuração de sistema em servidor de produção e reinicia
     # rsyslog/journald. Não derruba o FindFace, mas merece rastro forte.
     "maintenance.apply",
@@ -74,6 +80,10 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
     "tecnico": VIEW_ONLY + [
         "maintenance.apply",
         "services.restart",
+        # Deliberadamente FORA do perfil "operador": o plantão precisa
+        # destravar serviço travado (reiniciar), não deixar serviço
+        # parado. São riscos de ordem diferente.
+        "services.power",
         "backups.run",
         "backups.download",
         "destinations.manage",

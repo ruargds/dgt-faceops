@@ -474,21 +474,49 @@ echo "{SEP}END"
                 "durante a limpeza corrompe o banco. Espere terminar."
             )
 
-    async def restart_container(self, host, container: str, timeout_s: int = 60) -> dict:
-        """Reinicia um container. Ação de menor risco — resolve a maioria."""
+    # Verbo do Docker e o quanto esperar por cada um. `stop` dá o prazo
+    # de parada graciosa ao container e só então mata; `start` não espera
+    # nada além de subir o processo.
+    VERBOS = {
+        "restart": ("restart", True),
+        "stop": ("stop", True),
+        "start": ("start", False),
+    }
+
+    async def container_action(
+        self, host, container: str, acao: str = "restart", timeout_s: int = 60
+    ) -> dict:
+        """
+        Reinicia, para ou sobe UM container do projeto do FindFace.
+
+        Os três verbos vivem na mesma função de propósito: a cerca
+        (`_garantir_do_projeto`), a recusa durante limpeza de eventos e a
+        leitura do estado final são idênticas nos três casos. Em funções
+        separadas, a próxima correção de cerca entraria em uma e faltaria
+        nas outras duas.
+        """
+        verbo_info = self.VERBOS.get(acao)
+        if verbo_info is None:
+            raise StackError(f"ação inválida: {acao}")
+        verbo, usa_timeout = verbo_info
+
         self._recusar_se_limpando(host)
         _validar_nome(container)
+        # Vale para `start` também: `docker inspect` responde sobre
+        # container parado, então a cerca continua de pé para subir algo.
         await self._garantir_do_projeto(host, container)
 
+        prazo = f" -t {int(timeout_s)}" if usa_timeout else ""
         r = await self.ssh.run(
             host,
-            f"docker restart -t {int(timeout_s)} {shlex.quote(container)}",
+            f"docker {verbo}{prazo} {shlex.quote(container)}",
             sudo=True,
             timeout=timeout_s + 60,
         )
         if not r.ok:
             raise StackError(
-                f"falha ao reiniciar '{container}': {(r.stderr or r.stdout)[:400]}"
+                f"falha ao executar '{acao}' em '{container}': "
+                f"{(r.stderr or r.stdout)[:400]}"
             )
 
         estado = await self.ssh.run(
@@ -501,10 +529,17 @@ echo "{SEP}END"
         partes = estado.stdout.strip().split("|")
         return {
             "container": container,
+            "acao": acao,
             "estado": partes[0] if partes else "desconhecido",
             "saude": partes[1] if len(partes) > 1 and partes[1] != "<no value>" else None,
             "duracao_ms": r.duration_ms,
         }
+
+    async def restart_container(self, host, container: str, timeout_s: int = 60) -> dict:
+        """Reinicia um container. Ação de menor risco — resolve a maioria."""
+        return await self.container_action(
+            host, container, acao="restart", timeout_s=timeout_s
+        )
 
     async def stack_action(self, host, acao: str) -> dict:
         """

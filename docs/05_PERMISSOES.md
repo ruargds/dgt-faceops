@@ -85,6 +85,7 @@ Tudo do catálogo, inclusive:
 | `hosts.manage` | Cadastrar, editar e remover servidores (inclui credenciais) |
 | `metrics.view` | Ver RAM, GPU, disco e carga |
 | `services.view` | Ver status dos containers do FindFace Multi |
+| `services.power` | parar ou subir **um** container. Separada do restart de propósito: reiniciar volta sozinho, parar FICA parado — e serviço parado por descuido não gera erro, só ausência. Destrutiva (auditoria em nível crítico), exige o nome do container digitado, e **fora do perfil de plantão** |
 | `services.restart` | Reiniciar um container individual |
 | `services.stack` | Parar/subir o stack inteiro |
 | `backups.view` | Ver histórico e artefatos |

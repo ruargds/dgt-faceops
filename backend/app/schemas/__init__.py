@@ -161,6 +161,21 @@ class HostOut(BaseModel):
     tem_api: bool = False
 
 
+class PowerContainerIn(BaseModel):
+    """Parar ou subir um container. `confirmar` só é exigido em `stop`."""
+
+    container: str = Field(min_length=1, max_length=255)
+    acao: str = "stop"
+    confirmar: str = ""
+
+    @field_validator("acao")
+    @classmethod
+    def _validar_acao(cls, v: str) -> str:
+        if v not in ("stop", "start"):
+            raise ValueError("acao deve ser 'stop' ou 'start'")
+        return v
+
+
 class ScanChaveIn(BaseModel):
     address: str = Field(min_length=1, max_length=255)
     ssh_port: int = Field(default=22, ge=1, le=65535)
