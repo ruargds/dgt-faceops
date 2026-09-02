@@ -64,6 +64,23 @@ def _causa_provavel(d: dict) -> str:
     return ""
 
 
+def _causa_do_erro(erro: str) -> str:
+    """
+    A causa provável do host sem comunicação, a partir do erro REAL.
+
+    Antes era uma frase fixa — "rede fora, VM desligada ou parada" — que
+    mandava conferir rede mesmo quando o servidor tinha RECUSADO a
+    conexão, que é o oposto: nesse caso a máquina está de pé e o SSH é
+    que não está.
+    """
+    from app.services import erros_conexao
+
+    info = erros_conexao.explicar(erro or "")
+    if info["conhecido"] and info["significa"]:
+        return f"{info['resumo'].lower()} — {info['significa']}"
+    return "rede fora, VM desligada ou parada — confira o provedor antes de investigar o painel."
+
+
 def _texto_doente(nome: str, d: dict) -> str:
     """
     O que aconteceu, em palavras que significam algo para quem não opera
@@ -168,6 +185,7 @@ class IncidenteService:
         doentes: list[dict],
         reinicios: dict | None = None,
         agora: datetime | None = None,
+        erro: str = "",
     ) -> list[dict]:
         """
         Chamado uma vez por host a cada ciclo do monitor, depois da
@@ -200,7 +218,7 @@ class IncidenteService:
                 # servidor se trata, e repetir dava "vm-x — sem comunicação
                 # com vm-x" na tela e no aviso.
                 "texto": "o servidor não respondeu ao monitoramento",
-                "causa": "rede fora, VM desligada ou parada — confira o provedor antes de investigar o painel.",
+                "causa": _causa_do_erro(erro),
                 "significa": (
                     "Nada pode ser verificado nesta máquina agora — "
                     "inclusive o FindFace, que pode estar rodando normal. "

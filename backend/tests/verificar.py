@@ -701,6 +701,157 @@ async def cenario_apuracao_correlaciona_pico_de_recurso():
     await engine.dispose()
 
 
+async def cenario_erro_de_conexao_diz_onde_procurar():
+    """
+    "[Errno 111] Connection refused" está tecnicamente correto e é inútil
+    às 3h da manhã. Pior: os três erros mais comuns têm causas OPOSTAS e
+    a mesma cara de "não conectou".
+
+    Recusado = a máquina respondeu, o SSH é que não está de pé.
+    Timeout   = ninguém respondeu; é rede ou VM fora.
+    Negado    = conectou e autenticou errado; é credencial.
+
+    Mandar conferir a rede quando o problema é o `sshd` parado custa o
+    dobro do tempo — e é o que uma mensagem sem tradução faz.
+    """
+    from app.services.erros_conexao import explicar, mensagem
+
+    recusado = explicar("[Errno 111] Connection refused")
+    assert recusado["conhecido"]
+    assert "recusou" in recusado["resumo"].lower(), recusado
+    # A distinção que importa: é serviço, não rede.
+    assert "ssh" in recusado["significa"].lower(), recusado
+    assert "systemctl" in recusado["acao"], recusado
+
+    tempo = explicar("SSHError: timed out")
+    assert tempo["conhecido"]
+    assert "não respondeu" in tempo["resumo"].lower(), tempo
+    # E aqui é o contrário: rede/VM, não serviço.
+    assert "rede" in tempo["significa"].lower(), tempo
+
+    # Os dois NÃO podem dar a mesma resposta — é o ponto todo.
+    assert recusado["resumo"] != tempo["resumo"]
+    assert recusado["acao"] != tempo["acao"]
+
+    negado = explicar("Permission denied (publickey)")
+    assert "login" in negado["resumo"].lower(), negado
+    assert "credencial" in negado["significa"].lower(), negado
+
+    chave = explicar("HostKeyNotVerifiable: host key mismatch")
+    assert "identidade" in chave["resumo"].lower(), chave
+    # Identidade trocada tem de levantar a hipótese de ataque, e não só
+    # mandar recadastrar: é o mesmo sintoma dos dois casos.
+    assert "investigue" in chave["acao"].lower(), chave
+
+    # Erro desconhecido NÃO ganha explicação inventada. Vazio é honesto;
+    # um palpite com cara de diagnóstico manda procurar no lugar errado.
+    novo = explicar("QuicheError: algo que ninguém viu ainda")
+    assert not novo["conhecido"]
+    assert novo["significa"] == "" and novo["acao"] == "", novo
+    # E o texto original nunca some: quem investiga precisa dele.
+    assert "QuicheError" in novo["erro"]
+
+    assert "QuicheError" in mensagem("vm-x", "QuicheError: algo")
+    assert "recusou" in mensagem("vm-x", "[Errno 111] Connection refused").lower()
+
+    # A causa do incidente de host usa isto — antes era uma frase fixa
+    # mandando conferir a rede, inclusive quando a máquina tinha
+    # RECUSADO a conexão, que é o oposto.
+    from app.services.incidente_service import _causa_do_erro
+
+    assert "ssh" in _causa_do_erro("[Errno 111] Connection refused").lower()
+    assert "rede" in _causa_do_erro("").lower()
+
+
+async def cenario_acoes_rapidas_nao_sao_shell_remoto():
+    """
+    Um campo de comando livre no cartão do servidor seria um shell remoto
+    sem gravação — e o InTerminal já faz isso, com sessão gravada em
+    asciicast para auditoria.
+
+    Então: catálogo FIXO, comando que nunca vem da requisição, permissão
+    declarada por ação e confirmação digitada nas destrutivas.
+    """
+    import inspect
+
+    from app.core.permissions import (
+        DESTRUCTIVE_PERMISSIONS, PERMISSION_CATALOG, ROLE_PERMISSIONS,
+        permissions_for,
+    )
+    from app.services.comandos_rapidos import COMANDOS, catalogo
+
+    # Toda ação declara tudo o que a rota precisa para decidir.
+    for chave, info in COMANDOS.items():
+        for campo in ("rotulo", "ajuda", "comando", "sudo", "permissao",
+                      "destrutivo", "confirmar", "derruba", "timeout"):
+            assert campo in info, f"{chave}: falta '{campo}'"
+        assert info["permissao"] in PERMISSION_CATALOG, (
+            f"{chave} exige permissão inexistente: {info['permissao']}"
+        )
+        assert len(info["ajuda"]) > 40, f"{chave}: ajuda curta demais"
+        assert 0 < info["timeout"] <= 600, f"{chave}: timeout fora de faixa"
+        # Destrutiva SEM confirmação seria um clique sem volta.
+        if info["destrutivo"]:
+            assert info["confirmar"], f"{chave} é destrutiva e não confirma"
+
+    # `shutdown` fica de fora: uma VM desligada não volta pelo painel —
+    # sem SSH, não há como alcançá-la. Botão cuja consequência o painel
+    # não desfaz é armadilha.
+    todos = " ".join(i["comando"] for i in COMANDOS.values())
+    assert "shutdown -h" not in todos and "poweroff" not in todos, todos
+
+    # Reiniciar não usa `reboot` direto: ele mata a sessão SSH antes de
+    # responder, e a rota diria que falhou algo que funcionou.
+    assert "systemd-run" in COMANDOS["reiniciar"]["comando"]
+    assert COMANDOS["reiniciar"]["derruba"] is True
+
+    # Reiniciar a VM é só do admin — é mais amplo que parar o stack.
+    assert COMANDOS["reiniciar"]["permissao"] == "hosts.reboot"
+    assert "hosts.reboot" in DESTRUCTIVE_PERMISSIONS
+    for perfil in ("observador", "operador", "tecnico"):
+        assert "hosts.reboot" not in permissions_for(perfil), (
+            f"{perfil} pode reiniciar servidor de produção"
+        )
+    assert "hosts.reboot" in permissions_for("admin")
+
+    # As de leitura NÃO alteram estado. Um comando de consulta que mexe
+    # em alguma coisa é a pior surpresa possível.
+    for chave, info in COMANDOS.items():
+        if info["destrutivo"]:
+            continue
+        for perigoso in ("rm ", "restart", "stop ", "reboot", "kill ", "> /", "mkfs"):
+            assert perigoso not in info["comando"], (
+                f"{chave} é marcada como não-destrutiva e roda '{perigoso}'"
+            )
+
+    # O catálogo servido à tela NÃO leva o comando: a tela não precisa
+    # dele para desenhar um botão, e publicá-lo só ensinaria o que colar
+    # num terminal.
+    for item in catalogo(set(PERMISSION_CATALOG)):
+        assert "comando" not in item, item
+
+    # E filtra por permissão: quem não pode, não vê.
+    so_leitura = catalogo(permissions_for("observador"))
+    chaves = {i["chave"] for i in so_leitura}
+    assert "reiniciar" not in chaves and "reiniciar_docker" not in chaves, chaves
+    assert chaves, "observador ficou sem nenhuma ação de consulta"
+
+    # A rota nunca aceita comando pelo corpo — só a chave, pela URL.
+    fonte = (pathlib.Path(__file__).resolve().parents[1]
+             / "app" / "api" / "routes" / "hosts.py").read_text(encoding="utf-8")
+    trecho = fonte[fonte.index("async def executar_comando"):]
+    trecho = trecho[:trecho.index("return {")]
+    assert "COMANDOS.get(chave)" in trecho, trecho
+    assert "dados.comando" not in trecho, "a rota aceita comando do cliente"
+    assert 'info["confirmar"]' in trecho, "a rota ignora a confirmação"
+
+    from app.schemas import ComandoRapidoIn
+
+    assert set(ComandoRapidoIn.model_fields) == {"confirmar"}, (
+        "o corpo da requisição ganhou campo além da confirmação"
+    )
+
+
 async def cenario_sessao_cai_parada_e_tem_teto():
     """
     Duas regras, e a diferença entre elas é o ponto:
@@ -2495,6 +2646,8 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_erro_de_conexao_diz_onde_procurar,
+    cenario_acoes_rapidas_nao_sao_shell_remoto,
     cenario_sessao_cai_parada_e_tem_teto,
     cenario_perfis_descrevem_o_que_cada_um_pode,
     cenario_chave_fraca_impede_a_subida,

@@ -491,6 +491,34 @@ export default function ServicosView({ alvo }) {
             )}
           </div>
 
+          {/* Tabela vazia NÃO é "sem novidade": com `docker ps -a`, até
+              container parado apareceria. Zero linhas significa que não
+              existe container nenhum com o rótulo deste projeto — eles
+              foram REMOVIDOS, não parados. A tela precisa dizer isso e o
+              que fazer, senão parece que o painel não conseguiu ler. */}
+          {dados.servicos.length === 0 ? (
+            <Vazio titulo={t("Nenhum container existe neste projeto")}>
+              <div className="small muted" style={{ marginTop: 8, maxWidth: 680 }}>
+                {t("O painel conversou com o Docker e ele respondeu: não há container algum com o rótulo")}{" "}
+                <span className="mono">{dados.projeto}</span>.{" "}
+                {t("Parado apareceria aqui — a lista inclui container desligado. Vazio significa removido.")}
+              </div>
+              <div className="small muted" style={{ marginTop: 10, maxWidth: 680 }}>
+                <strong>{t("Causas prováveis")}:</strong>
+                <ul style={{ margin: "6px 0 0 18px", padding: 0 }}>
+                  <li>{t("alguém rodou 'docker compose down', que remove os containers em vez de parar")}</li>
+                  <li>
+                    {t("o disco onde o Docker guarda os dados não montou depois da queda — o compose vive em")}{" "}
+                    <span className="mono">{dados.arquivo || "/media/STORAGE"}</span>.{" "}
+                    {t("Nesse caso o Docker sobe vazio, e 'Subir stack' vai tentar baixar as imagens de novo.")}
+                  </li>
+                </ul>
+              </div>
+              <div className="small muted" style={{ marginTop: 10 }}>
+                {t("Antes de subir, confira a montagem em Manutenção → Diagnóstico. Subir com o disco desmontado recria o stack no lugar errado.")}
+              </div>
+            </Vazio>
+          ) : (
           <div className="table-wrap">
             <table>
               <thead>
@@ -642,6 +670,7 @@ export default function ServicosView({ alvo }) {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
 

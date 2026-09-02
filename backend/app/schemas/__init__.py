@@ -161,6 +161,12 @@ class HostOut(BaseModel):
     tem_api: bool = False
 
 
+class ComandoRapidoIn(BaseModel):
+    """`confirmar` é o nome do servidor, exigido nas ações destrutivas."""
+
+    confirmar: str = ""
+
+
 class PowerContainerIn(BaseModel):
     """Parar ou subir um container. `confirmar` só é exigido em `stop`."""
 

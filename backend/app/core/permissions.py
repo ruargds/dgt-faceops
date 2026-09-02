@@ -10,6 +10,7 @@ PERMISSION_CATALOG: dict[str, str] = {
     # Hosts
     "hosts.view": "Ver servidores cadastrados",
     "hosts.manage": "Cadastrar, editar e remover servidores (inclui credenciais)",
+    "hosts.reboot": "Reiniciar o servidor inteiro",
     # Métricas
     "metrics.view": "Ver RAM, GPU, disco e carga",
     # Serviços do FindFace
@@ -44,6 +45,9 @@ PERMISSION_CATALOG: dict[str, str] = {
 # registro de auditoria com nível "critical".
 DESTRUCTIVE_PERMISSIONS: frozenset[str] = frozenset({
     "services.stack",
+    # Reiniciar a VM é mais amplo que parar o stack: derruba o
+    # reconhecimento, o SSH e o próprio caminho de volta até ela subir.
+    "hosts.reboot",
     # Parar um serviço é diferente de reiniciar: reiniciar volta sozinho,
     # parar FICA parado. Um `findface-video-worker` parado por descuido é
     # reconhecimento facial fora do ar até alguém perceber — e ninguém
@@ -144,6 +148,10 @@ PERMISSION_INFO: dict[str, tuple[str, str]] = {
     "hosts.manage": ("servidores",
                      "Cadastrar, editar e remover servidor — inclusive trocar a chave "
                      "SSH e a senha de sudo. Na prática é acesso root aos servidores."),
+    "hosts.reboot": ("servidores",
+                     "Reiniciar a máquina inteira. Derruba o reconhecimento, o "
+                     "SSH e o próprio caminho de volta até ela subir — é mais "
+                     "amplo que parar o stack."),
     "metrics.view": ("monitoramento",
                      "Ver CPU, memória, disco, GPU, incidentes e diagnóstico."),
     "services.view": ("monitoramento",

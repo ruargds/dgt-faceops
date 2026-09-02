@@ -205,6 +205,7 @@ class MonitorService:
         doentes: list[dict],
         reinicios: dict | None = None,
         containers: dict | None = None,
+        erro: str = "",
     ) -> None:
         """
         Abre/fecha incidente a partir do que este ciclo já leu — sem SSH
@@ -215,7 +216,8 @@ class MonitorService:
             return
         try:
             eventos = await self.incidentes.registrar_ciclo(
-                db, host, host_ok=host_ok, doentes=doentes, reinicios=reinicios,
+                db, host, host_ok=host_ok, doentes=doentes,
+                reinicios=reinicios, erro=erro,
             )
         except Exception:
             log.exception("falha ao registrar incidente do host %s", host.id)
@@ -270,13 +272,23 @@ class MonitorService:
             amostra.erro = str(exc)[:255]
             self._ultimo_erro[host.id] = amostra.erro
             db.add(amostra)
-            await self._registrar_incidentes(db, host, host_ok=False, doentes=[])
+            # O erro REAL vai junto: é ele que distingue "recusou a
+            # conexão" (sshd parado) de "não respondeu" (rede/VM fora) —
+            # causas opostas com a mesma cara.
+            await self._registrar_incidentes(
+                db, host, host_ok=False, doentes=[], erro=amostra.erro,
+            )
             return
         except Exception as exc:
             amostra.erro = f"{type(exc).__name__}: {exc}"[:255]
             self._ultimo_erro[host.id] = amostra.erro
             db.add(amostra)
-            await self._registrar_incidentes(db, host, host_ok=False, doentes=[])
+            # O erro REAL vai junto: é ele que distingue "recusou a
+            # conexão" (sshd parado) de "não respondeu" (rede/VM fora) —
+            # causas opostas com a mesma cara.
+            await self._registrar_incidentes(
+                db, host, host_ok=False, doentes=[], erro=amostra.erro,
+            )
             return
 
         self._ultimo_erro.pop(host.id, None)

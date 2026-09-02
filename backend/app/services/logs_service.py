@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 
 import asyncssh
 
+from app.services import erros_conexao
 from app.services.ssh_service import SSHError
 
 # Nome de container: o que o Docker aceita, e nada além. O valor vai para
@@ -74,7 +75,9 @@ class SessaoLog:
                 "sessao de log recusada."
             ) from exc
         except (OSError, asyncssh.Error) as exc:
-            raise SSHError(f"nao consegui abrir sessao em '{self.host.name}': {exc}") from exc
+            raise SSHError(
+                erros_conexao.mensagem(self.host.rotulo, exc)
+            ) from exc
 
         tail = max(0, min(int(self.tail), 5000))
         # 2>&1 porque muita aplicação escreve o log estruturado em stderr

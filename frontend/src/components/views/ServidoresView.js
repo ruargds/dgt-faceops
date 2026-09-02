@@ -15,6 +15,92 @@ const PAPEIS = [
   { id: "outro", nome: "Outro" },
 ];
 
+/**
+ * Ações rápidas de um servidor.
+ *
+ * Catálogo FIXO vindo do backend, filtrado pela permissão de quem olha.
+ * Não existe caixa de comando aqui de propósito: comando livre já existe
+ * no InTerminal, que abre sessão real e GRAVA tudo. Uma caixa no cartão
+ * seria o mesmo poder com menos rastro.
+ *
+ * As destrutivas pedem o nome do servidor digitado — o risco não é errar
+ * a ação, é errar em QUAL máquina.
+ */
+function AcoesRapidas({ host }) {
+  const [itens, setItens] = useState(null);
+  const [saida, setSaida] = useState(null);
+  const [rodando, setRodando] = useState("");
+  const [confirmar, setConfirmar] = useState(null);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    api.comandosDoHost(host.id).then((r) => setItens(r.itens)).catch(() => setItens([]));
+  }, [host.id]);
+
+  async function executar(item, texto = "") {
+    setRodando(item.chave);
+    setErro("");
+    setSaida(null);
+    try {
+      const r = await api.executarComando(host.id, item.chave, texto);
+      setSaida(r);
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setRodando("");
+    }
+  }
+
+  if (!itens || itens.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+      <div className="small muted" style={{ marginBottom: 6 }}>
+        {t("Ações rápidas")}
+      </div>
+      <div className="stack-h" style={{ gap: 6, flexWrap: "wrap" }}>
+        {itens.map((item) => (
+          <button
+            key={item.chave}
+            type="button"
+            className={`btn btn-sm ${item.destrutivo ? "btn-danger" : "btn-secondary"}`}
+            title={item.ajuda}
+            disabled={Boolean(rodando)}
+            onClick={() => (item.confirmar ? setConfirmar(item) : executar(item))}
+          >
+            {rodando === item.chave ? "…" : t(item.rotulo)}
+          </button>
+        ))}
+      </div>
+
+      <Erro mensagem={erro} />
+
+      {saida && (
+        <div style={{ marginTop: 8 }}>
+          <div className="small muted" style={{ marginBottom: 4 }}>
+            {saida.rotulo}
+            {saida.derruba && ` — ${t("a máquina vai cair em alguns segundos")}`}
+          </div>
+          <div className="log" style={{ maxHeight: 220 }}>
+            {saida.saida || t("(sem saída)")}
+          </div>
+        </div>
+      )}
+
+      {confirmar && (
+        <ConfirmarDigitando
+          titulo={`${t(confirmar.rotulo)} — ${host.rotulo || host.name}`}
+          aviso={confirmar.ajuda}
+          palavra={host.name}
+          rotuloBotao={t(confirmar.rotulo)}
+          onConfirmar={(texto) => executar(confirmar, texto)}
+          onFechar={() => setConfirmar(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function ServidoresView({ alvo }) {
   const { has } = usePermissions();
   const [lista, setLista] = useState([]);
@@ -184,10 +270,30 @@ export default function ServidoresView({ alvo }) {
                         )}
                       </div>
                     ) : (
-                      <div className="small" style={{ color: "var(--red-fg)" }}>{teste.erro}</div>
+                      <div className="small" style={{ color: "var(--red-fg)" }}>
+                        {/* Com causa e ação, não só o erro do sistema:
+                            "Connection refused" e "timed out" parecem o
+                            mesmo problema e têm causas OPOSTAS — um é o
+                            SSH parado, o outro é rede. Mandar conferir a
+                            rede no primeiro caso custa o dobro do tempo. */}
+                        <strong>{teste.resumo || teste.erro}</strong>
+                        {teste.significa && (
+                          <div style={{ marginTop: 4, opacity: 0.92 }}>{teste.significa}</div>
+                        )}
+                        {teste.acao && (
+                          <div style={{ marginTop: 4, opacity: 0.85 }}>{teste.acao}</div>
+                        )}
+                        {teste.resumo && teste.erro && (
+                          <div className="mono" style={{ marginTop: 4, fontSize: 11, opacity: 0.7 }}>
+                            {teste.erro}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
+
+                <AcoesRapidas host={h} />
 
                 <div className="stack-h" style={{ gap: 6 }}>
                   <button

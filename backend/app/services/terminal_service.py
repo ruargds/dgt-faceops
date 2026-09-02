@@ -24,6 +24,7 @@ from pathlib import Path
 import asyncssh
 
 from app.core.config import settings
+from app.services import erros_conexao
 from app.services.ssh_service import SSHError
 
 log = logging.getLogger("faceops.terminal")
@@ -144,7 +145,21 @@ class SessaoTerminal:
                 "sessao recusada."
             ) from exc
         except (OSError, asyncssh.Error) as exc:
-            raise SSHError(f"nao foi possivel abrir sessao em '{self.host.name}': {exc}") from exc
+            # Traduzido: "[Errno 111] Connection refused" está correto e
+            # não ajuda ninguém às 3h. Os três erros mais comuns têm
+            # causas OPOSTAS e a mesma cara — e mandar conferir a rede
+            # quando o problema é o sshd parado custa o dobro do tempo.
+            info = erros_conexao.explicar(exc)
+            partes = [
+                f"não consegui abrir sessão em '{self.host.rotulo}': "
+                f"{info['resumo'].lower()}"
+            ]
+            if info["significa"]:
+                partes.append(info["significa"])
+            if info["acao"]:
+                partes.append(info["acao"])
+            partes.append(f"(erro do sistema: {info['erro']})")
+            raise SSHError(" ".join(partes)) from exc
         finally:
             # Autenticou ou não, a senha digitada não tem mais uso. Some da
             # memória do painel antes de qualquer outra coisa acontecer.

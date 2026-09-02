@@ -8,12 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.rede_segura import DestinoRecusado, validar_url
-from app.core.deps import client_ip, require_permission
+from app.services.comandos_rapidos import COMANDOS, catalogo
+from app.core.permissions import permissions_for
+from app.core.deps import get_current_user, client_ip, require_permission
 from app.core.vault import encrypt_secret, fingerprint
 from app.db.database import get_db
 from app.models.host import Host
 from app.models.user import User
-from app.schemas import HostIn, HostOut, HostUpdate, ScanChaveIn, ScanChaveOut
+from app.schemas import ComandoRapidoIn, HostIn, HostOut, HostUpdate, ScanChaveIn, ScanChaveOut
 from app.services import audit_service
 from app.services.ssh_service import SSHError
 
@@ -372,7 +374,18 @@ async def testar(
             success=False,
             detail={"erro": mensagem[:500]},
         )
-        return {"ok": False, "erro": mensagem}
+        # Com causa e ação: "Connection refused" e "timed out" parecem o
+        # mesmo problema e apontam para lados opostos — um é o SSH parado
+        # na máquina, o outro é rede ou VM fora. Devolver só o erro do
+        # sistema manda a pessoa procurar no lugar errado metade das vezes.
+        explicado = erros_conexao.explicar(mensagem)
+        return {
+            "ok": False,
+            "erro": mensagem,
+            "resumo": explicado["resumo"] if explicado["conhecido"] else "",
+            "significa": explicado["significa"],
+            "acao": explicado["acao"],
+        }
 
 
 class TestarApiIn(BaseModel):
@@ -465,3 +478,106 @@ async def testar_api(
         }
     except FFApiError as exc:
         return {"ok": False, "erro": str(exc), "origem": origem}
+
+
+@router.get("/{host_id}/comandos")
+async def comandos_disponiveis(
+    host_id: int,
+    autor: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """As ações rápidas que ESTE usuário pode disparar neste servidor."""
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    return {"itens": catalogo(permissions_for(autor.role, autor.is_super_admin))}
+
+
+@router.post("/{host_id}/comandos/{chave}")
+async def executar_comando(
+    host_id: int,
+    chave: str,
+    dados: ComandoRapidoIn,
+    request: Request,
+    autor: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dispara uma ação do catálogo fixo.
+
+    A chave vem da URL, mas o COMANDO vem do catálogo em código — nunca
+    do corpo da requisição. É a diferença entre um botão e um shell
+    remoto: aqui não existe caminho pelo qual um comando arbitrário
+    chegue ao servidor. Para comando arbitrário existe o InTerminal, que
+    grava a sessão inteira.
+    """
+    info = COMANDOS.get(chave)
+    if info is None:
+        raise HTTPException(status_code=404, detail=f"ação desconhecida: {chave}")
+
+    permissoes = permissions_for(autor.role, autor.is_super_admin)
+    if info["permissao"] not in permissoes:
+        raise HTTPException(
+            status_code=403,
+            detail=f"esta ação exige a permissão '{info['permissao']}'",
+        )
+
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    # Confirmação digitada nas destrutivas: o risco não é errar a ação, é
+    # errar QUAL servidor. Digitar o nome prova que o dedo estava certo.
+    if info["confirmar"] and dados.confirmar.strip() != host.name:
+        raise HTTPException(
+            status_code=400,
+            detail=f"confirme digitando o nome do servidor: '{host.name}'",
+        )
+
+    ssh = request.app.state.ssh
+    try:
+        r = await ssh.run(
+            host, info["comando"], sudo=info["sudo"], timeout=info["timeout"]
+        )
+        saida = (r.stdout or r.stderr or "").strip()
+        ok = r.ok
+    except (SSHError, Exception) as exc:  # noqa: B014
+        if info["derruba"]:
+            # A conexão cair FAZ PARTE do sucesso quando a ação derruba a
+            # máquina. Tratar isso como falha diria que não funcionou algo
+            # que funcionou — e alguém clicaria de novo.
+            saida = "a conexão caiu, como esperado nesta ação"
+            ok = True
+        else:
+            await audit_service.registrar(
+                db, usuario=autor.username, action="hosts.comando",
+                target=f"{host.name}/{chave}", ip=client_ip(request),
+                success=False, detail={"erro": str(exc)[:400]},
+            )
+            raise HTTPException(status_code=502, detail=str(exc)[:400]) from exc
+
+    if info["derruba"]:
+        # Sessão em cache aponta para uma máquina que vai sumir. Sem
+        # descartar, a próxima operação esperaria num socket morto.
+        await ssh.disconnect(host_id)
+
+    await audit_service.registrar(
+        db,
+        usuario=autor.username,
+        action="hosts.comando",
+        target=f"{host.name}/{chave}",
+        ip=client_ip(request),
+        success=ok,
+        detail={"acao": info["rotulo"], "destrutivo": info["destrutivo"]},
+    )
+
+    return {
+        "chave": chave,
+        "rotulo": info["rotulo"],
+        "ok": ok,
+        # Teto de saída: isto é resposta de botão, não tela de log. O log
+        # inteiro tem lugar próprio.
+        "saida": saida[:6000],
+        "derruba": info["derruba"],
+    }

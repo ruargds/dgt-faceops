@@ -430,6 +430,12 @@ export const api = {
   politicaSessao: () => get("/auth/sessao"),
   renovarSessao: () => post("/auth/renovar", {}),
   perfis: () => get("/auth/perfis"),
+  // Ações rápidas: o catálogo vem sem os comandos, e a execução manda só
+  // a CHAVE. Comando arbitrário tem lugar próprio — o InTerminal, que
+  // grava a sessão inteira.
+  comandosDoHost: (hostId) => get(`/hosts/${hostId}/comandos`),
+  executarComando: (hostId, chave, confirmar = "") =>
+    post(`/hosts/${hostId}/comandos/${chave}`, { confirmar }),
   auditoria: (params = "") => get(`/auditoria${params}`),
   filtrosAuditoria: (dias = 90) => get(`/auditoria/filtros?dias=${dias}`),
   resumoAuditoria: () => get("/auditoria/resumo"),
