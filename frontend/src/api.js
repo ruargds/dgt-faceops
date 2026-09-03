@@ -179,6 +179,21 @@ export async function enviarLogo(tipo, arquivo) {
   return request(`/marca/${tipo}`, { method: "POST", body: forma });
 }
 
+/**
+ * Período para a query: janela relativa ou intervalo absoluto.
+ *
+ * Os dois formatos existem porque as perguntas são diferentes — "as
+ * últimas 6 horas" acompanha o tempo passando, "a madrugada de terça"
+ * fica parada onde está. Mandar os dois seria ambíguo, então o absoluto
+ * ganha quando existe, igual ao que o servidor faz.
+ */
+function consultaPeriodo(periodo) {
+  if (periodo && periodo.de && periodo.ate) {
+    return `de=${encodeURIComponent(periodo.de)}&ate=${encodeURIComponent(periodo.ate)}`;
+  }
+  return `horas=${(periodo && periodo.horas) || 6}`;
+}
+
 export const api = {
   // Autenticação
   login: (username, password) => post("/auth/login", { username, password }),
@@ -353,10 +368,10 @@ export const api = {
   // Crescimento — consumo que sobe sem parar. As três primeiras leem só
   // o banco (a série que o coletor já gravou); `crescimentoRastrear` é a
   // única que abre SSH, e por isso é POST e só roda no clique.
-  crescimentoAnalise: (hostId, horas) =>
-    get(`/crescimento/analise/${hostId}${horas ? `?horas=${horas}` : ""}`),
-  crescimentoContainers: (hostId, horas = 6, limite = 24) =>
-    get(`/crescimento/containers/${hostId}?horas=${horas}&limite=${limite}`),
+  crescimentoAnalise: (hostId, periodo) =>
+    get(`/crescimento/analise/${hostId}?${consultaPeriodo(periodo)}`),
+  crescimentoContainers: (hostId, periodo, limite = 24) =>
+    get(`/crescimento/containers/${hostId}?${consultaPeriodo(periodo)}&limite=${limite}`),
   crescimentoVigilancias: (hostId, dias = 7) =>
     get(`/crescimento?dias=${dias}${hostId ? `&host_id=${hostId}` : ""}`),
   crescimentoRastrear: (id) => post(`/crescimento/${id}/rastrear`, {}),

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api";
-import { Carregando, Erro, SeletorHost, useHosts } from "../Comuns";
+import {
+  Carregando, Erro, SeletorHost, SeletorPeriodo, useHosts,
+} from "../Comuns";
 import { GraficoMultiLinha, corDaSerie } from "../Graficos";
 import { IconAlerta, IconAtualizar, IconFechar, IconOk, IconTendencia } from "../Icons";
 
@@ -44,18 +46,6 @@ const REGIME = {
   recuando: "recuando",
   indeterminado: "sem tendência",
 };
-
-// Sete dias é a retenção padrão da série por container — oferecer "30
-// dias" abriria uma janela que o banco não tem, e a tela mostraria menos
-// do que o botão promete.
-const JANELAS = [
-  { rotulo: "1h", horas: 1 },
-  { rotulo: "6h", horas: 6 },
-  { rotulo: "12h", horas: 12 },
-  { rotulo: "24h", horas: 24 },
-  { rotulo: "3d", horas: 72 },
-  { rotulo: "7d", horas: 168 },
-];
 
 function mb(valor) {
   if (valor === null || valor === undefined) return "—";
@@ -312,7 +302,9 @@ export default function CrescimentoView() {
   const { hosts, hostId, setHostId, carregando: carregandoHosts } = useHosts(true);
   const [analise, setAnalise] = useState(null);
   const [containers, setContainers] = useState(null);
-  const [horas, setHoras] = useState(6);
+  // Janela relativa por padrão; vira {de, ate} quando alguém fixa um
+  // intervalo. Ver SeletorPeriodo.
+  const [periodo, setPeriodo] = useState({ horas: 6 });
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [rastreando, setRastreando] = useState(0);
@@ -320,7 +312,7 @@ export default function CrescimentoView() {
   const [destaque, setDestaque] = useState("");
   const [aberto, setAberto] = useState("");
   const [filtro, setFiltro] = useState("");
-  const [ordem, setOrdem] = useState("mb_por_h");
+  const [ordem, setOrdem] = useState({ campo: "mb_por_h", desc: true });
 
   const carregar = useCallback(async () => {
     if (!hostId) return;
@@ -328,8 +320,8 @@ export default function CrescimentoView() {
     setErro("");
     try {
       const [a, c] = await Promise.all([
-        api.crescimentoAnalise(hostId, horas),
-        api.crescimentoContainers(hostId, horas),
+        api.crescimentoAnalise(hostId, periodo),
+        api.crescimentoContainers(hostId, periodo),
       ]);
       setAnalise(a);
       setContainers(c);
@@ -338,7 +330,7 @@ export default function CrescimentoView() {
     } finally {
       setCarregando(false);
     }
-  }, [hostId, horas]);
+  }, [hostId, periodo]);
 
   // Lê do banco, não do servidor: abrir a tela e trocar o período são
   // baratos, então carregam sozinhos. O que custa SSH aqui é só o
@@ -376,10 +368,22 @@ export default function CrescimentoView() {
     const lista = alvo
       ? series.filter((s) => s.nome.toLowerCase().includes(alvo))
       : series;
-    const ordenadas = [...lista];
-    ordenadas.sort((a, b) => (b[ordem] || 0) - (a[ordem] || 0));
-    return ordenadas;
+    const sinal = ordem.desc ? -1 : 1;
+    return [...lista].sort((a, b) => {
+      if (ordem.campo === "nome") return sinal * a.nome.localeCompare(b.nome);
+      return sinal * ((Number(a[ordem.campo]) || 0) - (Number(b[ordem.campo]) || 0));
+    });
   }, [series, filtro, ordem]);
+
+  // Clicar na mesma coluna inverte; clicar noutra começa do maior, que é
+  // o que quase sempre se procura numa tabela de consumo.
+  const ordenarPor = (campo) =>
+    setOrdem((antes) =>
+      antes.campo === campo ? { campo, desc: !antes.desc } : { campo, desc: true },
+    );
+
+  const seta = (campo) =>
+    ordem.campo === campo ? (ordem.desc ? " ↓" : " ↑") : "";
 
   const paraGrafico = useMemo(
     () =>
@@ -427,22 +431,23 @@ export default function CrescimentoView() {
         </div>
         <div className="page-actions">
           <SeletorHost hosts={hosts} hostId={hostId} onMudar={setHostId} />
-          <div className="stack-h" style={{ gap: 4 }}>
-            {JANELAS.map((j) => (
-              <button
-                key={j.horas}
-                className={`btn btn-sm ${horas === j.horas ? "btn-primary" : "btn-ghost"}`}
-                onClick={() => setHoras(j.horas)}
-                title={`Analisar as últimas ${j.rotulo}`}
-              >
-                {j.rotulo}
-              </button>
-            ))}
-          </div>
           <button className="btn btn-ghost" onClick={carregar} disabled={carregando}>
             <IconAtualizar size={15} /> Recarregar
           </button>
         </div>
+      </div>
+
+      <div className="card card-tight" style={{ marginBottom: 14 }}>
+        <SeletorPeriodo
+          valor={periodo}
+          onMudar={setPeriodo}
+          disponivelDesde={
+            (containers && containers.mais_antiga) ||
+            (analise && analise.mais_antiga)
+          }
+          retencaoDias={containers && containers.retencao_dias}
+          rotuloDado="série por container"
+        />
       </div>
 
       <Erro mensagem={erro} onTentar={carregar} />
@@ -500,7 +505,7 @@ export default function CrescimentoView() {
                   series={paraGrafico}
                   visiveis={visiveis}
                   destaque={destaque || aberto}
-                  altura={240}
+                  altura={300}
                 />
 
                 <div
@@ -530,6 +535,9 @@ export default function CrescimentoView() {
                         }}
                       />
                       <span className="mono">{curto(s.nome)}</span>
+                      <span className="small muted" style={{ marginLeft: 6 }}>
+                        {mb(s.atual_mb)}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -557,15 +565,19 @@ export default function CrescimentoView() {
             <div className="card">
               <div className="stat-top" style={{ marginBottom: 8 }}>
                 <div style={{ fontWeight: 600 }}>Containers, um a um</div>
-                <div className="stack-h" style={{ gap: 4 }}>
+                <div className="stack-h" style={{ gap: 4, flexWrap: "wrap" }}>
                   <span className="small muted">ordenar por</span>
                   {COLUNAS.map(([chave, rotulo]) => (
                     <button
                       key={chave}
-                      className={`btn btn-sm ${ordem === chave ? "btn-primary" : "btn-ghost"}`}
-                      onClick={() => setOrdem(chave)}
+                      className={`btn btn-sm ${
+                        ordem.campo === chave ? "btn-primary" : "btn-ghost"
+                      }`}
+                      onClick={() => ordenarPor(chave)}
+                      title={`Ordenar por ${rotulo.toLowerCase()} — clique de novo para inverter`}
                     >
                       {rotulo}
+                      {seta(chave)}
                     </button>
                   ))}
                 </div>
@@ -575,15 +587,27 @@ export default function CrescimentoView() {
                 <table className="tabela-densa">
                   <thead>
                     <tr>
-                      <th>Container</th>
-                      <th style={{ textAlign: "right" }}>Agora</th>
-                      <th style={{ textAlign: "right" }}>Mínimo</th>
-                      <th style={{ textAlign: "right" }}>Média</th>
-                      <th style={{ textAlign: "right" }}>Pico</th>
-                      <th style={{ textAlign: "right" }}>Na janela</th>
-                      <th style={{ textAlign: "right" }}>Ritmo</th>
-                      <th style={{ textAlign: "right" }}>CPU</th>
-                      <th style={{ textAlign: "right" }}>Amostras</th>
+                      {[
+                        ["nome", "Container", "left"],
+                        ["atual_mb", "Agora", "right"],
+                        ["minimo_mb", "Mínimo", "right"],
+                        ["media_mb", "Média", "right"],
+                        ["pico_mb", "Pico", "right"],
+                        ["variacao_mb", "Na janela", "right"],
+                        ["mb_por_h", "Ritmo", "right"],
+                        ["cpu_pct", "CPU", "right"],
+                        ["amostras", "Amostras", "right"],
+                      ].map(([campo, rotulo, lado]) => (
+                        <th
+                          key={campo}
+                          onClick={() => ordenarPor(campo)}
+                          style={{ textAlign: lado, cursor: "pointer", userSelect: "none" }}
+                          title="Clique para ordenar; de novo para inverter"
+                        >
+                          {rotulo}
+                          {seta(campo)}
+                        </th>
+                      ))}
                       <th />
                     </tr>
                   </thead>

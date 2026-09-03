@@ -260,46 +260,149 @@ export const PALETA = [
 export const corDaSerie = (i) => PALETA[i % PALETA.length];
 
 /**
+ * Escala vertical com marcas redondas.
+ *
+ * `max * 1,1` dava eixos com "3847 MB" escrito no meio — número que
+ * ninguém lê e que não ajuda a comparar. Aqui o topo sobe até o próximo
+ * valor redondo (1, 2 ou 5 vezes potência de dez), que é como todo
+ * gráfico de operação se lê.
+ */
+function escalaBonita(maximo, divisoes = 4) {
+  if (!isFinite(maximo) || maximo <= 0) return { topo: 1, passo: 0.25 };
+  const bruto = maximo / divisoes;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const normalizado = bruto / magnitude;
+  const passo =
+    (normalizado <= 1 ? 1 : normalizado <= 2 ? 2 : normalizado <= 5 ? 5 : 10) *
+    magnitude;
+  return { topo: Math.ceil(maximo / passo) * passo, passo };
+}
+
+// Degraus do eixo do tempo, em milissegundos. O eixo escolhe o primeiro
+// que couber em ~5 marcas — sem isso, uma janela de um ano ganharia marca
+// de minuto em minuto, e uma de dez minutos, marca de dia.
+const DEGRAUS_MS = [
+  60e3, 5 * 60e3, 15 * 60e3, 30 * 60e3, 3600e3, 3 * 3600e3, 6 * 3600e3,
+  12 * 3600e3, 86400e3, 2 * 86400e3, 7 * 86400e3, 14 * 86400e3,
+  30 * 86400e3, 90 * 86400e3, 180 * 86400e3, 365 * 86400e3,
+];
+
+function marcasDeTempo(t0, t1, alvo = 5) {
+  const span = Math.max(1, t1 - t0);
+  const passo =
+    DEGRAUS_MS.find((d) => span / d <= alvo) || DEGRAUS_MS[DEGRAUS_MS.length - 1];
+  // Alinha a primeira marca ao passo, em hora local: marca em "14:00" se
+  // lê; em "14:07" não.
+  const inicio = Math.ceil(t0 / passo) * passo;
+  const marcas = [];
+  for (let t = inicio; t <= t1; t += passo) marcas.push(t);
+  return { marcas, passo };
+}
+
+function rotuloDeTempo(ms, passo) {
+  const d = new Date(ms);
+  if (passo < 3600e3) {
+    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+  if (passo < 86400e3) {
+    // Meia-noite ganha a data: senão o dia vira quando ninguém percebe.
+    return d.getHours() === 0
+      ? d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+      : d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+  if (passo < 30 * 86400e3) {
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  }
+  return d.toLocaleDateString("pt-BR", { month: "2-digit", year: "2-digit" });
+}
+
+/**
+ * Largura real do elemento, medida.
+ *
+ * O gráfico antigo desenhava num viewBox fixo de 800 e esticava com
+ * `preserveAspectRatio="none"`. Isso deformava tudo que não fosse linha —
+ * texto e círculo saíam achatados — e obrigava a pôr os rótulos como HTML
+ * por cima. Medindo a largura, o SVG passa a ser desenhado no tamanho que
+ * ele realmente tem, e traço, fonte e ponto ficam proporcionais em
+ * qualquer tela.
+ */
+function useLargura(ref, padrao = 760) {
+  const [largura, setLargura] = React.useState(padrao);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const medir = () => setLargura(Math.max(320, el.clientWidth || padrao));
+    medir();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", medir);
+      return () => window.removeEventListener("resize", medir);
+    }
+    const observador = new ResizeObserver(medir);
+    observador.observe(el);
+    return () => observador.disconnect();
+  }, [ref, padrao]);
+  return largura;
+}
+
+/**
  * Várias séries num gráfico só — o "quem está comendo a RAM".
  *
- * `series` = [{nome, cor, pontos: [{ts, valor}]}]. Cada série desenha uma
- * linha; quem está fora de `visiveis` some do desenho sem sumir da lista,
- * porque esconder é filtro de leitura, não exclusão de dado.
+ * `series` = [{nome, cor, pontos: [{ts, valor}]}]. Quem está fora de
+ * `visiveis` some do desenho sem sumir da lista: esconder é filtro de
+ * leitura, não exclusão de dado.
  *
- * Duas diferenças em relação ao `GraficoLinha`, e as duas vêm da natureza
+ * Três diferenças em relação ao `GraficoLinha`, e as três vêm da natureza
  * do dado:
  *
- * * **eixo Y em MB, com máximo calculado.** Aqui não há teto de 100%: o
- *   que importa é comparar containers entre si, e uma escala fixa
- *   achataria todo mundo contra o chão por causa do maior.
+ * * **eixo Y calculado, não fixo em 100%.** Aqui não há teto: o que
+ *   importa é comparar containers entre si, e escala fixa achataria todo
+ *   mundo contra o chão por causa do maior.
  * * **sem preenchimento de área.** Doze áreas translúcidas empilhadas
  *   viram uma mancha; linha limpa é o que deixa cruzar as curvas.
+ * * **buraco de coleta não vira reta.** Quando o intervalo entre dois
+ *   pontos passa de 2,5x o normal da série, a linha é interrompida — o
+ *   painel esteve fora, e desenhar a reta ali inventaria uma medição que
+ *   ninguém fez.
  *
- * O eixo do tempo é comum a todas: cada série pode ter começado em
- * momento diferente (container que subiu depois), então a posição
- * horizontal vem do carimbo, não do índice do ponto.
+ * O cursor mostra os valores daquele instante, ordenados do maior para o
+ * menor: é a pergunta que se faz olhando um gráfico com muitas linhas —
+ * "às 3h da manhã, quem estava por cima?".
  */
 export function GraficoMultiLinha({
   series,
-  altura = 220,
+  altura = 260,
   unidade = " MB",
   visiveis = null,
   destaque = "",
   formatar = null,
+  aoClicar = null,
 }) {
-  const L = 44, R = 10, T = 10, B = 20;
-  const W = 800;
-  const H = altura;
-  const areaW = W - L - R;
-  const areaH = H - T - B;
+  const caixa = React.useRef(null);
+  const largura = useLargura(caixa);
+  const [cursor, setCursor] = React.useState(null);
 
   const ativas = (series || []).filter(
     (s) => (!visiveis || visiveis.has(s.nome)) && s.pontos && s.pontos.length,
   );
 
+  // Proporção: cresce com a largura até um teto, e nunca fica mais baixo
+  // que o pedido. Numa tela de 1080p o gráfico ganha altura em vez de
+  // virar uma tira; no celular, não estoura a dobra.
+  const H = Math.round(
+    Math.min(Math.max(largura * 0.34, altura), altura * 1.7),
+  );
+  const L = 58, R = 16, T = 14, B = 28;
+  const areaW = Math.max(10, largura - L - R);
+  const areaH = Math.max(10, H - T - B);
+
+  const formatarValor =
+    formatar ||
+    ((v) => (v >= 1024 ? `${(v / 1024).toFixed(1)} GB` : `${Math.round(v)}${unidade}`));
+
   if (!ativas.length) {
     return (
       <div
+        ref={caixa}
         className="small muted"
         style={{
           height: altura,
@@ -315,100 +418,210 @@ export function GraficoMultiLinha({
     );
   }
 
-  const carimbos = ativas.flatMap((s) =>
-    s.pontos.map((p) => new Date(p.ts).getTime()),
-  );
+  const carimbos = ativas.flatMap((s) => s.pontos.map((p) => +new Date(p.ts)));
   const t0 = Math.min(...carimbos);
   const t1 = Math.max(...carimbos);
-  const spanMs = Math.max(1, t1 - t0);
+  const span = Math.max(1, t1 - t0);
 
-  const topo = Math.max(...ativas.flatMap((s) => s.pontos.map((p) => p.valor)));
-  // Uma folga de 10% no topo evita a linha do maior colar na borda, onde
-  // ela some contra o quadro.
-  const maximo = topo > 0 ? topo * 1.1 : 1;
+  const pico = Math.max(...ativas.flatMap((s) => s.pontos.map((p) => p.valor)));
+  const { topo, passo } = escalaBonita(pico);
 
-  const px = (ts) => L + ((new Date(ts).getTime() - t0) / spanMs) * areaW;
-  const py = (v) => T + areaH - (Math.min(Math.max(v, 0), maximo) / maximo) * areaH;
+  const px = (ts) => L + ((+new Date(ts) - t0) / span) * areaW;
+  const py = (v) => T + areaH - (Math.min(Math.max(v, 0), topo) / topo) * areaH;
 
-  // O formatador padrão é o de memória (MB que vira GB). CPU e outras
-  // unidades passam o seu — sem isso, "42%" viraria "0.0 GB" no eixo.
-  const formatarValor =
-    formatar ||
-    ((v) => (v >= 1024 ? `${(v / 1024).toFixed(1)} GB` : `${Math.round(v)}${unidade}`));
+  // Cadência típica da série, para saber o que é buraco. Mediana, não
+  // média: um único buraco enorme puxaria a média e esconderia os outros.
+  const intervalos = [];
+  const maisLonga = ativas.reduce(
+    (a, b) => (b.pontos.length > a.pontos.length ? b : a),
+    ativas[0],
+  );
+  for (let i = 1; i < maisLonga.pontos.length; i++) {
+    intervalos.push(+new Date(maisLonga.pontos[i].ts) - +new Date(maisLonga.pontos[i - 1].ts));
+  }
+  intervalos.sort((a, b) => a - b);
+  const cadencia = intervalos.length ? intervalos[Math.floor(intervalos.length / 2)] : 0;
+  const limiteBuraco = cadencia > 0 ? cadencia * 2.5 : Infinity;
 
-  const formatarHora = (ms) => {
-    const d = new Date(ms);
-    if (spanMs <= 36 * 3600e3) {
-      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    }
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const { marcas, passo: passoTempo } = marcasDeTempo(t0, t1);
+
+  const marcasY = [];
+  for (let v = 0; v <= topo + passo / 2; v += passo) marcasY.push(v);
+
+  const caminho = (pontos) => {
+    let d = "";
+    let anterior = null;
+    pontos.forEach((p) => {
+      const atual = +new Date(p.ts);
+      const salto = anterior !== null && atual - anterior > limiteBuraco;
+      d += `${!d || salto ? "M" : "L"} ${px(p.ts).toFixed(1)},${py(p.valor).toFixed(1)} `;
+      anterior = atual;
+    });
+    return d.trim();
   };
 
-  const marcasY = [0, 0.25, 0.5, 0.75, 1].map((f) => ({
-    y: py(maximo * f),
-    texto: formatarValor(maximo * f),
-  }));
+  // ── Cursor ─────────────────────────────────────────────────────────
+  const aoMover = (evento) => {
+    const caixaSvg = evento.currentTarget.getBoundingClientRect();
+    const x = evento.clientX - caixaSvg.left;
+    if (x < L || x > largura - R) return setCursor(null);
+    const alvo = t0 + ((x - L) / areaW) * span;
 
-  const marcasX = [0, 0.5, 1].map((f) => ({
-    x: L + f * areaW,
-    texto: formatarHora(t0 + f * spanMs),
-    ancora: f === 0 ? "start" : f === 1 ? "end" : "middle",
-  }));
+    const leituras = ativas
+      .map((s) => {
+        let melhor = null;
+        let distancia = Infinity;
+        s.pontos.forEach((p) => {
+          const d = Math.abs(+new Date(p.ts) - alvo);
+          if (d < distancia) {
+            distancia = d;
+            melhor = p;
+          }
+        });
+        // Ponto longe demais não é leitura daquele instante: a série
+        // estava fora do ar ali, e mostrar o vizinho seria inventar.
+        if (!melhor || distancia > Math.max(limiteBuraco, span / areaW * 8)) return null;
+        return { nome: s.nome, cor: s.cor, valor: melhor.valor, ts: melhor.ts };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.valor - a.valor);
+
+    setCursor(leituras.length ? { x, alvo, leituras } : null);
+  };
+
+  const ladoDireito = cursor && cursor.x > largura * 0.55;
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      style={{ width: "100%", height: altura, display: "block" }}
-      role="img"
-      aria-label={`Memória por container: ${ativas.length} série(s)`}
-    >
-      {marcasY.map((m, i) => (
-        <g key={`y${i}`}>
-          <line
-            x1={L} x2={W - R} y1={m.y} y2={m.y}
-            stroke="var(--border)" strokeWidth="1" strokeDasharray="2 4"
-          />
-          <text
-            x={L - 6} y={m.y + 3} textAnchor="end"
-            style={{ fontSize: 9, fill: "var(--text-3)" }}
-          >
-            {m.texto}
-          </text>
-        </g>
-      ))}
+    <div ref={caixa} style={{ position: "relative", width: "100%" }}>
+      <svg
+        width={largura}
+        height={H}
+        viewBox={`0 0 ${largura} ${H}`}
+        style={{ display: "block", cursor: aoClicar ? "pointer" : "crosshair" }}
+        onMouseMove={aoMover}
+        onMouseLeave={() => setCursor(null)}
+        role="img"
+        aria-label={`${ativas.length} série(s), pico de ${formatarValor(pico)}`}
+      >
+        {marcasY.map((v) => (
+          <g key={`y${v}`}>
+            <line
+              x1={L} x2={largura - R} y1={py(v)} y2={py(v)}
+              stroke="var(--border)" strokeWidth="1"
+              strokeDasharray={v === 0 ? undefined : "2 4"}
+            />
+            <text
+              x={L - 8} y={py(v) + 3} textAnchor="end"
+              style={{ fontSize: 10, fill: "var(--text-3)" }}
+            >
+              {formatarValor(v)}
+            </text>
+          </g>
+        ))}
 
-      {marcasX.map((m, i) => (
-        <text
-          key={`x${i}`}
-          x={m.x} y={H - 5} textAnchor={m.ancora}
-          style={{ fontSize: 9, fill: "var(--text-3)" }}
+        {marcas.map((ms) => (
+          <g key={`x${ms}`}>
+            <line
+              x1={px(ms)} x2={px(ms)} y1={T} y2={T + areaH}
+              stroke="var(--border)" strokeWidth="1" strokeDasharray="2 6"
+              opacity="0.6"
+            />
+            <text
+              x={px(ms)} y={H - 8} textAnchor="middle"
+              style={{ fontSize: 10, fill: "var(--text-3)" }}
+            >
+              {rotuloDeTempo(ms, passoTempo)}
+            </text>
+          </g>
+        ))}
+
+        {ativas.map((s) => {
+          const apagada = destaque && destaque !== s.nome;
+          return (
+            <path
+              key={s.nome}
+              d={caminho(s.pontos)}
+              fill="none"
+              stroke={s.cor}
+              strokeWidth={destaque === s.nome ? 2.4 : 1.5}
+              strokeOpacity={apagada ? 0.18 : 0.95}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          );
+        })}
+
+        {cursor && (
+          <>
+            <line
+              x1={cursor.x} x2={cursor.x} y1={T} y2={T + areaH}
+              stroke="var(--text-3)" strokeWidth="1" strokeDasharray="3 3"
+            />
+            {cursor.leituras.map((l) => (
+              <circle
+                key={l.nome}
+                cx={px(l.ts)} cy={py(l.valor)} r="3"
+                fill="var(--white)" stroke={l.cor} strokeWidth="2"
+              />
+            ))}
+          </>
+        )}
+      </svg>
+
+      {cursor && (
+        <div
+          style={{
+            position: "absolute",
+            top: 8,
+            left: ladoDireito ? undefined : cursor.x + 14,
+            right: ladoDireito ? largura - cursor.x + 14 : undefined,
+            background: "var(--white)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius)",
+            padding: "6px 8px",
+            fontSize: 11,
+            pointerEvents: "none",
+            boxShadow: "0 4px 14px rgba(0,0,0,.18)",
+            maxWidth: 320,
+            zIndex: 2,
+          }}
         >
-          {m.texto}
-        </text>
-      ))}
-
-      {ativas.map((s) => {
-        const d = s.pontos
-          .map((p, i) => `${i === 0 ? "M" : "L"} ${px(p.ts).toFixed(1)},${py(p.valor).toFixed(1)}`)
-          .join(" ");
-        // Com uma série em destaque, as outras recuam em vez de sumir: o
-        // ponto de ter tudo no mesmo gráfico é comparar, e comparação
-        // precisa das vizinhas visíveis.
-        const apagada = destaque && destaque !== s.nome;
-        return (
-          <path
-            key={s.nome}
-            d={d}
-            fill="none"
-            stroke={s.cor}
-            strokeWidth={destaque === s.nome ? 2.6 : 1.6}
-            strokeOpacity={apagada ? 0.25 : 1}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        );
-      })}
-    </svg>
+          <div className="muted" style={{ marginBottom: 4 }}>
+            {new Date(cursor.alvo).toLocaleString("pt-BR")}
+          </div>
+          {cursor.leituras.slice(0, 8).map((l) => (
+            <div
+              key={l.nome}
+              style={{ display: "flex", gap: 6, alignItems: "center", lineHeight: 1.5 }}
+            >
+              <span
+                style={{
+                  width: 8, height: 8, borderRadius: 2,
+                  background: l.cor, flexShrink: 0,
+                }}
+              />
+              <span
+                className="mono"
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  flex: 1,
+                }}
+              >
+                {l.nome.replace(/^findface-multi-/, "")}
+              </span>
+              <strong>{formatarValor(l.valor)}</strong>
+            </div>
+          ))}
+          {cursor.leituras.length > 8 && (
+            <div className="muted" style={{ marginTop: 3 }}>
+              e mais {cursor.leituras.length - 8}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -11,6 +11,8 @@ Duas famílias de rota, e a diferença entre elas é o custo:
 
 Nenhuma rota aqui altera estado no servidor. O rastreio só lê.
 """
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,24 +24,68 @@ from app.models.user import User
 
 router = APIRouter(prefix="/api/crescimento", tags=["crescimento"])
 
+# Teto do intervalo absoluto. Não é limite de retenção (essa é menor e
+# configurável) — é a cerca contra alguém pedir dez anos e o painel varrer
+# a tabela inteira para desenhar 240 pixels.
+MAX_DIAS = 400
+
+
+def _quando(texto: str | None, campo: str) -> datetime | None:
+    """
+    Instante ISO vindo da tela. Erro de digitação vira 400 com o motivo,
+    e não série vazia — que a pessoa leria como "não há dado".
+    """
+    if not texto:
+        return None
+    try:
+        return datetime.fromisoformat(texto.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{campo} não é uma data válida: use 2026-09-03T14:00 ou ISO 8601",
+        )
+
+
+def _intervalo(de: str | None, ate: str | None):
+    inicio, fim = _quando(de, "de"), _quando(ate, "ate")
+    if inicio and fim:
+        if fim <= inicio:
+            raise HTTPException(
+                status_code=400, detail="o fim do período tem de ser depois do início"
+            )
+        if (fim - inicio).days > MAX_DIAS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"período longo demais: o teto é {MAX_DIAS} dias",
+            )
+    return inicio, fim
+
 
 @router.get("/analise/{host_id}")
 async def analise(
     host_id: int,
     request: Request,
-    horas: float | None = Query(default=None, ge=1, le=168),
+    horas: float | None = Query(default=None, ge=0.25, le=24 * MAX_DIAS),
+    de: str | None = Query(default=None),
+    ate: str | None = Query(default=None),
     _: User = Depends(require_permission("metrics.view")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Tendência dos três recursos deste servidor, com projeção e dano
     previsto. Só banco — nenhuma ida ao servidor.
+
+    `horas` é o atalho; `de`/`ate` (ISO) mandam quando vêm, para a tela
+    poder andar para trás no tempo como qualquer painel de série.
     """
     host = await db.get(Host, host_id)
     if host is None:
         raise HTTPException(status_code=404, detail="servidor não encontrado")
 
-    dados = await request.app.state.crescimento.analisar(db, host_id, horas)
+    inicio, fim = _intervalo(de, ate)
+    dados = await request.app.state.crescimento.analisar(
+        db, host_id, horas, de=inicio, ate=fim
+    )
     dados["host"] = host.name
     dados["rotulo"] = host.rotulo
     return dados
@@ -49,9 +95,11 @@ async def analise(
 async def containers(
     host_id: int,
     request: Request,
-    horas: float = Query(default=6, ge=0.25, le=720),
+    horas: float = Query(default=6, ge=0.25, le=24 * MAX_DIAS),
     pontos: int = Query(default=180, ge=30, le=2000),
     limite: int = Query(default=24, ge=1, le=60),
+    de: str | None = Query(default=None),
+    ate: str | None = Query(default=None),
     _: User = Depends(require_permission("metrics.view")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -68,8 +116,10 @@ async def containers(
     if host is None:
         raise HTTPException(status_code=404, detail="servidor não encontrado")
 
+    inicio, fim = _intervalo(de, ate)
     dados = await request.app.state.crescimento.serie_containers(
-        db, host_id, horas=horas, pontos=pontos, limite=limite
+        db, host_id, horas=horas, pontos=pontos, limite=limite,
+        de=inicio, ate=fim,
     )
     dados["host"] = host.name
     dados["rotulo"] = host.rotulo

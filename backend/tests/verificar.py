@@ -3465,11 +3465,14 @@ async def cenario_crescimento_abre_e_fecha_vigilancia_sozinha():
         host = await com_host(db)
         agora = datetime.now(timezone.utc)
 
-        # 90 min de memória subindo de 60% a 90% (20 pontos por hora).
+        # Memória subindo de 60% a 90%, terminando uma hora atrás. O
+        # tempo é todo NO PASSADO de propósito: a série é cortada em
+        # "agora", como em produção — amostra com carimbo no futuro não
+        # existe, e um teste que dependesse dela não provaria nada.
         for i in range(19):
             db.add(Amostra(
                 host_id=host.id,
-                ts=agora - timedelta(minutes=90 - i * 5),
+                ts=agora - timedelta(minutes=155 - i * 5),
                 mem_pct=60.0 + i * 1.6667,
                 mem_total_mb=16384, mem_usado_mb=9830,
                 disco_pct=40.0, disco_ponto="/", disco_total_gb=100,
@@ -3513,11 +3516,11 @@ async def cenario_crescimento_abre_e_fecha_vigilancia_sozinha():
         assert "chega a" in evento["texto"], evento["texto"]
         assert evento["significa"], "aviso sem o dano previsto"
 
-        # Agora estabiliza: as amostras novas param de subir.
-        for i in range(1, 13):
+        # Agora estabiliza: a última hora de amostras para de subir.
+        for i in range(12):
             db.add(Amostra(
                 host_id=host.id,
-                ts=agora + timedelta(minutes=i * 5),
+                ts=agora - timedelta(minutes=55 - i * 5),
                 mem_pct=90.0,
                 mem_total_mb=16384, mem_usado_mb=14745,
                 disco_pct=40.0, disco_ponto="/", disco_total_gb=100,
@@ -3681,6 +3684,83 @@ async def cenario_faxina_apaga_vigilancia_fechada_so():
 
 
 
+
+async def cenario_periodo_absoluto_manda_e_nao_inventa_dado():
+    """
+    O seletor de período pede duas garantias, e as duas já custaram tela
+    errada em painel de série:
+
+    1. **O intervalo absoluto ganha da janela relativa.** Quem digitou
+       "a madrugada de terça" não quer as últimas 6 horas — e mandar os
+       dois juntos é ambíguo, então a regra é fixa e testada.
+    2. **Não se lê o futuro.** Sem teto, a janela relativa pegaria
+       carimbo à frente do relógio (amostra de teste, relógio dessincronizado)
+       e o gráfico mostraria linha onde não houve medição.
+
+    E a série devolve `mais_antiga`: é o que deixa a tela dizer "não há
+    dado tão para trás" em vez de desenhar um período vazio, que se lê
+    como "o servidor ficou parado".
+    """
+    from app.services.crescimento_service import CrescimentoService
+
+    de = datetime(2026, 9, 1, 3, 0, tzinfo=timezone.utc)
+    ate = datetime(2026, 9, 1, 9, 0, tzinfo=timezone.utc)
+
+    # Absoluto manda, mesmo com janela relativa junto.
+    i, f = CrescimentoService._intervalo(janela_h=6, de=de, ate=ate)
+    assert (i, f) == (de, ate), (i, f)
+
+    # Relativo termina AGORA, nunca no futuro.
+    i, f = CrescimentoService._intervalo(janela_h=2)
+    agora = datetime.now(timezone.utc)
+    assert f <= agora + timedelta(seconds=2), f
+    assert abs((f - i).total_seconds() - 7200) < 2, (i, f)
+
+    # Fim sem início mantém o tamanho da janela: é o que permite andar
+    # para trás no tempo sem a janela encolher a cada clique.
+    i, f = CrescimentoService._intervalo(janela_h=3, ate=ate)
+    assert f == ate and abs((f - i).total_seconds() - 10800) < 2, (i, f)
+
+    # Intervalo invertido não vira série vazia sem explicação.
+    i, f = CrescimentoService._intervalo(de=ate, ate=de)
+    assert i < f, (i, f)
+
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        host = await com_host(db)
+        base = datetime.now(timezone.utc) - timedelta(hours=3)
+        for k in range(6):
+            db.add(AmostraContainer(
+                host_id=host.id, ts=base + timedelta(minutes=k * 5),
+                nome="findface-multi-redis-1", mem_mb=100.0 + k,
+            ))
+        # Uma amostra com carimbo no futuro: não pode entrar em janela
+        # relativa nenhuma.
+        db.add(AmostraContainer(
+            host_id=host.id, ts=datetime.now(timezone.utc) + timedelta(hours=2),
+            nome="findface-multi-redis-1", mem_mb=9999.0,
+        ))
+        await db.flush()
+
+        serv = CrescimentoService(ssh=None, config=ConfigFalsa({}))
+        serie = await serv.serie_containers(db, host.id, horas=6)
+        assert serie["amostras"] == 6, serie["amostras"]
+        assert serie["series"][0]["pico_mb"] < 1000, "leu amostra do futuro"
+        assert serie["mais_antiga"], "não disse desde quando há dado"
+
+        # Período em que não houve coleta: zero séries, com o motivo
+        # dizendo desde quando existe dado — e não silêncio.
+        antigo = await serv.serie_containers(
+            db, host.id,
+            de=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            ate=datetime(2020, 1, 2, tzinfo=timezone.utc),
+        )
+        assert antigo["series"] == []
+        assert "mais antigo que existe" in antigo["motivo"], antigo["motivo"]
+
+    await engine.dispose()
+
+
 CENARIOS = [
     cenario_ddl_sem_indice_duplicado,
     cenario_resumo_do_painel_degrada_sem_quebrar,
@@ -3710,6 +3790,7 @@ CENARIOS = [
     cenario_crescimento_acusa_quem_cresceu_nao_quem_e_grande,
     cenario_rastreio_de_crescimento_so_le,
     cenario_faxina_apaga_vigilancia_fechada_so,
+    cenario_periodo_absoluto_manda_e_nao_inventa_dado,
     cenario_busca_entende_acento_e_parte_da_palavra,
     cenario_servidor_nao_acumula_sobra,
     cenario_atualizar_forca_coleta_de_verdade,

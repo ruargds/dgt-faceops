@@ -199,9 +199,57 @@ dia em que alguém abre chamado citando o painel.
 4. **Vigilâncias abertas** — culpado, por que ele cresce, o que fazer, o
    que o fabricante recomenda, e a evidência do rastreio.
 
-Período: 1h, 6h, 12h, 24h, 3d e 7d. Sete dias é o limite porque é a
-retenção da série por container — oferecer "30 dias" abriria uma janela
-que o banco não tem.
+### O seletor de período
+
+O controle de tempo é o de qualquer painel de série, e serve às duas
+perguntas que aparecem de verdade:
+
+| Quero | Como |
+|---|---|
+| "as últimas N horas", acompanhando o tempo passar | atalhos: 1h, 6h, 12h, 24h, 2d, 7d, 30d, 90d, 6m, 1a |
+| "a madrugada de terça", parada onde está | **Período…** → início e fim exatos |
+| "e antes disso?" | `‹` e `›` andam uma janela do mesmo tamanho |
+
+Andar para trás converte a janela em intervalo absoluto — "as 6 horas
+anteriores a estas 6 horas" só existe com âncora. Voltar ao presente é
+clicar num atalho.
+
+**Atalho além do que o banco guarda aparece marcado com `·` e apagado**,
+e o title diz desde quando há dado e qual é a retenção. Oferecer "1 ano"
+e desenhar sete dias faria a tela mentir por omissão: a série por
+container vive 7 dias e as amostras do host, 30 — números de custo, não
+defeito. O servidor devolve `mais_antiga` justamente para a tela poder
+dizer isso.
+
+Quando o período escolhido não tem gravação nenhuma, a resposta é "não
+há gravação por container neste período — o mais antigo que existe é de
+X", e não um gráfico vazio, que se lê como "o servidor ficou parado".
+
+### O gráfico
+
+Desenhado na largura real do elemento (medida com `ResizeObserver`), e
+não esticado a partir de um `viewBox` fixo — que era o que deformava
+texto e ponto. A altura acompanha a largura até um teto: numa tela de
+1080p ele cresce em vez de virar uma tira; no celular, não estoura a
+dobra.
+
+Três detalhes que mudam a leitura:
+
+* **eixo com marcas redondas** (1, 2 ou 5 vezes potência de dez). "3847
+  MB" no meio do eixo é número que ninguém usa para comparar;
+* **eixo de tempo adaptativo** — minuto, hora, dia ou mês, escolhido pelo
+  tamanho da janela, com a data aparecendo na virada do dia;
+* **buraco de coleta não vira reta.** Intervalo maior que 2,5x a cadência
+  da série interrompe a linha: o painel esteve fora, e ligar os dois
+  pontos inventaria uma medição que ninguém fez.
+
+O cursor mostra os valores daquele instante ordenados do maior para o
+menor — é a pergunta que se faz com muitas linhas na tela: "às 3h, quem
+estava por cima?". Ponto distante demais do instante apontado não entra
+na leitura, pelo mesmo motivo do buraco.
+
+A tabela ordena por qualquer coluna, clicando no cabeçalho ou nos botões;
+clicar de novo inverte, e a seta diz qual está valendo.
 
 **Tudo isso lê o banco.** Abrir a tela e trocar o período não tocam em
 servidor nenhum. Só "Rastrear agora" abre SSH, e por isso é botão.
@@ -287,14 +335,20 @@ Todas em **Configurações → Monitoramento contínuo**:
 
 | Rota | Custo | Devolve |
 |---|---|---|
-| `GET /api/crescimento/analise/{host_id}?horas=` | banco | tendência, projeção e dano dos três recursos, vigilâncias abertas e culpados de memória |
-| `GET /api/crescimento/containers/{host_id}?horas=&limite=` | banco | uma série por container, ordenada por quem mais cresceu |
+| `GET /api/crescimento/analise/{host_id}?horas=` ou `?de=&ate=` | banco | tendência, projeção e dano dos três recursos, vigilâncias abertas e culpados de memória |
+| `GET /api/crescimento/containers/{host_id}?horas=&limite=` ou `?de=&ate=` | banco | uma série por container, ordenada por quem mais cresceu |
 | `GET /api/crescimento?host_id=&dias=` | banco | vigilâncias abertas e encerradas na janela |
 | `GET /api/crescimento/{id}` | banco | uma vigilância com o rastreio inteiro |
 | `POST /api/crescimento/{id}/rastrear` | **1 SSH** | rastreia agora; só em vigilância aberta |
 | `POST /api/crescimento/rastrear/{host_id}?recurso=` | **1 SSH** | rastreio avulso, sem vigilância |
 
 Todas exigem `metrics.view`. Nenhuma altera estado no servidor.
+
+`de` e `ate` são ISO 8601 e **mandam** quando vêm — `horas` é o atalho
+para o mesmo par. Data inválida devolve 400 explicando o formato, em vez
+de série vazia; fim antes do início e período acima de 400 dias também.
+A janela relativa nunca passa do instante atual: sem esse teto, carimbo à
+frente do relógio viraria linha no gráfico.
 
 ---
 
@@ -307,6 +361,7 @@ Todas exigem `metrics.view`. Nenhuma altera estado no servidor.
 | `crescimento projeta o estouro e diz o dano` | a conta da projeção, o que não se projeta, e o dano escrito em operação |
 | `crescimento abre e fecha vigilancia sozinha` | uma leitura não abre; estabilizou, fecha |
 | `crescimento acusa quem cresceu nao quem e grande` | atribuição por diferença entre medições, nos dois caminhos (disco e container) |
+| `periodo absoluto manda e nao inventa dado` | absoluto ganha do relativo, janela relativa não lê o futuro, intervalo invertido não vira série vazia, e o período sem coleta diz desde quando há dado |
 | `rastreio de crescimento so le` | nenhum comando que altera estado; `ionice`, `nice` e `timeout` presentes; `du` estourado vira "não medido" |
 | `faxina apaga vigilancia fechada so` | vigilância aberta é estado atual, não histórico |
 

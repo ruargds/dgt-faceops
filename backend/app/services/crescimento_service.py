@@ -777,8 +777,56 @@ class CrescimentoService:
 
     # ── Detecção: só banco, custo zero de servidor ─────────────────────
 
-    async def _serie(self, db, host_id: int, janela_h: float) -> list[Amostra]:
-        desde = datetime.now(timezone.utc) - timedelta(hours=janela_h)
+    @staticmethod
+    def _intervalo(
+        janela_h: float | None = None,
+        de: datetime | None = None,
+        ate: datetime | None = None,
+    ) -> tuple[datetime, datetime]:
+        """
+        (início, fim) a partir de uma janela relativa OU de um intervalo
+        absoluto.
+
+        Absoluto ganha quando os dois vêm: é o que a pessoa digitou, e
+        janela relativa é sempre um atalho para o mesmo par. Fim sem
+        início vira "as N horas até aquele instante" — é o que permite
+        andar para trás no tempo sem perder o tamanho da janela.
+        """
+        agora = datetime.now(timezone.utc)
+        fim = ate or agora
+        if fim.tzinfo is None:
+            fim = fim.replace(tzinfo=timezone.utc)
+        if de is not None:
+            inicio = de if de.tzinfo else de.replace(tzinfo=timezone.utc)
+        else:
+            inicio = fim - timedelta(hours=float(janela_h or 6))
+        if inicio >= fim:
+            # Intervalo invertido ou nulo: cai numa hora até o fim pedido,
+            # em vez de devolver série vazia sem explicar por quê.
+            inicio = fim - timedelta(hours=1)
+        return inicio, fim
+
+    async def _mais_antiga(self, db, modelo, host_id: int) -> datetime | None:
+        """
+        A amostra mais velha que existe para este host.
+
+        É o que permite a tela dizer "não há dado tão para trás" em vez de
+        desenhar um gráfico vazio e deixar a pessoa achando que o servidor
+        ficou parado. A retenção configurada diz o teto teórico; isto diz
+        o que de fato está lá.
+        """
+        from sqlalchemy import func
+
+        r = await db.execute(
+            select(func.min(modelo.ts)).where(modelo.host_id == host_id)
+        )
+        return r.scalar()
+
+    async def _serie(
+        self, db, host_id: int, janela_h: float | None = None,
+        de: datetime | None = None, ate: datetime | None = None,
+    ) -> list[Amostra]:
+        desde, ateh = self._intervalo(janela_h, de, ate)
         r = await db.execute(
             select(
                 Amostra.ts, Amostra.mem_pct, Amostra.disco_pct, Amostra.swap_pct,
@@ -788,6 +836,7 @@ class CrescimentoService:
             .where(
                 Amostra.host_id == host_id,
                 Amostra.ts >= desde,
+                Amostra.ts <= ateh,
                 # Amostra de falha não entra na série: buraco na leitura
                 # não é queda de consumo.
                 Amostra.erro == "",
@@ -1335,7 +1384,8 @@ class CrescimentoService:
 
     async def serie_containers(
         self, db, host_id: int, horas: float = 6, pontos: int = 180,
-        limite: int = 24,
+        limite: int = 24, de: datetime | None = None,
+        ate: datetime | None = None,
     ) -> dict:
         """
         Uma série por container, já reduzida ao que a tela desenha.
@@ -1350,8 +1400,8 @@ class CrescimentoService:
         série do host: mandar dez mil pontos para desenhar 240 pixels é
         tráfego jogado fora.
         """
-        janela = max(0.25, min(float(horas), 24 * 30))
-        desde = datetime.now(timezone.utc) - timedelta(hours=janela)
+        desde, ateh = self._intervalo(horas, de, ate)
+        janela = (ateh - desde).total_seconds() / 3600
 
         r = await db.execute(
             select(
@@ -1359,19 +1409,38 @@ class CrescimentoService:
                 AmostraContainer.mem_mb, AmostraContainer.mem_pct,
                 AmostraContainer.cpu_pct,
             )
-            .where(AmostraContainer.host_id == host_id, AmostraContainer.ts >= desde)
+            .where(
+                AmostraContainer.host_id == host_id,
+                AmostraContainer.ts >= desde,
+                AmostraContainer.ts <= ateh,
+            )
             .order_by(AmostraContainer.ts)
         )
         linhas = list(r.all())
+        # O que existe de verdade, para a tela não confundir "não há dado
+        # tão para trás" com "o servidor ficou parado".
+        antiga = await self._mais_antiga(db, AmostraContainer, host_id)
+        contexto = {
+            "de": desde.isoformat(),
+            "ate": ateh.isoformat(),
+            "mais_antiga": antiga.isoformat() if antiga else None,
+            "retencao_dias": int(self._cfg("containers.retencao_dias", 7)),
+            "intervalo_min": int(self._cfg("containers.intervalo_min", 5)),
+        }
         if not linhas:
             return {
-                "host_id": host_id, "horas": janela, "series": [],
+                **contexto,
+                "host_id": host_id, "horas": round(janela, 2), "series": [],
                 "amostras": 0,
                 # Sem histórico ainda é diferente de "nenhum container
                 # consome memória". A tela precisa distinguir os dois.
-                "motivo": "ainda não há histórico por container nesta janela — "
-                          "a primeira gravação acontece no próximo ciclo do "
-                          "coletor",
+                "motivo": (
+                    "não há gravação por container neste período — o mais "
+                    f"antigo que existe é de {antiga:%d/%m %H:%M} (UTC)"
+                    if antiga else
+                    "ainda não há histórico por container — a primeira "
+                    "gravação acontece no próximo ciclo do coletor"
+                ),
             }
 
         por_nome: dict[str, list] = {}
@@ -1433,8 +1502,9 @@ class CrescimentoService:
         cortadas = series[:max(1, limite)]
 
         return {
+            **contexto,
             "host_id": host_id,
-            "horas": janela,
+            "horas": round(janela, 2),
             "amostras": len(linhas),
             "total_containers": len(series),
             "series": cortadas,
@@ -1444,7 +1514,9 @@ class CrescimentoService:
         }
 
     async def culpados_memoria(
-        self, db, host_id: int, horas: float | None = None, minimo_mb_h: float = 20.0
+        self, db, host_id: int, horas: float | None = None,
+        minimo_mb_h: float = 20.0, de: datetime | None = None,
+        ate: datetime | None = None,
     ) -> list[dict]:
         """
         Quem cresceu em memória na janela — direto do banco, sem SSH.
@@ -1458,7 +1530,9 @@ class CrescimentoService:
         culpado de nada.
         """
         janela = float(horas or self._cfg("crescimento.janela_h", 6))
-        dados = await self.serie_containers(db, host_id, janela, pontos=60, limite=60)
+        dados = await self.serie_containers(
+            db, host_id, janela, pontos=60, limite=60, de=de, ate=ate
+        )
         saida = []
         for serie in dados.get("series", []):
             if serie["mb_por_h"] < minimo_mb_h or serie["amostras"] < 3:
@@ -1490,7 +1564,10 @@ class CrescimentoService:
 
     # ── Consulta ───────────────────────────────────────────────────────
 
-    async def analisar(self, db, host_id: int, horas: float | None = None) -> dict:
+    async def analisar(
+        self, db, host_id: int, horas: float | None = None,
+        de: datetime | None = None, ate: datetime | None = None,
+    ) -> dict:
         """
         A análise sob demanda de um servidor — só banco, sem tocar nele.
 
@@ -1498,8 +1575,11 @@ class CrescimentoService:
         está subindo" é resposta, e é a que a tela precisa dar quando
         alguém abre por desconfiança.
         """
-        janela = float(horas or self._cfg("crescimento.janela_h", 6))
-        linhas = await self._serie(db, host_id, janela)
+        desde, ateh = self._intervalo(
+            horas or self._cfg("crescimento.janela_h", 6), de, ate
+        )
+        janela = (ateh - desde).total_seconds() / 3600
+        linhas = await self._serie(db, host_id, de=desde, ate=ateh)
         ponto = (linhas[-1].disco_ponto or "") if linhas else ""
 
         recursos = []
@@ -1542,14 +1622,19 @@ class CrescimentoService:
         # só quando há vigilância aberta: a pergunta "qual container está
         # comendo a RAM" é legítima mesmo com tudo dentro do limite.
         try:
-            culpados = await self.culpados_memoria(db, host_id, janela)
+            culpados = await self.culpados_memoria(db, host_id, janela, de=desde, ate=ateh)
         except Exception:
             log.exception("falha ao apurar culpados de memória do host %s", host_id)
             culpados = []
 
+        antiga = await self._mais_antiga(db, Amostra, host_id)
         return {
             "host_id": host_id,
-            "janela_h": janela,
+            "janela_h": round(janela, 2),
+            "de": desde.isoformat(),
+            "ate": ateh.isoformat(),
+            "mais_antiga": antiga.isoformat() if antiga else None,
+            "retencao_dias": int(self._cfg("monitor.retencao_dias", 30)),
             "amostras": len(linhas),
             "ponto": ponto,
             "recursos": recursos,

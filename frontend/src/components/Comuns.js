@@ -283,3 +283,203 @@ export function ConfirmarDigitando({ titulo, aviso, palavra, rotuloBotao, onConf
     </div>
   );
 }
+
+// ── Seletor de período ─────────────────────────────────────────────────
+// O controle de tempo que todo painel de série tem, e que faltava aqui:
+// atalhos de janela, navegação para trás e para a frente, e intervalo
+// absoluto quando a pergunta é "o que houve na madrugada de terça".
+//
+// Uma decisão de honestidade no meio: atalho que pede mais tempo do que o
+// banco guarda aparece MARCADO, com o prazo real no title. Oferecer "1
+// ano" e desenhar sete dias faria a tela mentir por omissão — e a
+// retenção curta da série por container é escolha de custo, não defeito.
+
+const ATALHOS = [
+  { rotulo: "1h", horas: 1 },
+  { rotulo: "6h", horas: 6 },
+  { rotulo: "12h", horas: 12 },
+  { rotulo: "24h", horas: 24 },
+  { rotulo: "2d", horas: 48 },
+  { rotulo: "7d", horas: 168 },
+  { rotulo: "30d", horas: 720 },
+  { rotulo: "90d", horas: 2160 },
+  { rotulo: "6m", horas: 4380 },
+  { rotulo: "1a", horas: 8760 },
+];
+
+/** ISO → valor aceito por `<input type="datetime-local">` (hora local). */
+function paraCampo(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+/** O par (início, fim) que o período representa agora. */
+export function intervaloDe(periodo) {
+  if (periodo && periodo.de && periodo.ate) {
+    return { de: new Date(periodo.de), ate: new Date(periodo.ate) };
+  }
+  const horas = (periodo && periodo.horas) || 6;
+  const ate = new Date();
+  return { de: new Date(ate.getTime() - horas * 3600e3), ate };
+}
+
+export function SeletorPeriodo({
+  valor,
+  onMudar,
+  disponivelDesde = null,
+  retencaoDias = null,
+  rotuloDado = "histórico",
+}) {
+  const [aberto, setAberto] = React.useState(false);
+  const { de, ate } = intervaloDe(valor);
+  const [campoDe, setCampoDe] = React.useState(paraCampo(de.toISOString()));
+  const [campoAte, setCampoAte] = React.useState(paraCampo(ate.toISOString()));
+
+  // Os campos partem do período que está na tela — sincronizados no
+  // CLIQUE que abre o painel, não num efeito. Num período relativo o
+  // "até" é `new Date()`, que muda a cada render: um efeito que
+  // dependesse dele gravaria estado a cada render e giraria em laço.
+  const abrirPainel = () => {
+    const proximo = !aberto;
+    if (proximo) {
+      setCampoDe(paraCampo(de.toISOString()));
+      setCampoAte(paraCampo(ate.toISOString()));
+    }
+    setAberto(proximo);
+  };
+
+  const desde = disponivelDesde ? new Date(disponivelDesde) : null;
+  const relativo = !(valor && valor.de);
+  const larguraMs = ate - de;
+
+  // Andar no tempo mantém o TAMANHO da janela e vira intervalo absoluto:
+  // "as 6 horas anteriores a estas 6 horas" só faz sentido com âncora.
+  const andar = (sinal) => {
+    const novoDe = new Date(de.getTime() + sinal * larguraMs);
+    const novoAte = new Date(ate.getTime() + sinal * larguraMs);
+    const agora = new Date();
+    if (novoAte >= agora) return onMudar({ horas: larguraMs / 3600e3 });
+    onMudar({ de: novoDe.toISOString(), ate: novoAte.toISOString() });
+  };
+
+  const aplicar = () => {
+    if (!campoDe || !campoAte) return;
+    const d = new Date(campoDe);
+    const a = new Date(campoAte);
+    if (!(d < a)) return;
+    onMudar({ de: d.toISOString(), ate: a.toISOString() });
+    setAberto(false);
+  };
+
+  return (
+    <div className="stack-h" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={() => andar(-1)}
+        title="Janela anterior, do mesmo tamanho"
+        aria-label="Período anterior"
+      >
+        ‹
+      </button>
+
+      {ATALHOS.map((a) => {
+        const alemDoDado =
+          desde && new Date(Date.now() - a.horas * 3600e3) < desde;
+        return (
+          <button
+            key={a.horas}
+            className={`btn btn-sm ${
+              relativo && valor.horas === a.horas ? "btn-primary" : "btn-ghost"
+            }`}
+            onClick={() => onMudar({ horas: a.horas })}
+            style={alemDoDado ? { opacity: 0.55 } : undefined}
+            title={
+              alemDoDado
+                ? `O ${rotuloDado} começa em ${desde.toLocaleString("pt-BR")}` +
+                  (retencaoDias ? ` (retenção de ${retencaoDias} dias)` : "") +
+                  " — o gráfico mostra até onde há dado."
+                : `Últimas ${a.rotulo}`
+            }
+          >
+            {a.rotulo}
+            {alemDoDado ? "·" : ""}
+          </button>
+        );
+      })}
+
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={() => andar(1)}
+        disabled={relativo}
+        title="Janela seguinte"
+        aria-label="Período seguinte"
+      >
+        ›
+      </button>
+
+      <button
+        className={`btn btn-sm ${aberto ? "btn-primary" : "btn-ghost"}`}
+        onClick={abrirPainel}
+        title="Escolher início e fim exatos"
+      >
+        {relativo ? "Período…" : "Período fixo"}
+      </button>
+
+      {!relativo && (
+        <span className="small muted">
+          {de.toLocaleString("pt-BR")} → {ate.toLocaleString("pt-BR")}
+        </span>
+      )}
+
+      {aberto && (
+        <div
+          className="card card-tight"
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "flex-end",
+            flexWrap: "wrap",
+            width: "100%",
+            marginTop: 6,
+          }}
+        >
+          <label className="small">
+            De
+            <input
+              type="datetime-local"
+              value={campoDe}
+              onChange={(e) => setCampoDe(e.target.value)}
+            />
+          </label>
+          <label className="small">
+            Até
+            <input
+              type="datetime-local"
+              value={campoAte}
+              onChange={(e) => setCampoAte(e.target.value)}
+            />
+          </label>
+          <button className="btn btn-primary btn-sm" onClick={aplicar}>
+            Aplicar
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              onMudar({ horas: 6 });
+              setAberto(false);
+            }}
+          >
+            Voltar para 6h
+          </button>
+          {desde && (
+            <span className="small muted">
+              Há {rotuloDado} desde {desde.toLocaleString("pt-BR")}
+              {retencaoDias ? ` · retenção de ${retencaoDias} dias` : ""}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
