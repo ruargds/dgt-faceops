@@ -13,6 +13,13 @@ distribuído.
 Uma máquina Ubuntu 22.04 ou 24.04, **fora do ambiente facial**, que
 alcance as VMs na porta 22.
 
+> **Nesta instalação não foi assim.** O painel está em `/opt/.faceops`,
+> **dentro** da VM701633 (`vm-integracao`) — uma das quatro máquinas que
+> ele monitora. Funciona, e é onde se roda o `atualizar.sh`; mas significa
+> que o build, o `du` sob demanda e o backup agendado disputam CPU e disco
+> com os 80 workers que rodam lá. Ao dimensionar qualquer coleta nova,
+> conte o custo como se fosse em servidor de produção — porque é.
+
 | Recurso | Mínimo | Recomendado |
 |---|---|---|
 | CPU | 2 vCPU | 4 vCPU |
@@ -282,9 +289,16 @@ Ver [11_OPERACAO_DIARIA](11_OPERACAO_DIARIA.md) e
 ## Atualizar o painel depois
 
 ```bash
-cd ~/dgt-faceops
-bash deploy.sh --build
+cd /opt/.faceops
+bash atualizar.sh
 ```
+
+`/opt/.faceops` é onde esta instalação vive — ver
+[36_REFERENCIA_RAPIDA](36_REFERENCIA_RAPIDA.md) e
+[17_ATUALIZACAO](17_ATUALIZACAO.md). O `deploy.sh --build` continua
+valendo para subir a primeira vez ou depois de mexer no `.env`; para
+buscar versão nova, o `atualizar.sh` é quem confere carga, trabalho em
+curso e reverte sozinho se não subir.
 
 Preserva `.env`, banco, backups e gravações. As migrações rodam sozinhas
 na subida.

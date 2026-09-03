@@ -6,9 +6,18 @@ que já esteja em operação.
 ## O comando
 
 ```bash
-cd ~/dgt-faceops
+cd /opt/.faceops
 bash atualizar.sh
 ```
+
+> **Onde o painel está, neste ambiente:** `/opt/.faceops`, na **VM701633**
+> (`vm-integracao`, `10.50.153.12`), com o diretório pertencendo ao
+> `azureadmin` — então **sem `sudo`**. Rodar este clone como root deixaria
+> arquivos com dono errado e quebraria a atualização seguinte.
+>
+> Instalação nova segue o caminho do
+> [15_SOLUCAO_PRONTA](15_SOLUCAO_PRONTA.md) (clone no `~`); o que vale para
+> atualizar é onde ele **está**, não onde a receita mandava pôr.
 
 | Variação | Para quê |
 |---|---|
@@ -171,7 +180,7 @@ O jeito seguro é **verificar** de forma automática e **aplicar** à mão:
 
 ```bash
 # crontab -e — avisa, não aplica
-0 9 * * 1 cd /home/dgt/dgt-faceops && bash atualizar.sh --verificar
+0 9 * * 1 cd /opt/.faceops && bash atualizar.sh --verificar
 ```
 
 Aplicar sozinho de madrugada é tentador e errado: é exatamente o horário
