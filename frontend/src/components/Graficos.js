@@ -345,6 +345,113 @@ function useLargura(ref, padrao = 760) {
 }
 
 /**
+ * A escala vertical, escolhida pelos VALORES — que é o problema real de
+ * um gráfico de containers.
+ *
+ * Num servidor do FindFace o `findface-multi-legacy` fica em 17 GB e o
+ * `healthcheck` em 6 MB. Numa escala linear compartilhada, uma linha usa
+ * o gráfico inteiro e as outras vinte e cinco viram um risco no chão:
+ * tecnicamente correto, e inútil para a pergunta que se está fazendo.
+ *
+ * Quatro modos, e o padrão decide sozinho:
+ *
+ * | modo | quando serve |
+ * |---|---|
+ * | `linear` | as séries têm ordem de grandeza parecida |
+ * | `log` | há mais de ~50x entre a maior e a menor — cada faixa do eixo é uma potência de dez, e todas as linhas ficam legíveis |
+ * | `variacao` | a pergunta é "quem CRESCEU", não "quem é grande": cada série vira a diferença para o próprio começo da janela, e quem está parado fica em zero |
+ * | `auto` | linear ou log, pela razão entre maior e menor |
+ *
+ * `variacao` é o modo que responde à pergunta desta tela. Ele não é o
+ * padrão porque a primeira leitura de quem chega é "quanto cada um está
+ * usando" — mas é um clique.
+ */
+function prepararEscala(series, escala) {
+  const brutos = series.flatMap((s) => s.pontos.map((p) => p.valor));
+  const positivos = brutos.filter((v) => v > 0);
+  const maior = brutos.length ? Math.max(...brutos) : 1;
+  const menor = positivos.length ? Math.min(...positivos) : maior;
+  const razao = menor > 0 ? maior / menor : 1;
+
+  const modo = escala === "auto" ? (razao > 50 ? "log" : "linear") : escala;
+
+  if (modo === "variacao") {
+    // Cada série menos o próprio primeiro ponto da janela.
+    const deslocadas = series.map((s) => {
+      const base = s.pontos[0] ? s.pontos[0].valor : 0;
+      return { ...s, pontos: s.pontos.map((p) => ({ ...p, valor: p.valor - base })) };
+    });
+    const valores = deslocadas.flatMap((s) => s.pontos.map((p) => p.valor));
+    const alto = Math.max(0, ...valores);
+    const baixo = Math.min(0, ...valores);
+    const { topo, passo } = escalaBonita(Math.max(alto, Math.abs(baixo)) || 1);
+    const piso = baixo < 0 ? -topo : 0;
+    const marcas = [];
+    for (let v = piso; v <= topo + passo / 2; v += passo) marcas.push(v);
+    return {
+      modo,
+      series: deslocadas,
+      marcas,
+      posicao: (v) => (v - piso) / (topo - piso || 1),
+      sufixo: " (variação)",
+    };
+  }
+
+  if (modo === "log") {
+    // Topo no próximo 1, 2 ou 5 acima do pico — e não na próxima década
+    // cheia. Com pico de 17,7 GB, arredondar para 100 GB jogaria metade
+    // do eixo no vazio e achataria tudo de novo, que é o problema que
+    // esta escala existe para resolver.
+    const expTopo = Math.floor(Math.log10(maior || 1));
+    const mantissa = (maior || 1) / Math.pow(10, expTopo);
+    const topoValor =
+      (mantissa <= 1 ? 1 : mantissa <= 2 ? 2 : mantissa <= 5 ? 5 : 10) *
+      Math.pow(10, expTopo);
+    // Piso na década do menor valor positivo, com teto de cinco décadas:
+    // um container de 6 MB e outro de 17 GB cabem juntos, e um zero não
+    // puxa o eixo para o infinito.
+    const pisoDecada = Math.max(
+      Math.pow(10, Math.floor(Math.log10(menor || 1))),
+      topoValor / 1e5,
+    );
+    const lo = Math.log10(pisoDecada);
+    const hi = Math.log10(topoValor);
+    const marcas = [];
+    for (let e = Math.ceil(lo); e <= Math.floor(hi + 1e-9); e += 1) {
+      marcas.push(Math.pow(10, e));
+    }
+    // O topo entra como marca quando não é uma década — é onde a linha
+    // mais alta encosta, e sem rótulo ali não há como ler o pico.
+    if (!marcas.length || marcas[marcas.length - 1] < topoValor * 0.999) {
+      marcas.push(topoValor);
+    }
+    return {
+      modo,
+      series,
+      marcas,
+      // Valor zero ou negativo encosta no piso — não some do gráfico, e a
+      // legenda continua mostrando o número exato.
+      posicao: (v) => {
+        const alvo = Math.max(v, pisoDecada);
+        return (Math.log10(alvo) - lo) / (hi - lo || 1);
+      },
+      sufixo: " (escala log)",
+    };
+  }
+
+  const { topo, passo } = escalaBonita(maior);
+  const marcas = [];
+  for (let v = 0; v <= topo + passo / 2; v += passo) marcas.push(v);
+  return {
+    modo,
+    series,
+    marcas,
+    posicao: (v) => Math.min(Math.max(v, 0), topo) / (topo || 1),
+    sufixo: "",
+  };
+}
+
+/**
  * Várias séries num gráfico só — o "quem está comendo a RAM".
  *
  * `series` = [{nome, cor, pontos: [{ts, valor}]}]. Quem está fora de
@@ -354,11 +461,10 @@ function useLargura(ref, padrao = 760) {
  * Três diferenças em relação ao `GraficoLinha`, e as três vêm da natureza
  * do dado:
  *
- * * **eixo Y calculado, não fixo em 100%.** Aqui não há teto: o que
- *   importa é comparar containers entre si, e escala fixa achataria todo
- *   mundo contra o chão por causa do maior.
+ * * **eixo Y escolhido pelos valores** (ver `prepararEscala`), porque
+ *   17 GB e 6 MB não convivem numa régua linear;
  * * **sem preenchimento de área.** Doze áreas translúcidas empilhadas
- *   viram uma mancha; linha limpa é o que deixa cruzar as curvas.
+ *   viram uma mancha; linha limpa é o que deixa cruzar as curvas;
  * * **buraco de coleta não vira reta.** Quando o intervalo entre dois
  *   pontos passa de 2,5x o normal da série, a linha é interrompida — o
  *   painel esteve fora, e desenhar a reta ali inventaria uma medição que
@@ -375,7 +481,7 @@ export function GraficoMultiLinha({
   visiveis = null,
   destaque = "",
   formatar = null,
-  aoClicar = null,
+  escala = "auto",
 }) {
   const caixa = React.useRef(null);
   const largura = useLargura(caixa);
@@ -388,16 +494,20 @@ export function GraficoMultiLinha({
   // Proporção: cresce com a largura até um teto, e nunca fica mais baixo
   // que o pedido. Numa tela de 1080p o gráfico ganha altura em vez de
   // virar uma tira; no celular, não estoura a dobra.
-  const H = Math.round(
-    Math.min(Math.max(largura * 0.34, altura), altura * 1.7),
-  );
-  const L = 58, R = 16, T = 14, B = 28;
+  const H = Math.round(Math.min(Math.max(largura * 0.34, altura), altura * 1.7));
+  const L = 62, R = 16, T = 14, B = 28;
   const areaW = Math.max(10, largura - L - R);
   const areaH = Math.max(10, H - T - B);
 
   const formatarValor =
     formatar ||
-    ((v) => (v >= 1024 ? `${(v / 1024).toFixed(1)} GB` : `${Math.round(v)}${unidade}`));
+    ((v) => {
+      const sinal = v < 0 ? "−" : "";
+      const abs = Math.abs(v);
+      return abs >= 1024
+        ? `${sinal}${(abs / 1024).toFixed(1)} GB`
+        : `${sinal}${Math.round(abs)}${unidade}`;
+    });
 
   if (!ativas.length) {
     return (
@@ -418,35 +528,34 @@ export function GraficoMultiLinha({
     );
   }
 
-  const carimbos = ativas.flatMap((s) => s.pontos.map((p) => +new Date(p.ts)));
+  const eixo = prepararEscala(ativas, escala);
+  const desenhadas = eixo.series;
+
+  const carimbos = desenhadas.flatMap((s) => s.pontos.map((p) => +new Date(p.ts)));
   const t0 = Math.min(...carimbos);
   const t1 = Math.max(...carimbos);
   const span = Math.max(1, t1 - t0);
 
-  const pico = Math.max(...ativas.flatMap((s) => s.pontos.map((p) => p.valor)));
-  const { topo, passo } = escalaBonita(pico);
-
   const px = (ts) => L + ((+new Date(ts) - t0) / span) * areaW;
-  const py = (v) => T + areaH - (Math.min(Math.max(v, 0), topo) / topo) * areaH;
+  const py = (v) => T + areaH - eixo.posicao(v) * areaH;
 
   // Cadência típica da série, para saber o que é buraco. Mediana, não
   // média: um único buraco enorme puxaria a média e esconderia os outros.
-  const intervalos = [];
-  const maisLonga = ativas.reduce(
+  const maisLonga = desenhadas.reduce(
     (a, b) => (b.pontos.length > a.pontos.length ? b : a),
-    ativas[0],
+    desenhadas[0],
   );
+  const intervalos = [];
   for (let i = 1; i < maisLonga.pontos.length; i++) {
-    intervalos.push(+new Date(maisLonga.pontos[i].ts) - +new Date(maisLonga.pontos[i - 1].ts));
+    intervalos.push(
+      +new Date(maisLonga.pontos[i].ts) - +new Date(maisLonga.pontos[i - 1].ts),
+    );
   }
   intervalos.sort((a, b) => a - b);
   const cadencia = intervalos.length ? intervalos[Math.floor(intervalos.length / 2)] : 0;
   const limiteBuraco = cadencia > 0 ? cadencia * 2.5 : Infinity;
 
   const { marcas, passo: passoTempo } = marcasDeTempo(t0, t1);
-
-  const marcasY = [];
-  for (let v = 0; v <= topo + passo / 2; v += passo) marcasY.push(v);
 
   const caminho = (pontos) => {
     let d = "";
@@ -464,10 +573,11 @@ export function GraficoMultiLinha({
   const aoMover = (evento) => {
     const caixaSvg = evento.currentTarget.getBoundingClientRect();
     const x = evento.clientX - caixaSvg.left;
+    const y = evento.clientY - caixaSvg.top;
     if (x < L || x > largura - R) return setCursor(null);
     const alvo = t0 + ((x - L) / areaW) * span;
 
-    const leituras = ativas
+    const leituras = desenhadas
       .map((s) => {
         let melhor = null;
         let distancia = Infinity;
@@ -480,13 +590,15 @@ export function GraficoMultiLinha({
         });
         // Ponto longe demais não é leitura daquele instante: a série
         // estava fora do ar ali, e mostrar o vizinho seria inventar.
-        if (!melhor || distancia > Math.max(limiteBuraco, span / areaW * 8)) return null;
+        if (!melhor || distancia > Math.max(limiteBuraco, (span / areaW) * 8)) {
+          return null;
+        }
         return { nome: s.nome, cor: s.cor, valor: melhor.valor, ts: melhor.ts };
       })
       .filter(Boolean)
       .sort((a, b) => b.valor - a.valor);
 
-    setCursor(leituras.length ? { x, alvo, leituras } : null);
+    setCursor(leituras.length ? { x, y, alvo, leituras } : null);
   };
 
   const ladoDireito = cursor && cursor.x > largura * 0.55;
@@ -497,13 +609,13 @@ export function GraficoMultiLinha({
         width={largura}
         height={H}
         viewBox={`0 0 ${largura} ${H}`}
-        style={{ display: "block", cursor: aoClicar ? "pointer" : "crosshair" }}
+        style={{ display: "block", cursor: "crosshair" }}
         onMouseMove={aoMover}
         onMouseLeave={() => setCursor(null)}
         role="img"
-        aria-label={`${ativas.length} série(s), pico de ${formatarValor(pico)}`}
+        aria-label={`${desenhadas.length} série(s)${eixo.sufixo}`}
       >
-        {marcasY.map((v) => (
+        {eixo.marcas.map((v) => (
           <g key={`y${v}`}>
             <line
               x1={L} x2={largura - R} y1={py(v)} y2={py(v)}
@@ -535,7 +647,7 @@ export function GraficoMultiLinha({
           </g>
         ))}
 
-        {ativas.map((s) => {
+        {desenhadas.map((s) => {
           const apagada = destaque && destaque !== s.nome;
           return (
             <path
@@ -572,7 +684,10 @@ export function GraficoMultiLinha({
         <div
           style={{
             position: "absolute",
-            top: 8,
+            // Acompanha o mouse na vertical, preso dentro do gráfico: fixo
+            // no topo, ele cobria justamente as linhas de cima, que são as
+            // que se está olhando.
+            top: Math.min(Math.max(cursor.y - 40, 4), Math.max(4, H - 150)),
             left: ladoDireito ? undefined : cursor.x + 14,
             right: ladoDireito ? largura - cursor.x + 14 : undefined,
             background: "var(--white)",
@@ -582,14 +697,14 @@ export function GraficoMultiLinha({
             fontSize: 11,
             pointerEvents: "none",
             boxShadow: "0 4px 14px rgba(0,0,0,.18)",
-            maxWidth: 320,
+            maxWidth: 300,
             zIndex: 2,
           }}
         >
           <div className="muted" style={{ marginBottom: 4 }}>
             {new Date(cursor.alvo).toLocaleString("pt-BR")}
           </div>
-          {cursor.leituras.slice(0, 8).map((l) => (
+          {cursor.leituras.slice(0, 6).map((l) => (
             <div
               key={l.nome}
               style={{ display: "flex", gap: 6, alignItems: "center", lineHeight: 1.5 }}
@@ -614,9 +729,9 @@ export function GraficoMultiLinha({
               <strong>{formatarValor(l.valor)}</strong>
             </div>
           ))}
-          {cursor.leituras.length > 8 && (
+          {cursor.leituras.length > 6 && (
             <div className="muted" style={{ marginTop: 3 }}>
-              e mais {cursor.leituras.length - 8}
+              e mais {cursor.leituras.length - 6}
             </div>
           )}
         </div>

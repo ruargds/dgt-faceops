@@ -233,6 +233,33 @@ texto e ponto. A altura acompanha a largura até um teto: numa tela de
 1080p ele cresce em vez de virar uma tira; no celular, não estoura a
 dobra.
 
+#### A escala tem de caber nos valores
+
+Num servidor deste ambiente o `findface-multi-legacy` fica em **17,7 GB**
+e o `healthcheck` em **6 MB** — quase 3.000 vezes de diferença. Numa
+escala linear compartilhada, uma linha usa o gráfico inteiro e as outras
+vinte e cinco viram um risco no chão: tecnicamente correto e inútil para
+a pergunta que se está fazendo.
+
+Quatro modos, e o padrão decide sozinho:
+
+| Modo | O que faz | Quando serve |
+|---|---|---|
+| **auto** (padrão) | linear até 50x de razão, log acima disso | quase sempre |
+| **linear** | proporção real | séries de tamanho parecido |
+| **log** | cada faixa do eixo é 10x a anterior | 17 GB e 6 MB no mesmo gráfico |
+| **variação** | cada série menos o próprio início do período | a pergunta desta tela: quem **cresceu** — quem está parado fica em zero |
+
+Com os valores reais acima, o eixo em log põe as marcas em 1 MB, 10 MB,
+100 MB, 1000 MB, 9,8 GB e 19,5 GB, e as linhas passam a ocupar de 18% a
+99% da altura — em vez de todas empilhadas no primeiro por cento.
+
+Dois cuidados no log: o topo sobe até o próximo 1, 2 ou 5 acima do pico
+(arredondar para a década cheia jogaria metade do eixo no vazio e
+achataria tudo de novo), e o piso fica na década do menor valor positivo,
+com teto de cinco décadas. Valor zero encosta no piso em vez de sumir — e
+a legenda continua mostrando o número exato.
+
 Três detalhes que mudam a leitura:
 
 * **eixo com marcas redondas** (1, 2 ou 5 vezes potência de dez). "3847
@@ -247,6 +274,10 @@ O cursor mostra os valores daquele instante ordenados do maior para o
 menor — é a pergunta que se faz com muitas linhas na tela: "às 3h, quem
 estava por cima?". Ponto distante demais do instante apontado não entra
 na leitura, pelo mesmo motivo do buraco.
+
+O cursor acompanha o mouse na vertical, preso dentro do gráfico: fixo no
+topo, ele cobria justamente as linhas de cima, que são as que se está
+olhando.
 
 A tabela ordena por qualquer coluna, clicando no cabeçalho ou nos botões;
 clicar de novo inverte, e a seta diz qual está valendo.

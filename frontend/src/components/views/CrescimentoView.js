@@ -32,6 +32,15 @@ import { IconAlerta, IconAtualizar, IconFechar, IconOk, IconTendencia } from "..
  * por isso é botão, não intervalo.
  */
 
+// Os modos do eixo vertical. "Variação" é o que responde à pergunta
+// desta tela — quem CRESCEU — e por isso vem explicado, não só rotulado.
+const ESCALAS = [
+  ["auto", "auto", "Linear ou log, decidido pela razão entre a maior e a menor série"],
+  ["linear", "linear", "Proporção real; a maior série domina o gráfico"],
+  ["log", "log", "Cada faixa é 10x a anterior — 17 GB e 6 MB no mesmo gráfico"],
+  ["variacao", "variação", "Diferença para o início do período: quem está parado fica em zero"],
+];
+
 const CORES = {
   critico: { fundo: "var(--red-bg)", borda: "var(--red-bd)", texto: "var(--red-fg)" },
   atencao: { fundo: "var(--amber-bg)", borda: "var(--amber-bd)", texto: "var(--amber-fg)" },
@@ -313,6 +322,11 @@ export default function CrescimentoView() {
   const [aberto, setAberto] = useState("");
   const [filtro, setFiltro] = useState("");
   const [ordem, setOrdem] = useState({ campo: "mb_por_h", desc: true });
+  // Escala do gráfico. "auto" resolve o caso deste ambiente sozinho: com
+  // 17 GB no legacy e 6 MB no healthcheck, a razão passa de 50x e ele
+  // entra em log — numa régua linear as outras vinte e cinco linhas
+  // ficam esmagadas no chão, tecnicamente certas e ilegíveis.
+  const [escala, setEscala] = useState("auto");
 
   const carregar = useCallback(async () => {
     if (!hostId) return;
@@ -484,14 +498,31 @@ export default function CrescimentoView() {
                   destacar. Para ver um sozinho, abra na tabela abaixo.
                 </div>
               </div>
-              <input
-                type="search"
-                placeholder="filtrar container…"
-                value={filtro}
-                onChange={(e) => setFiltro(e.target.value)}
-                aria-label="Filtrar containers pelo nome"
-                style={{ maxWidth: 240 }}
-              />
+              <div className="stack-h" style={{ gap: 6, flexWrap: "wrap" }}>
+                <div className="stack-h" style={{ gap: 4 }}>
+                  <span className="small muted">escala</span>
+                  {ESCALAS.map(([chave, rotulo, ajuda]) => (
+                    <button
+                      key={chave}
+                      className={`btn btn-sm ${
+                        escala === chave ? "btn-primary" : "btn-ghost"
+                      }`}
+                      onClick={() => setEscala(chave)}
+                      title={ajuda}
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="search"
+                  placeholder="filtrar container…"
+                  value={filtro}
+                  onChange={(e) => setFiltro(e.target.value)}
+                  aria-label="Filtrar containers pelo nome"
+                  style={{ maxWidth: 240 }}
+                />
+              </div>
             </div>
 
             {!series.length ? (
@@ -506,7 +537,18 @@ export default function CrescimentoView() {
                   visiveis={visiveis}
                   destaque={destaque || aberto}
                   altura={300}
+                  escala={escala}
                 />
+
+                <div className="small muted" style={{ marginTop: 6 }}>
+                  {escala === "variacao"
+                    ? "Cada linha é a diferença para o próprio início do período: quem está parado fica em zero, e só quem cresceu sobe."
+                    : escala === "log"
+                      ? "Escala logarítmica: cada faixa do eixo é dez vezes a anterior. É o que deixa 17 GB e 6 MB no mesmo gráfico."
+                      : escala === "linear"
+                        ? "Escala linear: proporção real entre as linhas. Com uma série muito maior que as outras, as menores ficam coladas no chão."
+                        : "Escala automática: linear quando as séries têm tamanho parecido, logarítmica quando há mais de 50x entre a maior e a menor."}
+                </div>
 
                 <div
                   className="stack-h"
