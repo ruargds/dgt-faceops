@@ -80,52 +80,84 @@
 19. **Não gere JSON no bash.** Quebra no primeiro valor com aspas ou acento.
     Use as seções `###FACEOPS:` e parseie no Python.
 
+### Séries, tendência e projeção
+
+*(vieram da vigilância de crescimento — ver
+[38_CRESCIMENTO_E_VAZAMENTO](38_CRESCIMENTO_E_VAZAMENTO.md))*
+
+20. **Não afirme tendência com poucos pontos nem com ajuste ruim.**
+    Abaixo de `MIN_PONTOS` (8) e abaixo de R² 0,70, a resposta é
+    "indeterminado" com o motivo — nunca uma inclinação com cara de
+    número certo. Uma reta puxada de três amostras vira previsão errada
+    na tela e alarme que ninguém acredita na terceira vez.
+
+21. **Queda brusca corta a série.** Container reiniciado devolve memória
+    de uma vez, log rotacionado devolve disco. Ajustar reta por cima
+    disso mente nos dois sentidos. Corte, use o trecho de depois, e conte
+    quantos cortes houve — duas quedas com subida entre elas são outro
+    diagnóstico ("volta ao normal quando reinicia"), não um vazamento.
+
+22. **Quem é grande não é quem cresceu.** Acusação vem de **duas**
+    medições com hora, não de um retrato. O maior diretório do disco é o
+    maior desde sempre; o que ganhou 8 GB em duas horas é o assunto.
+
+23. **Comando caro de diagnóstico leva `timeout` e prioridade baixa de
+    E/S.** `du`, `find` e afins rodam com `ionice -c3 nice -n19` e teto de
+    tempo, com plano B onde o `ionice` não existe. Quem estourou o prazo
+    devolve "não medido" — número inventado é pior que buraco.
+
+24. **Dado que o ciclo já lê e joga fora é candidato a virar série — com
+    cadência e retenção PRÓPRIAS.** O `docker stats` do coletor já
+    existia; guardá-lo não custa nada ao servidor. Guardá-lo a cada ciclo
+    custaria 172 mil linhas por dia ao banco. Regra: nova série decide
+    seu intervalo e seu prazo, e ambos entram em Configurações.
+
 ### Frontend
 
-20. **Ícone sempre de `Icons.js`.** Heroicons outline, `strokeWidth 1.5`.
+25. **Ícone sempre de `Icons.js`.** Heroicons outline, `strokeWidth 1.5`.
     Nunca SVG solto, nunca emoji em botão ou rótulo.
 
-21. **Botão sem permissão é OMITIDO, não desabilitado.** Use
+26. **Botão sem permissão é OMITIDO, não desabilitado.** Use
     `has("codigo")` do `usePermissions()`.
 
-22. **Cuidado com aninhamento de guarda.** `{canA && (<div>{canB && …}</div>)}`
+27. **Cuidado com aninhamento de guarda.** `{canA && (<div>{canB && …}</div>)}`
     nunca avalia `canB` se `canA` é falso. Correto: `{(canA || canB) && …}`.
 
-23. **Caminho de import depende do diretório.**
+28. **Caminho de import depende do diretório.**
     `components/Comuns.js` → `from "./Icons"`.
     `components/views/X.js` → `from "../Comuns"`, `from "../../api"`.
 
-24. **Sem polling eterno.** A tela de Backups só liga o intervalo enquanto
+29. **Sem polling eterno.** A tela de Backups só liga o intervalo enquanto
     houver execução em andamento. Recursos só coleta no clique. Cada leitura
     é um SSH em servidor de produção.
 
-25. **Confirmação destrutiva é por digitação, não por diálogo.** Use
+30. **Confirmação destrutiva é por digitação, não por diálogo.** Use
     `ConfirmarDigitando`. "Tem certeza? [OK]" vira reflexo na terceira vez.
 
 ### Permissões
 
-26. **O catálogo é hardcoded.** Não existe tabela `permissions`. Registre em
+31. **O catálogo é hardcoded.** Não existe tabela `permissions`. Registre em
     `PERMISSION_CATALOG` antes de usar — `require_permission` levanta erro na
     subida se o código não existir.
 
 ### Deploy
 
-27. **`deploy.sh --build` para aplicar qualquer mudança de código.**
+32. **`deploy.sh --build` para aplicar qualquer mudança de código.**
     Backend, frontend, `requirements.txt`, `Dockerfile` — tudo. O código é
     copiado para dentro da imagem (`COPY backend/app ./app`) e não há
     volume de fonte.
 
-28. **`deploy.sh` sem `--build` NÃO aplica código novo.** Ele recria os
+33. **`deploy.sh` sem `--build` NÃO aplica código novo.** Ele recria os
     containers com a imagem que já existe. Serve para trocar valor do
     `.env`, recriar container derrubado ou testar a subida — e o mesmo
     vale para `atualizar.sh --sem-build`. Esta regra já esteve escrita ao
     contrário aqui, e a consequência é sutil: o painel sobe igual e passa
     a anunciar uma revisão que não é a que está rodando.
 
-29. **Container fantasma:** se der "container name already in use", rode
+34. **Container fantasma:** se der "container name already in use", rode
     `docker rm -f faceops_backend faceops_frontend`. O `deploy.sh` já faz.
 
-30. **Script `.sh` tem que estar em LF.** O `.gitattributes` garante no
+35. **Script `.sh` tem que estar em LF.** O `.gitattributes` garante no
     clone; ZIP baixado não. O instalador Windows converte. Sem isso o bash
     falha com `$'\r': command not found`, que não diz nada sobre a causa.
 
@@ -146,8 +178,11 @@
 [ ] Rota que age no Docker: chama _garantir_do_projeto()?
 [ ] Ação destrutiva: exige confirmação e gera auditoria critical?
 [ ] git config user.email "dev@dgt.com.br" e user.name "DGT Dev"
-[ ] cd backend && python tests/verificar.py  (26 cenários, sem Postgres)
+[ ] cd backend && python tests/verificar.py  (todos os cenários, sem Postgres)
 [ ] Índice novo no model: o nome COLIDE com o que index=True já gera?
+[ ] Tabela nova que cresce: entrou na faxina E na prévia da faxina?
+[ ] Tipo de evento novo no Telegram: regra que JÁ EXISTE consegue marcá-lo?
+[ ] Comando novo em servidor: só leitura, com timeout e ionice?
 [ ] A tela afirma algo que ela realmente sabe? (ver regra abaixo)
 ```
 

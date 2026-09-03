@@ -513,6 +513,94 @@ CATALOGO: list[ItemConfig] = [
                "execução cujo artefato JÁ NÃO EXISTE mais — enquanto houver "
                "arquivo para restaurar, a linha que o descreve fica.",
                minimo=0, maximo=3650),
+
+    # Crescimento — consumo que sobe sem parar
+    ItemConfig("crescimento.ativo", "monitor",
+               "Vigiar consumo que sobe sem parar", "booleano",
+               True,
+               "Detecta memória ou disco em subida contínua a partir das "
+               "amostras que o coletor já gravou, projeta quando encosta no "
+               "limite e diz o que quebra. Não custa ida nova ao servidor. "
+               "Desligado, o painel só avisa quando o limiar for atingido — "
+               "que costuma ser tarde demais para agir."),
+    ItemConfig("crescimento.janela_h", "monitor",
+               "Janela analisada (horas)", "numero",
+               6,
+               "Quanto tempo para trás a tendência é calculada. Janela curta "
+               "reage rápido e confunde pico com tendência; janela longa "
+               "demora a perceber e dilui a aceleração.",
+               minimo=2, maximo=72),
+    ItemConfig("crescimento.horizonte_h", "monitor",
+               "Avisar quando o estouro couber em (horas)", "numero",
+               72,
+               "Se a projeção diz que o recurso encosta no limite dentro "
+               "deste prazo, vira vigilância. Consumo que só estoura em "
+               "meses é assunto de dimensionamento, não de plantão.",
+               minimo=1, maximo=720),
+    ItemConfig("crescimento.mem_pp_por_h", "monitor",
+               "Memória: subida mínima para valer atenção (pontos %/hora)",
+               "numero", 2,
+               "Abaixo disso é variação normal de carga. Dois pontos por "
+               "hora levam uma máquina de 60% a 95% em menos de um turno.",
+               minimo=1, maximo=50),
+    ItemConfig("crescimento.disco_pp_por_dia", "monitor",
+               "Disco: subida mínima para valer atenção (pontos %/dia)",
+               "numero", 1,
+               "A escala do disco é outra: o que na memória se mede por "
+               "hora, aqui se mede por dia. Um ponto percentual por dia num "
+               "disco de 1 TB são cerca de 10 GB diários.",
+               minimo=1, maximo=50),
+    ItemConfig("crescimento.ciclos_para_abrir", "monitor",
+               "Confirmar a subida em quantos ciclos antes de avisar",
+               "numero", 3,
+               "Uma leitura não abre vigilância: backup começando, câmera "
+               "religando e cache do kernel produzem subidas curtas que "
+               "passam sozinhas.",
+               minimo=1, maximo=20),
+    ItemConfig("crescimento.rastrear_sozinho", "monitor",
+               "Rastrear o culpado sozinho quando a vigilância abrir",
+               "booleano", True,
+               "Uma execução SSH, só leitura, com prioridade baixa de E/S. "
+               "Desligado, a detecção continua e o rastreio passa a ser no "
+               "clique — é o que fazer se o servidor não puder receber nem "
+               "essa leitura."),
+    ItemConfig("crescimento.rastrear_a_cada_min", "monitor",
+               "Repetir o rastreio enquanto durar, a cada (minutos)",
+               "numero", 30,
+               "É o que transforma 'quem é grande' em 'quem está crescendo': "
+               "dois rastreios com hora dão o ganho por hora de cada "
+               "caminho. Intervalo curto demais vira `du` repetido em disco "
+               "de produção.",
+               minimo=5, maximo=1440),
+    ItemConfig("containers.historico_ativo", "monitor",
+               "Guardar memória por container", "booleano",
+               True,
+               "O ciclo já lê `docker stats` a cada passada para desenhar os "
+               "cartões, e descartava o resultado. Guardando, o painel passa a "
+               "responder QUEM está com a memória — sem comando novo no "
+               "servidor. O custo é linha no banco, não carga no FindFace."),
+    ItemConfig("containers.intervalo_min", "monitor",
+               "Gravar memória por container a cada (minutos)", "numero",
+               5,
+               "Memória de container não muda de forma interessante a cada "
+               "minuto. Com 30 containers em 4 servidores, gravar a cada ciclo "
+               "de 60 s daria 172 mil linhas por dia; a cada 5 min, 34 mil.",
+               minimo=1, maximo=120),
+    ItemConfig("containers.retencao_dias", "monitor",
+               "Guardar memória por container por (dias)", "numero",
+               7,
+               "Curto de propósito: esta série responde 'quem está comendo a "
+               "memória agora e desde quando'. O histórico longo de capacidade "
+               "continua sendo o das amostras do host.",
+               minimo=1, maximo=90),
+    ItemConfig("crescimento.retencao_dias", "monitor",
+               "Guardar vigilâncias encerradas por (dias)", "numero",
+               90,
+               "Uma linha por episódio, com a série medida e o último "
+               "rastreio. Prazo maior que o dos incidentes de propósito: "
+               "'este disco já encheu antes?' é pergunta de mês, não de "
+               "semana.",
+               minimo=1, maximo=730),
 ]
 
 POR_CHAVE: dict[str, ItemConfig] = {i.chave: i for i in CATALOGO}

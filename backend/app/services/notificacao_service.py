@@ -65,6 +65,14 @@ TIPOS: list[dict] = [
                  "da GPU acima do limiar configurado.",
         "icone": "🟡",
     },
+    {
+        "chave": "crescimento",
+        "rotulo": "Consumo subindo sem parar",
+        "ajuda": "Memória ou disco em subida contínua, com a projeção de "
+                 "quando encosta no limite e quem está ocupando. Chega ANTES "
+                 "do limiar — é o aviso que ainda dá tempo de usar.",
+        "icone": "📈",
+    },
 ]
 
 POR_TIPO = {t["chave"]: t for t in TIPOS}

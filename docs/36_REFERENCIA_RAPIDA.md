@@ -85,6 +85,25 @@ Completo em [17_ATUALIZACAO](17_ATUALIZACAO.md).
 
 ---
 
+## Crescimento e vazamento
+
+* **Tendência sai da amostra que já existe.** Detectar consumo em subida
+  não custa ida ao servidor — o que custa é rastrear o culpado, e por isso
+  o rastreio só roda depois de a subida se confirmar em três ciclos.
+* **`docker stats` já era lido e jogado fora.** A série de memória por
+  container é ele, gravado. Nenhum comando novo; o custo é linha no banco,
+  com cadência (5 min) e retenção (7 dias) próprias.
+* **Quem é grande ≠ quem cresceu.** O Tarantool é o maior do disco desde
+  sempre e não explica nada. A acusação vem da diferença entre duas
+  medições com hora — vale para caminho no disco e para container.
+* **Abrir usa a janela inteira; fechar usa o fim dela.** Se as duas
+  decisões olhassem as mesmas 6h, uma vigilância resolvida às 14h ficaria
+  acusando até as 20h.
+* **`du` sem `timeout` é armadilha.** Na árvore de dados do FindFace ele
+  não termina — e "não medido" é resposta; zero não é.
+* **Reta perfeita não ganha "dobra a cada X".** Tempo de dobra é
+  vocabulário de exponencial; usá-lo em série linear é inventar precisão.
+
 ## Diagnóstico e log
 
 * **O painel não varre log sozinho.** Lê só de serviço com incidente

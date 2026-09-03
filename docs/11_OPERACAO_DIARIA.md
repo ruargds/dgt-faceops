@@ -15,6 +15,12 @@ Abra o **Painel**. Um cartão por servidor. Você está procurando três coisas:
 
 Se os três estão bem, acabou.
 
+Uma quarta, quando o painel avisou: **Crescimento**, no grupo
+Monitoramento, responde "isto está subindo e vai estourar quando". Ela lê
+só o histórico já gravado, então abrir não custa nada ao servidor — e é a
+única tela que dá tempo de agir antes do estrago. Ver
+[38_CRESCIMENTO_E_VAZAMENTO](38_CRESCIMENTO_E_VAZAMENTO.md).
+
 ### Toda semana, 10 minutos
 
 - **Backups** → confira que os agendamentos rodaram todos os dias. Falha
@@ -23,6 +29,9 @@ Se os três estão bem, acabou.
   algum serviço é sinal de causa não resolvida.
 - **Recursos**, em cada servidor → Atualizar. Disco acima de 80% ou VRAM
   constantemente acima de 90% pedem ação antes de virar incidente.
+- **Crescimento**, janela de 7 dias → algum container com ritmo positivo
+  constante em MB/h? Consumo alto e ESTÁVEL é normal; o que interessa é o
+  que sobe e não volta.
 - **Auditoria** → filtre por `critical`. Alguém parou stack, apagou backup
   ou mexeu em credencial? Era esperado?
 
@@ -129,7 +138,7 @@ reversível.
 
 Confirme na tela que voltou a `running` e `healthy`.
 
-### 5. Recursos (1 minuto)
+### 5. Recursos e Crescimento (1 minuto)
 
 Se o reinício não resolveu, ou se o container voltou a morrer:
 
@@ -140,6 +149,12 @@ Se o reinício não resolveu, ou se o container voltou a morrer:
 **Disco cheio é o incidente mais comum em servidor de reconhecimento
 facial**, porque as fotos de evento crescem sem parar. Use
 **Recursos → Analisar** para ver onde está indo.
+
+E quando a pergunta for "quem está comendo a RAM desta máquina", abra
+**Crescimento**: o gráfico de memória por container mostra as curvas lado
+a lado, e a tabela abaixo abre um container por vez, com o ritmo em MB/h.
+Sai do histórico já gravado — não custa uma ida ao servidor no meio de um
+incidente.
 
 ### 6. InTerminal
 
@@ -224,6 +239,8 @@ gigabytes por dia.
 **Sintomas de disco cheio chegando:**
 
 - Disco acima de 85% em Recursos
+- Em **Crescimento**, o disco com projeção de estouro dentro de dias — e a
+  tela já diz qual caminho está ganhando espaço por hora
 - PostgreSQL com erro de escrita no log
 - Eventos novos sem imagem
 

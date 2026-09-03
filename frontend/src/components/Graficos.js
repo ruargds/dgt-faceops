@@ -244,6 +244,174 @@ export function GraficoLinha({
   );
 }
 
+/**
+ * Paleta das séries do gráfico de containers.
+ *
+ * Doze cores distinguíveis entre si e legíveis nos dois temas. Acima
+ * disso as cores se repetem — e é de propósito: um gráfico com mais de
+ * doze linhas simultâneas não se lê, e o caminho é filtrar, não colorir
+ * mais.
+ */
+export const PALETA = [
+  "#1A6FC4", "#E4572E", "#17A398", "#8E44AD", "#F2A65A", "#2E86AB",
+  "#C0392B", "#27AE60", "#D81B60", "#7F8C8D", "#5B6ABF", "#B58900",
+];
+
+export const corDaSerie = (i) => PALETA[i % PALETA.length];
+
+/**
+ * Várias séries num gráfico só — o "quem está comendo a RAM".
+ *
+ * `series` = [{nome, cor, pontos: [{ts, valor}]}]. Cada série desenha uma
+ * linha; quem está fora de `visiveis` some do desenho sem sumir da lista,
+ * porque esconder é filtro de leitura, não exclusão de dado.
+ *
+ * Duas diferenças em relação ao `GraficoLinha`, e as duas vêm da natureza
+ * do dado:
+ *
+ * * **eixo Y em MB, com máximo calculado.** Aqui não há teto de 100%: o
+ *   que importa é comparar containers entre si, e uma escala fixa
+ *   achataria todo mundo contra o chão por causa do maior.
+ * * **sem preenchimento de área.** Doze áreas translúcidas empilhadas
+ *   viram uma mancha; linha limpa é o que deixa cruzar as curvas.
+ *
+ * O eixo do tempo é comum a todas: cada série pode ter começado em
+ * momento diferente (container que subiu depois), então a posição
+ * horizontal vem do carimbo, não do índice do ponto.
+ */
+export function GraficoMultiLinha({
+  series,
+  altura = 220,
+  unidade = " MB",
+  visiveis = null,
+  destaque = "",
+  formatar = null,
+}) {
+  const L = 44, R = 10, T = 10, B = 20;
+  const W = 800;
+  const H = altura;
+  const areaW = W - L - R;
+  const areaH = H - T - B;
+
+  const ativas = (series || []).filter(
+    (s) => (!visiveis || visiveis.has(s.nome)) && s.pontos && s.pontos.length,
+  );
+
+  if (!ativas.length) {
+    return (
+      <div
+        className="small muted"
+        style={{
+          height: altura,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius)",
+        }}
+      >
+        Nenhuma série selecionada.
+      </div>
+    );
+  }
+
+  const carimbos = ativas.flatMap((s) =>
+    s.pontos.map((p) => new Date(p.ts).getTime()),
+  );
+  const t0 = Math.min(...carimbos);
+  const t1 = Math.max(...carimbos);
+  const spanMs = Math.max(1, t1 - t0);
+
+  const topo = Math.max(...ativas.flatMap((s) => s.pontos.map((p) => p.valor)));
+  // Uma folga de 10% no topo evita a linha do maior colar na borda, onde
+  // ela some contra o quadro.
+  const maximo = topo > 0 ? topo * 1.1 : 1;
+
+  const px = (ts) => L + ((new Date(ts).getTime() - t0) / spanMs) * areaW;
+  const py = (v) => T + areaH - (Math.min(Math.max(v, 0), maximo) / maximo) * areaH;
+
+  // O formatador padrão é o de memória (MB que vira GB). CPU e outras
+  // unidades passam o seu — sem isso, "42%" viraria "0.0 GB" no eixo.
+  const formatarValor =
+    formatar ||
+    ((v) => (v >= 1024 ? `${(v / 1024).toFixed(1)} GB` : `${Math.round(v)}${unidade}`));
+
+  const formatarHora = (ms) => {
+    const d = new Date(ms);
+    if (spanMs <= 36 * 3600e3) {
+      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  };
+
+  const marcasY = [0, 0.25, 0.5, 0.75, 1].map((f) => ({
+    y: py(maximo * f),
+    texto: formatarValor(maximo * f),
+  }));
+
+  const marcasX = [0, 0.5, 1].map((f) => ({
+    x: L + f * areaW,
+    texto: formatarHora(t0 + f * spanMs),
+    ancora: f === 0 ? "start" : f === 1 ? "end" : "middle",
+  }));
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ width: "100%", height: altura, display: "block" }}
+      role="img"
+      aria-label={`Memória por container: ${ativas.length} série(s)`}
+    >
+      {marcasY.map((m, i) => (
+        <g key={`y${i}`}>
+          <line
+            x1={L} x2={W - R} y1={m.y} y2={m.y}
+            stroke="var(--border)" strokeWidth="1" strokeDasharray="2 4"
+          />
+          <text
+            x={L - 6} y={m.y + 3} textAnchor="end"
+            style={{ fontSize: 9, fill: "var(--text-3)" }}
+          >
+            {m.texto}
+          </text>
+        </g>
+      ))}
+
+      {marcasX.map((m, i) => (
+        <text
+          key={`x${i}`}
+          x={m.x} y={H - 5} textAnchor={m.ancora}
+          style={{ fontSize: 9, fill: "var(--text-3)" }}
+        >
+          {m.texto}
+        </text>
+      ))}
+
+      {ativas.map((s) => {
+        const d = s.pontos
+          .map((p, i) => `${i === 0 ? "M" : "L"} ${px(p.ts).toFixed(1)},${py(p.valor).toFixed(1)}`)
+          .join(" ");
+        // Com uma série em destaque, as outras recuam em vez de sumir: o
+        // ponto de ter tudo no mesmo gráfico é comparar, e comparação
+        // precisa das vizinhas visíveis.
+        const apagada = destaque && destaque !== s.nome;
+        return (
+          <path
+            key={s.nome}
+            d={d}
+            fill="none"
+            stroke={s.cor}
+            strokeWidth={destaque === s.nome ? 2.6 : 1.6}
+            strokeOpacity={apagada ? 0.25 : 1}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 /** Versão miniatura, para o cartão do servidor. */
 export function Faisca({ serie, limite = null, altura = 34, maximo = 100 }) {
   if (!serie || serie.length < 2) {

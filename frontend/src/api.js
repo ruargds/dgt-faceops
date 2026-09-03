@@ -350,6 +350,19 @@ export const api = {
   apuracaoIncidente: (id) => get(`/incidentes/${id}/apuracao`),
   apurarIncidente: (id) => post(`/incidentes/${id}/apurar`, {}),
 
+  // Crescimento — consumo que sobe sem parar. As três primeiras leem só
+  // o banco (a série que o coletor já gravou); `crescimentoRastrear` é a
+  // única que abre SSH, e por isso é POST e só roda no clique.
+  crescimentoAnalise: (hostId, horas) =>
+    get(`/crescimento/analise/${hostId}${horas ? `?horas=${horas}` : ""}`),
+  crescimentoContainers: (hostId, horas = 6, limite = 24) =>
+    get(`/crescimento/containers/${hostId}?horas=${horas}&limite=${limite}`),
+  crescimentoVigilancias: (hostId, dias = 7) =>
+    get(`/crescimento?dias=${dias}${hostId ? `&host_id=${hostId}` : ""}`),
+  crescimentoRastrear: (id) => post(`/crescimento/${id}/rastrear`, {}),
+  crescimentoRastrearHost: (hostId, recurso = "disco") =>
+    post(`/crescimento/rastrear/${hostId}?recurso=${recurso}`, {}),
+
   // Diagnóstico — reincidência, padrões de log e base de erros conhecidos.
   // Tudo leitura barata, menos `analisarLog`, que lê no servidor (por isso
   // é POST e só roda no clique).

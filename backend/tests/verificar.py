@@ -31,6 +31,8 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from app.db.database import Base  # noqa: E402
 from app.models.amostra import Amostra  # noqa: E402
+from app.models.amostra_container import AmostraContainer  # noqa: E402
+from app.models.crescimento import Crescimento  # noqa: E402
 from app.models.host import Host  # noqa: E402
 from app.models.audit import AuditLog, TerminalSession
 from app.models.licenca_amostra import LicencaAmostra
@@ -46,6 +48,7 @@ from app.services.limiar_service import LimiarService  # noqa: E402
 
 TABELAS = [
     Host.__table__, Amostra.__table__, Incidente.__table__,
+    Crescimento.__table__, AmostraContainer.__table__,
     LimiarOverride.__table__, LogPadrao.__table__,
     NotificacaoConta.__table__, NotificacaoDestino.__table__,
     NotificacaoRegra.__table__, NotificacaoEnvio.__table__,
@@ -3333,6 +3336,351 @@ async def cenario_aviso_mostra_apelido_e_roteia_por_id():
     )
 
 
+
+# ── Crescimento: o que sobe sem parar ──────────────────────────────────
+
+
+def _serie(valores, minutos=5):
+    """(horas, valor) a partir de uma lista de valores igualmente espaçados."""
+    return [(i * minutos / 60, v) for i, v in enumerate(valores)]
+
+
+async def cenario_crescimento_distingue_linear_de_exponencial():
+    """
+    As três formas que a série pode ter, e por que a diferença importa:
+
+    * **estável** — não há o que projetar;
+    * **linear** — sobe sempre igual, e a projeção é uma conta de regra de três;
+    * **acelerando** — a taxa da segunda metade é muito maior que a da
+      primeira. É o caso do pedido ("do nada, consumo exponencial") e o
+      único em que faz sentido falar em "dobra a cada X".
+
+    Sem separar os três, um crescimento normal de operação e um vazamento
+    receberiam o mesmo aviso — e o aviso que vale para tudo não vale para
+    nada.
+    """
+    from app.services.crescimento_service import analisar_serie
+
+    plana = analisar_serie(_serie([70.0, 70.1, 69.9, 70.0, 70.2, 70.1, 70.0,
+                                   69.9, 70.1, 70.0, 70.1, 70.0]))
+    assert plana["regime"] in ("estavel", "recuando"), plana
+    assert plana["dobra_h"] is None
+
+    linear = analisar_serie(_serie([60 + i * 1.5 for i in range(14)]))
+    assert linear["regime"] == "linear", linear
+    # 1,5 ponto a cada 5 min = 18 pontos por hora.
+    assert 17 <= linear["taxa_por_h"] <= 19, linear
+    assert linear["confianca"] == "alta", linear
+    # Reta perfeita NÃO ganha "dobra": dobrar é vocabulário de exponencial,
+    # e usá-lo aqui daria uma precisão que a série não sustenta.
+    assert linear["dobra_h"] is None, linear
+
+    exponencial = analisar_serie(_serie([10 * (1.35 ** i) for i in range(14)]))
+    assert exponencial["regime"] == "acelerando", exponencial
+    assert exponencial["dobra_h"] is not None, "aceleração sem tempo de dobra"
+    # 1,35 por passo de 5 min → dobra em ~0,19 h. Margem larga de
+    # propósito: o que se trava é a ordem de grandeza, não o decimal.
+    assert 0.1 <= exponencial["dobra_h"] <= 0.5, exponencial
+
+
+async def cenario_crescimento_nao_inventa_tendencia():
+    """
+    Três formas de a série NÃO ser um vazamento — e o painel tem de dizer
+    isso, em vez de puxar uma reta por cima.
+
+    1. **Poucos pontos.** Três amostras não desenham tendência.
+    2. **Reinício.** Container reiniciado devolve a memória de uma vez; a
+       reta por cima da queda daria inclinação negativa numa máquina que
+       está subindo, ou positiva numa que acabou de ser resolvida.
+    3. **Serrote.** Sobe, cai, sobe de novo: o diagnóstico é "volta ao
+       normal quando reinicia", que manda investigar outra coisa.
+    """
+    from app.services.crescimento_service import analisar_serie
+
+    curta = analisar_serie(_serie([50.0, 60.0, 70.0]))
+    assert curta["regime"] == "indeterminado", curta
+    assert "ponto" in curta["motivo"], curta
+    assert curta["taxa_por_h"] == 0.0, "projetou em cima de três pontos"
+
+    # Sobe até 80 e o container reinicia: cai para 40 e recomeça devagar.
+    reinicio = analisar_serie(
+        _serie([60, 65, 70, 75, 80, 40, 40.2, 40.4, 40.6, 40.8, 41, 41.2])
+    )
+    assert reinicio["reinicios"] == 1, reinicio
+    # O trecho DEPOIS da queda é o que vale — e ele sobe devagar.
+    assert reinicio["regime"] in ("linear", "indeterminado"), reinicio
+    assert reinicio["taxa_por_h"] < 5, (
+        "a queda do reinício entrou na conta da tendência"
+    )
+
+    serrote = analisar_serie(
+        _serie([50, 60, 70, 80, 45, 55, 65, 75, 40, 50, 60, 70, 80])
+    )
+    assert serrote["regime"] == "serrote", serrote
+    assert "reinicia" in serrote["motivo"], serrote
+
+
+async def cenario_crescimento_projeta_o_estouro_e_diz_o_dano():
+    """
+    A projeção e o dano são o par que transforma medida em decisão. Número
+    sozinho ("memória a 4 pp/h") não faz ninguém levantar da cama; "em 6h
+    o kernel mata o container e as câmeras dele param" faz.
+
+    Trava também o que NÃO se projeta: sem subida e acima do teto não há
+    previsão — nos dois casos, número aqui seria invenção.
+    """
+    from app.services.crescimento_service import CrescimentoService, projetar
+
+    # De 71% subindo 4 pontos por hora até o teto de 95%: 6 horas.
+    assert projetar(71.0, 4.0, 95.0) == 6.0
+    assert projetar(80.0, 0.0, 95.0) is None, "projetou sem subida"
+    assert projetar(96.0, 4.0, 95.0) is None, "projetou o que já estourou"
+
+    dano_mem = CrescimentoService.dano("memoria", "findface-video-worker-1")
+    assert "findface-video-worker-1" in dano_mem
+    # O dano é escrito em operação, não em métrica.
+    assert "câmeras" in dano_mem and "não aparece erro" in dano_mem, dano_mem
+
+    dano_disco = CrescimentoService.dano("disco", ponto="/")
+    assert "para de gravar" in dano_disco and "passagens" in dano_disco, dano_disco
+
+
+async def cenario_crescimento_abre_e_fecha_vigilancia_sozinha():
+    """
+    O ciclo de vida inteiro, sem SSH nenhum: a subida aparece nas amostras
+    que o coletor já gravou, a vigilância abre depois de confirmada em N
+    ciclos, e fecha sozinha quando o consumo estabiliza.
+
+    As duas travas que importam:
+
+    * **uma leitura não abre vigilância** — senão um backup começando
+      viraria alarme toda madrugada;
+    * **estabilizou, fechou** — vigilância que fica aberta para sempre
+      vira ruído permanente na tela, que é pior que não ter.
+    """
+    from app.services.crescimento_service import CrescimentoService
+
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        host = await com_host(db)
+        agora = datetime.now(timezone.utc)
+
+        # 90 min de memória subindo de 60% a 90% (20 pontos por hora).
+        for i in range(19):
+            db.add(Amostra(
+                host_id=host.id,
+                ts=agora - timedelta(minutes=90 - i * 5),
+                mem_pct=60.0 + i * 1.6667,
+                mem_total_mb=16384, mem_usado_mb=9830,
+                disco_pct=40.0, disco_ponto="/", disco_total_gb=100,
+                disco_livre_gb=60, swap_pct=0.0,
+            ))
+        await db.flush()
+
+        serv = CrescimentoService(
+            ssh=None,
+            config=ConfigFalsa({
+                "crescimento.ativo": True,
+                "crescimento.janela_h": 6,
+                "crescimento.ciclos_para_abrir": 3,
+                # Sem ida ao servidor no teste — e é configuração real,
+                # não gambiarra de teste: quem não quer o rastreio
+                # automático desliga esta chave.
+                "crescimento.rastrear_sozinho": False,
+                "containers.historico_ativo": False,
+            }),
+        )
+
+        eventos = await serv.registrar_ciclo(db, host)
+        assert eventos == [], "uma leitura só abriu vigilância"
+        assert (await db.execute(sa.select(sa.func.count(Crescimento.id)))).scalar() == 0
+
+        await serv.registrar_ciclo(db, host)
+        eventos = await serv.registrar_ciclo(db, host)
+        abertas = list((await db.execute(sa.select(Crescimento))).scalars().all())
+        assert len(abertas) == 1, f"não abriu no terceiro ciclo: {abertas}"
+        vig = abertas[0]
+        assert vig.recurso == "memoria" and vig.fim is None
+        assert vig.regime in ("linear", "acelerando"), vig.regime
+        assert vig.estouro_em is not None, "abriu sem previsão de estouro"
+
+        assert len(eventos) == 1, eventos
+        evento = eventos[0]
+        assert evento["tipo"] == "crescimento"
+        assert "memória" in evento["texto"], evento["texto"]
+        # A previsão vai no texto do aviso: é o que faz alguém agir, e tem
+        # de caber na primeira linha da mensagem no celular.
+        assert "chega a" in evento["texto"], evento["texto"]
+        assert evento["significa"], "aviso sem o dano previsto"
+
+        # Agora estabiliza: as amostras novas param de subir.
+        for i in range(1, 13):
+            db.add(Amostra(
+                host_id=host.id,
+                ts=agora + timedelta(minutes=i * 5),
+                mem_pct=90.0,
+                mem_total_mb=16384, mem_usado_mb=14745,
+                disco_pct=40.0, disco_ponto="/", disco_total_gb=100,
+                disco_livre_gb=60, swap_pct=0.0,
+            ))
+        await db.flush()
+
+        eventos = await serv.registrar_ciclo(db, host)
+        await db.flush()
+        assert vig.fim is not None, "não fechou quando o consumo estabilizou"
+        assert vig.desfecho == "estabilizou", vig.desfecho
+        assert any(e["tipo"] == "retorno" for e in eventos), eventos
+
+    await engine.dispose()
+
+
+async def cenario_crescimento_acusa_quem_cresceu_nao_quem_e_grande():
+    """
+    A diferença entre as duas perguntas, que é o coração do rastreio:
+
+    * *quem é grande?* — o Tarantool, desde sempre. Não explica nada.
+    * *quem cresceu?* — o worker que ganhou 900 MB em duas horas. É esse.
+
+    Vale para os dois lados: a série por container (memória) e a
+    comparação entre dois rastreios de disco.
+    """
+    from app.services.crescimento_service import CrescimentoService, atribuir
+
+    # Disco: dois retratos com hora. O maior não é o que cresceu.
+    medicoes = [
+        {"ts": "2026-09-03T10:00:00+00:00",
+         "alvos": {"/opt/findface-multi/data": 800 * 1024 ** 3,
+                   "/var/log": 2 * 1024 ** 3}},
+        {"ts": "2026-09-03T12:00:00+00:00",
+         "alvos": {"/opt/findface-multi/data": 800 * 1024 ** 3 + 1024 ** 3,
+                   "/var/log": 10 * 1024 ** 3}},
+    ]
+    ranking = atribuir(medicoes)
+    assert ranking, "não atribuiu crescimento nenhum"
+    assert ranking[0]["alvo"] == "/var/log", ranking
+    assert ranking[0]["cresceu_bytes"] == 8 * 1024 ** 3
+    assert ranking[0]["por_hora_bytes"] == 4 * 1024 ** 3
+
+    # Um retrato só não acusa ninguém — e dizer isso é a resposta certa.
+    assert atribuir(medicoes[:1]) == []
+
+    # Memória: a série por container, direto do banco.
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        host = await com_host(db)
+        agora = datetime.now(timezone.utc)
+        for i in range(13):
+            quando = agora - timedelta(minutes=(12 - i) * 5)
+            # O maior da máquina, e estável.
+            db.add(AmostraContainer(
+                host_id=host.id, ts=quando,
+                nome="findface-tarantool-server-1", mem_mb=8000.0, mem_pct=48.0,
+            ))
+            # O que cresce: +75 MB a cada 5 min = 900 MB/h.
+            db.add(AmostraContainer(
+                host_id=host.id, ts=quando,
+                nome="findface-video-worker-1", mem_mb=1000.0 + i * 75, mem_pct=12.0,
+            ))
+        await db.flush()
+
+        serv = CrescimentoService(ssh=None, config=ConfigFalsa({}))
+        serie = await serv.serie_containers(db, host.id, horas=6)
+        assert serie["series"], serie
+        # Ordenado por quem CRESCEU, não por quem ocupa.
+        assert serie["series"][0]["nome"] == "findface-video-worker-1", [
+            (x["nome"], x["mb_por_h"]) for x in serie["series"]
+        ]
+        assert 850 <= serie["series"][0]["mb_por_h"] <= 950, serie["series"][0]
+
+        culpados = await serv.culpados_memoria(db, host.id, horas=6)
+        assert culpados and culpados[0]["nome"] == "findface-video-worker-1"
+        # E vem com o que o catálogo sabe sobre aquele serviço: o porquê,
+        # o contorno e o que o fabricante recomenda.
+        assert culpados[0]["causa"] == "video_worker", culpados[0]
+        assert culpados[0]["contorno"], "culpado sem o que fazer"
+        assert "manual" in culpados[0]["fabricante"], culpados[0]["fabricante"]
+        # O estável não é acusado de nada.
+        assert all(c["nome"] != "findface-tarantool-server-1" for c in culpados)
+
+    await engine.dispose()
+
+
+async def cenario_rastreio_de_crescimento_so_le():
+    """
+    O rastreio roda com sudo, em servidor de produção, no pior momento
+    possível — quando a máquina já está sob pressão de recurso. Então ele
+    não pode escrever nada, e não pode ser a causa do próximo incidente.
+
+    Mesma trava da apuração (INV-24), mais a de custo: todo comando caro
+    tem `timeout` e prioridade baixa de E/S, porque num disco com teto de
+    IOPS o diagnóstico compete com o FindFace.
+    """
+    from app.services import crescimento_service as cs
+
+    memoria = cs.script_memoria()
+    disco = cs.script_disco("/opt/findface-multi", "/", 6, "/var/backups/faceops")
+
+    proibidos = [
+        " rm ", "rm -", "restart", "systemctl stop", "docker stop",
+        "docker rm", "truncate", "mkfs", "dd ", "> /", ">> /", "kill ",
+        "chmod", "chown", "reboot",
+    ]
+    for script, nome in ((memoria, "memória"), (disco, "disco")):
+        for termo in proibidos:
+            assert termo not in script, (
+                f"o rastreio de {nome} tem comando que altera estado: {termo!r}"
+            )
+
+    # Custo cercado: o `du` da árvore de dados é o comando caro do painel.
+    assert "ionice -c3" in disco and "nice -n19" in disco, disco
+    assert disco.count("timeout") >= 4, "há `du`/`find` sem teto de tempo"
+    assert "docker stats" in memoria and "timeout 25 docker stats" in memoria
+
+    # E o que ele procura de fato: os lugares que já encheram disco neste
+    # ambiente, mais o arquivo apagado que continua ocupando (o caso em
+    # que o `du` não acha nada e o `df` segue cheio).
+    for esperado in ("/var/log", "/var/lib/docker/containers", "APAGADOS",
+                     "newermt", "lsof"):
+        assert esperado in disco, esperado
+
+    # Um `du` que não termina vira "não medido", nunca zero.
+    lido = cs.interpretar_disco({"CAMINHOS": "/opt/findface-multi/data|"})
+    assert lido["alvos"] == {}, lido
+    assert "não terminou de ser medido" in lido["achados"][0]["texto"], lido
+
+
+async def cenario_faxina_apaga_vigilancia_fechada_so():
+    """
+    Mesma regra do incidente: vigilância ABERTA é estado atual, não
+    histórico. Apagá-la faria a tela achar que o problema nunca existiu
+    enquanto ele ainda está acontecendo.
+    """
+    from app.services.crescimento_service import CrescimentoService
+
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        host = await com_host(db)
+        velha = datetime.now(timezone.utc) - timedelta(days=200)
+
+        db.add(Crescimento(host_id=host.id, recurso="disco", inicio=velha,
+                           fim=velha + timedelta(hours=2), desfecho="estabilizou"))
+        db.add(Crescimento(host_id=host.id, recurso="memoria", inicio=velha))
+        db.add(AmostraContainer(host_id=host.id, ts=velha, nome="x", mem_mb=10))
+        await db.flush()
+
+        removidas = await CrescimentoService.limpar(db, 90)
+        assert removidas == 1, removidas
+        restantes = list((await db.execute(sa.select(Crescimento))).scalars().all())
+        assert len(restantes) == 1 and restantes[0].fim is None, restantes
+
+        assert await CrescimentoService.limpar_containers(db, 7) == 1
+        # Zero dia desliga a faxina, em vez de apagar tudo.
+        assert await CrescimentoService.limpar(db, 0) == 0
+
+    await engine.dispose()
+
+
+
 CENARIOS = [
     cenario_ddl_sem_indice_duplicado,
     cenario_resumo_do_painel_degrada_sem_quebrar,
@@ -3355,6 +3703,13 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_crescimento_distingue_linear_de_exponencial,
+    cenario_crescimento_nao_inventa_tendencia,
+    cenario_crescimento_projeta_o_estouro_e_diz_o_dano,
+    cenario_crescimento_abre_e_fecha_vigilancia_sozinha,
+    cenario_crescimento_acusa_quem_cresceu_nao_quem_e_grande,
+    cenario_rastreio_de_crescimento_so_le,
+    cenario_faxina_apaga_vigilancia_fechada_so,
     cenario_busca_entende_acento_e_parte_da_palavra,
     cenario_servidor_nao_acumula_sobra,
     cenario_atualizar_forca_coleta_de_verdade,

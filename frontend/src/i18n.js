@@ -37,6 +37,7 @@ const DICIONARIO = {
   "menu.diagnostico": { pt: "Diagnóstico", en: "Diagnostics" },
   "menu.notificacoes": { pt: "Avisos (Telegram)", en: "Alerts (Telegram)" },
   "menu.recursos": { pt: "Recursos", en: "Resources" },
+  "menu.crescimento": { pt: "Crescimento", en: "Growth" },
   "menu.processos": { pt: "Processos", en: "Processes" },
   "menu.servicos": { pt: "Serviços", en: "Services" },
   "menu.cameras": { pt: "Licenciamento e dispositivos", en: "Licensing and devices" },

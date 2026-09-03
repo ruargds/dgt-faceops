@@ -92,7 +92,7 @@ def _gb(mb: float) -> str:
 class MonitorService:
     def __init__(
         self, metrics, stack, config=None, incidentes=None, limiares=None,
-        analise=None, notificacoes=None, apuracao=None,
+        analise=None, notificacoes=None, apuracao=None, crescimento=None,
     ) -> None:
         self.metrics = metrics
         self.stack = stack
@@ -107,6 +107,9 @@ class MonitorService:
         # Apura a causa quando o incidente FECHA — o único momento em que
         # a máquina volta a poder ser perguntada.
         self.apuracao = apuracao
+        # Vigilância de consumo que sobe sem parar. Trabalha sobre as
+        # amostras que este ciclo já gravou — não ganha ida ao servidor.
+        self.crescimento = crescimento
         self._tarefa: asyncio.Task | None = None
         self._rodando = False
         # Último erro por host, para a tela não repetir a mesma queixa
@@ -326,6 +329,45 @@ class MonitorService:
         except Exception:
             log.exception("falha ao analisar log do host %s", host.id)
 
+    async def _gravar_containers(self, db, host, containers: list[dict]) -> None:
+        """
+        Guarda a memória por container que a coleta desta passada já leu.
+
+        Sem comando novo no servidor: o `docker stats` acontecia de
+        qualquer forma para desenhar os cartões, e o resultado era jogado
+        fora. A cadência e a retenção da série são próprias — ver
+        `AmostraContainer`.
+        """
+        if self.crescimento is None or not containers:
+            return
+        try:
+            await self.crescimento.gravar_containers(db, host, containers)
+        except Exception:
+            log.exception("falha ao gravar memória por container de %s", host.id)
+
+    async def _registrar_crescimento(self, db, host) -> None:
+        """
+        Vigilância de consumo crescente, sobre a amostra que acabou de ser
+        gravada.
+
+        Não abre SSH: a detecção lê a série do banco. O rastreio do
+        culpado, esse sim caro, tem teto por passada e mora dentro do
+        `CrescimentoService`.
+
+        Isolado do resto do ciclo, como os incidentes: erro aqui não pode
+        custar a amostra, que é o dado que mais importa.
+        """
+        if self.crescimento is None:
+            return
+        try:
+            eventos = await self.crescimento.registrar_ciclo(db, host, host_ok=True)
+        except Exception:
+            log.exception("falha ao avaliar crescimento do host %s", host.id)
+            return
+
+        if eventos and self.notificacoes is not None:
+            await self.notificacoes.despachar(db, eventos)
+
     async def _amostrar(self, db, host) -> None:
         amostra = Amostra(host_id=host.id)
 
@@ -444,6 +486,15 @@ class MonitorService:
             pass
 
         db.add(amostra)
+
+        # Quem está com a memória, do `docker stats` que esta passada já
+        # fez. Antes da análise de tendência, para o culpado da vigilância
+        # que abrir agora já vir da série.
+        await self._gravar_containers(db, host, containers)
+
+        # Depois de gravar: a série desta janela já inclui a leitura de
+        # agora, e é dela que sai a tendência.
+        await self._registrar_crescimento(db, host)
 
         host.last_seen_at = datetime.now(timezone.utc)
         host.last_status = "ok"

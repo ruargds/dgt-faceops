@@ -105,7 +105,9 @@ class FaxinaService:
             "sessoes_removidas": 0,
             "logs_esvaziados": 0,
             "amostras_removidas": 0,
+            "containers_removidos": 0,
             "incidentes_removidos": 0,
+            "crescimentos_removidos": 0,
             "padroes_removidos": 0,
             "avisos_removidos": 0,
             "licenca_removidas": 0,
@@ -118,7 +120,9 @@ class FaxinaService:
             ("staging", self._staging),
             ("banco", self._banco),
             ("amostras", self._amostras),
+            ("containers", self._containers),
             ("incidentes", self._incidentes),
+            ("crescimentos", self._crescimentos),
             ("padroes de log", self._padroes_log),
             ("avisos enviados", self._notificacoes),
             ("licenca", self._licenca),
@@ -267,6 +271,25 @@ class FaxinaService:
             r["amostras_removidas"] = await MonitorService.limpar(db, dias)
             await db.commit()
 
+    async def _containers(self, r: dict) -> None:
+        """
+        Memória por container, com retenção própria (padrão 7 dias).
+
+        Prazo curto e separado do das amostras de propósito: são muitas
+        linhas por hora, e a pergunta que elas respondem é do presente
+        ("quem está com a memória"), não do histórico de capacidade.
+        """
+        dias = int(self._cfg("containers.retencao_dias", 7))
+        if dias <= 0:
+            return
+        from app.services.crescimento_service import CrescimentoService
+
+        async with AsyncSessionLocal() as db:
+            r["containers_removidos"] = await CrescimentoService.limpar_containers(
+                db, dias
+            )
+            await db.commit()
+
     async def _incidentes(self, r: dict) -> None:
         """Histórico de indisponibilidade, com retenção própria (padrão 30 dias)."""
         dias = int(self._cfg("incidentes.retencao_dias", 30))
@@ -276,6 +299,27 @@ class FaxinaService:
 
         async with AsyncSessionLocal() as db:
             r["incidentes_removidos"] = await IncidenteService.limpar(db, dias)
+            await db.commit()
+
+    async def _crescimentos(self, r: dict) -> None:
+        """
+        Vigilâncias de consumo já encerradas, com retenção própria.
+
+        Prazo maior que o dos incidentes (padrão 90 dias) porque a
+        pergunta que elas respondem é de outra escala: "este disco já
+        encheu antes, e por causa de quê?" se faz olhando meses, não dias.
+
+        Só as ENCERRADAS, pela mesma razão do incidente aberto: apagar uma
+        vigilância em curso faria a tela achar que o problema nunca
+        existiu enquanto ele ainda está acontecendo.
+        """
+        dias = int(self._cfg("crescimento.retencao_dias", 90))
+        if dias <= 0:
+            return
+        from app.services.crescimento_service import CrescimentoService
+
+        async with AsyncSessionLocal() as db:
+            r["crescimentos_removidos"] = await CrescimentoService.limpar(db, dias)
             await db.commit()
 
     async def _notificacoes(self, r: dict) -> None:
@@ -569,6 +613,8 @@ class FaxinaService:
         from sqlalchemy import func
 
         from app.models.amostra import Amostra
+        from app.models.amostra_container import AmostraContainer
+        from app.models.crescimento import Crescimento
         from app.models.incidente import Incidente
         from app.models.licenca_amostra import LicencaAmostra
         from app.models.log_padrao import LogPadrao
@@ -584,7 +630,9 @@ class FaxinaService:
         d_log = dias_de("faxina.log_execucao_dias", 60)
         d_exec = dias_de("faxina.execucoes_dias", 730)
         d_amostra = dias_de("monitor.retencao_dias", 30)
+        d_ct = dias_de("containers.retencao_dias", 7)
         d_inc = dias_de("incidentes.retencao_dias", 30)
+        d_cresc = dias_de("crescimento.retencao_dias", 90)
         d_padrao = dias_de("analise.retencao_dias", 30)
         d_aviso = dias_de("notificacao.retencao_dias", 14)
         d_lic = dias_de("faxina.licenca_dias", 365)
@@ -644,8 +692,14 @@ class FaxinaService:
                 BackupRun.status.notin_(("executando", "pendente")),
             )
             amostras = await contar(Amostra, Amostra.ts, d_amostra)
+            containers = await contar(
+                AmostraContainer, AmostraContainer.ts, d_ct
+            )
             incidentes = await contar(
                 Incidente, Incidente.fim, d_inc, Incidente.fim.isnot(None)
+            )
+            crescimentos = await contar(
+                Crescimento, Crescimento.fim, d_cresc, Crescimento.fim.isnot(None)
             )
             padroes = await contar(LogPadrao, LogPadrao.ultima_vez, d_padrao)
             avisos = await contar(NotificacaoEnvio, NotificacaoEnvio.ts, d_aviso)
@@ -677,9 +731,15 @@ class FaxinaService:
             {"chave": "amostras", "rotulo": "Amostras do monitor",
              "nota": "os pontos dos gráficos da aba Monitor",
              "quantidade": amostras, "retencao": f"{d_amostra} dias"},
+            {"chave": "containers", "rotulo": "Memória por container",
+             "nota": "a série que desenha o gráfico de quem consome",
+             "quantidade": containers, "retencao": f"{d_ct} dias"},
             {"chave": "incidentes", "rotulo": "Incidentes encerrados",
              "nota": "janelas de indisponibilidade já fechadas",
              "quantidade": incidentes, "retencao": f"{d_inc} dias"},
+            {"chave": "crescimentos", "rotulo": "Vigilâncias de consumo encerradas",
+             "nota": "episódios de consumo crescente que já estabilizaram",
+             "quantidade": crescimentos, "retencao": f"{d_cresc} dias"},
             {"chave": "padroes", "rotulo": "Moldes de log analisados",
              "nota": "as impressões digitais dos erros agrupados",
              "quantidade": padroes, "retencao": f"{d_padrao} dias"},

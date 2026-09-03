@@ -291,3 +291,24 @@ duas regras, e confere que cada evento chegou em quem devia:
 | nunca derruba o ciclo | Telegram fora do ar registra falha e segue |
 | token nunca aparece | nem em resposta de API, nem em mensagem de erro |
 | ponta a ponta | o fluxo inteiro, com as funções que as rotas usam |
+
+
+## Consumo subindo sem parar (2026)
+
+Tipo de evento novo: **`crescimento`**. Ele não avisa que um limite foi
+ultrapassado — avisa que, no ritmo medido, ele **vai** ser, e diz em
+quanto tempo, quem está empurrando e o que fazer. É o único aviso do
+painel que chega antes do estrago; ver
+[38_CRESCIMENTO_E_VAZAMENTO](38_CRESCIMENTO_E_VAZAMENTO.md).
+
+Duas coisas para saber antes de recebê-lo:
+
+* **Nas regras que já existiam, ele entra marcado.** Ninguém poderia ter
+  marcado uma caixa que não existia quando a regra foi criada, e o aviso
+  ficaria mudo para sempre em toda instalação já em uso. Quem não quiser é
+  uma caixa a desmarcar aqui em Avisos.
+* **Ele não repete a cada ciclo.** Enquanto a vigilância está aberta, só
+  volta a avisar se a situação **piorar de nível**. Quando ela fecha, sai
+  um retorno dizendo que o consumo parou de subir — pela mesma razão de
+  sempre: saber que passou evita alguém sair de casa por um problema que
+  já se resolveu.

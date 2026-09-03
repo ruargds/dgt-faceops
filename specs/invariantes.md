@@ -162,16 +162,19 @@ faxina diária.
 | `incidentes` | `incidentes.retencao_dias` | 30 |
 | `log_padroes` | `analise.retencao_dias` | 30 |
 | `notificacao_envios` | `notificacao.retencao_dias` | 14 |
+| `crescimentos` | `crescimento.retencao_dias` | 90 |
+| `amostras_container` | `containers.retencao_dias` | 7 |
 | `licenca_amostras` | `faxina.licenca_dias` | 365 |
 
 **Trava:** `faxina so apaga fechado`
 
 ### INV-16 — Incidente aberto é estado, não histórico
 
-A faxina só apaga incidente **fechado**. Apagar um aberto faria a tela
-achar que o problema nunca existiu enquanto ele acontece.
+A faxina só apaga incidente **fechado** — e o mesmo vale para a
+vigilância de crescimento. Apagar um aberto faria a tela achar que o
+problema nunca existiu enquanto ele acontece.
 
-**Trava:** `faxina so apaga fechado`
+**Trava:** `faxina so apaga fechado`, `faxina apaga vigilancia fechada so`
 
 ### INV-17 — Guardar molde, não a linha
 
@@ -269,9 +272,61 @@ executam, mais a checagem positiva das fontes de leitura)
 
 ---
 
+### INV-25 — Tendência não se afirma sem série que a sustente
+
+Menos de oito pontos, ou R² abaixo de 0,70 sem ajuste exponencial melhor,
+resulta em `indeterminado` **com motivo** — nunca em taxa e projeção.
+Queda brusca (reinício, rotação) corta a série, e a análise usa o trecho
+de depois.
+
+*Por quê:* é a família de INV-1 e INV-23 aplicada a número: uma reta
+puxada de três amostras é falha de leitura vestida de previsão, e a
+previsão aparece na tela e no Telegram com hora marcada.
+
+*Dano se quebrar:* alarme falso com data e hora. Depois do segundo, a
+tela deixa de ser lida.
+
+**Trava:** `crescimento nao inventa tendencia`,
+`crescimento distingue linear de exponencial`
+
+### INV-26 — Acusação vem da diferença, não do retrato
+
+Quem cresceu é apontado comparando **duas** medições com carimbo de hora
+— por caminho no disco e por container na memória. O maior ocupante só é
+citado como "o maior de agora", nunca como causa.
+
+*Por quê:* `data/` é o maior diretório do servidor desde o primeiro dia.
+Apontá-lo manda a investigação para o lugar errado toda vez.
+
+**Trava:** `crescimento acusa quem cresceu nao quem e grande`
+
+### INV-27 — Diagnóstico caro não vira a causa do próximo incidente
+
+Todo comando de leitura pesada (`du`, `find`) roda com teto de tempo e
+prioridade baixa de E/S, e o rastreio tem teto de um por passada do
+monitor. Estourar o prazo devolve "não medido".
+
+*Por quê:* num disco com teto de IOPS, o diagnóstico compete com o
+FindFace — e o pior momento para competir é quando o recurso já está no
+limite. Mesma lição de [33_SATURACAO_DE_DISCO](../docs/33_SATURACAO_DE_DISCO.md).
+
+**Trava:** `rastreio de crescimento so le`
+
+### INV-28 — O rastreio de crescimento só lê
+
+Nenhum comando altera estado: sem `rm`, `truncate`, `restart`, `stop`,
+`kill`, `chmod` ou redirecionamento de escrita. Vale a mesma régua de
+INV-24, e pela mesma razão — roda com sudo, em produção, sob pressão.
+
+**Trava:** `rastreio de crescimento so le`
+
+---
+
 ## Cobertura
 
-44 cenários em `backend/tests/verificar.py`. Rodam sem Postgres e sem
+Os cenários vivem em `backend/tests/verificar.py` e o total aparece na
+saída da execução — não é repetido aqui, porque número copiado em dois
+lugares diverge no primeiro cenário novo. Rodam sem Postgres e sem
 framework:
 
 ```bash

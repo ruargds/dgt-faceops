@@ -137,6 +137,8 @@ Nada aqui cresce sem teto. Verificado item por item:
 | `backup_runs` (a linha) | faxina, `faxina.execucoes_dias` (padrão 730) — **só a execução cujo artefato já não existe**. O texto saía em 60 dias e a linha ficava para sempre; agora ela também tem prazo, mas nunca à frente do arquivo que descreve: apagar a linha e deixar o `.tar.gz` no disco produziria um artefato que ninguém sabe de onde veio |
 | `amostras` (monitor) | faxina, `monitor.retencao_dias` (padrão 30) |
 | `incidentes` | faxina, `incidentes.retencao_dias` (padrão 30) — **só os fechados**; um aberto é estado atual, não histórico |
+| `crescimentos` | faxina, `crescimento.retencao_dias` (padrão 90) — **só as encerradas**, pela mesma razão do incidente aberto. Prazo maior que o dos incidentes: "este disco já encheu antes?" é pergunta de mês |
+| `amostras_container` | faxina, `containers.retencao_dias` (padrão 7). Muitas linhas por hora e vida curta de propósito: ela responde "quem está com a memória agora", não o histórico de capacidade |
 | `log_padroes` | faxina, `analise.retencao_dias` (padrão 30). Guarda molde com contador, não a linha: mil ocorrências do mesmo erro são UMA linha |
 | `notificacao_envios` | faxina, `notificacao.retencao_dias` (padrão 14) — log operacional, some inclusive as falhas |
 | `licenca_amostras` | faxina, `faxina.licenca_dias` (padrão 365) |

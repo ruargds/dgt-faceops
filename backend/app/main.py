@@ -14,21 +14,23 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from app.api.routes import (
-    audit, auth, backups, configuracoes, descoberta, dispositivos, destinos,
-    diagnostico, exportar, hosts, incidentes, limiares, logs, maintenance, marca,
-    monitor, notificacoes, ops, processos, terminal,
+    audit, auth, backups, configuracoes, crescimento, descoberta, dispositivos,
+    destinos, diagnostico, exportar, hosts, incidentes, limiares, logs,
+    maintenance, marca, monitor, notificacoes, ops, processos, terminal,
 )
 from app.core.busca import habilitar_unaccent
 from app.core.config import como_gerar_chave, settings, verificar_chave
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
 from app.models import (  # noqa: F401 — registra todos os modelos
-    Amostra, Destino, Incidente, LicencaAmostra, LimiarOverride, LogPadrao,
-    NotificacaoConta, NotificacaoDestino, NotificacaoEnvio, NotificacaoRegra,
-    User, VisaoLog,
+    Amostra, AmostraContainer, Crescimento, Destino, Incidente,
+    LicencaAmostra, LimiarOverride,
+    LogPadrao, NotificacaoConta, NotificacaoDestino, NotificacaoEnvio,
+    NotificacaoRegra, User, VisaoLog,
 )
 from app.services.backup_service import BackupService
 from app.services.config_service import ConfigService
+from app.services.crescimento_service import CrescimentoService
 from app.services.descoberta_service import DescobertaService
 from app.services.dispositivos_service import DispositivosService
 from app.services.faxina_service import FaxinaService
@@ -132,6 +134,17 @@ ALTERACOES = [
     "DROP INDEX IF EXISTS ix_notif_regra_unica",
     "CREATE INDEX IF NOT EXISTS ix_notif_regra_escopo "
     "ON notificacao_regras (destino_id, host_id, servico)",
+    # Tipo de evento novo (crescimento) nas regras que já existem.
+    # Sem isto, quem já configurou avisos nunca receberia a categoria
+    # nova: ninguém pode ter marcado uma caixa que não existia quando a
+    # regra foi criada, e justo o aviso que chega ANTES do limite
+    # ficaria mudo em toda instalação já em uso. Quem não quiser tem
+    # uma caixa a desmarcar em Avisos; o contrário exigiria adivinhar
+    # que alguém foi conferir a tela. Idempotente: só toca em quem
+    # ainda não tem o tipo.
+    "UPDATE notificacao_regras SET tipos = "
+    """((tipos::jsonb) || '["crescimento"]'::jsonb)::json """
+    """WHERE NOT ((tipos::jsonb) @> '["crescimento"]'::jsonb)""",
 ]
 
 
@@ -397,11 +410,15 @@ async def iniciar() -> None:
     # Apuração: quando o incidente FECHA, uma leitura no servidor para
     # dizer o que causou — ou dizer que não achou. Ver apuracao_service.
     app.state.apuracao = ApuracaoService(app.state.stack, config)
+    # Crescimento: detecta consumo que sobe sem parar a partir das amostras
+    # que o ciclo já grava, projeta quando estoura e — só depois de
+    # confirmado — rastreia o culpado no servidor. Ver crescimento_service.
+    app.state.crescimento = CrescimentoService(ssh, config)
     app.state.monitor = MonitorService(
         app.state.metrics, app.state.stack, config,
         incidentes=app.state.incidentes, limiares=app.state.limiares,
         analise=app.state.analise, notificacoes=app.state.notificacoes,
-        apuracao=app.state.apuracao,
+        apuracao=app.state.apuracao, crescimento=app.state.crescimento,
     )
     app.state.scheduler = SchedulerService(
         app.state.backups,
@@ -538,6 +555,7 @@ app.include_router(configuracoes.router)
 app.include_router(marca.router)
 app.include_router(monitor.router)
 app.include_router(incidentes.router)
+app.include_router(crescimento.router)
 app.include_router(limiares.router)
 app.include_router(diagnostico.router)
 app.include_router(notificacoes.router)

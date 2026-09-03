@@ -45,7 +45,7 @@ class FaxinaPontualIn(BaseModel):
 
     `simular` (padrão) só conta. Aplicar exige a palavra de confirmação —
     apagar histórico não tem volta, e "tem certeza? [OK]" vira reflexo na
-    terceira vez (regra 25).
+    terceira vez (regra 30).
     """
 
     categorias: list[str] = Field(default_factory=list, max_length=12)

@@ -92,6 +92,17 @@ Teto do journald e tamanho de rotação do syslog, usados quando você
 aplica a contenção de log. O manual da NtechLab sugere 3 GB para o
 journald.
 
+### Monitoramento contínuo
+
+Além do intervalo do coletor e das retenções, é aqui que fica a régua da
+vigilância de consumo crescente (ver
+[38_CRESCIMENTO_E_VAZAMENTO](38_CRESCIMENTO_E_VAZAMENTO.md)):
+janela analisada, horizonte da projeção, subida mínima que vale atenção
+(uma por hora para memória, uma por dia para disco), quantos ciclos
+confirmam antes de avisar, e se o rastreio do culpado roda sozinho ou só
+no clique. A série de memória por container tem cadência e retenção
+próprias — é a que desenha o gráfico de "quem está comendo a RAM".
+
 ### Sessão e acesso
 
 Duração do login e o percentual de disco que deixa o cartão do servidor

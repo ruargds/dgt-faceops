@@ -29,6 +29,9 @@ no momento da investigação.
   confirmação por digitação
 - Coleta sob demanda de RAM, carga, GPU (`nvidia-smi`), disco e inodes
 - Análise de ocupação de disco do FindFace (onde as fotos estão indo)
+- Vigilância de consumo crescente: projeta quando memória ou disco
+  encostam no limite, aponta o container que está empurrando e traz o
+  contorno e a recomendação do fabricante
 - Terminal SSH web (InTerminal) com PTY real e gravação em asciicast v2
 - Quatro perfis de acesso, do somente-leitura ao administrador
 - Cofre cifrado para chave PEM, senha SSH e senha de sudo
@@ -37,11 +40,12 @@ no momento da investigação.
 ## O que não faz
 
 - **Não substitui o Zabbix.** Desde 2026 o painel tem histórico de série
-  temporal próprio (aba Monitor) e um trigger simples — abre/fecha
-  incidente por serviço, com causa provável heurística (ver
-  [25_INCIDENTES_E_LIMIARES](docs/25_INCIDENTES_E_LIMIARES.md)) — mas
-  segue sem alerta por e-mail/Telegram e sem a profundidade de um
-  monitoramento genérico. A leitura sob demanda (Recursos, Rastreio)
+  temporal próprio (aba Monitor), trigger simples que abre/fecha incidente
+  por serviço com causa provável heurística (ver
+  [25_INCIDENTES_E_LIMIARES](docs/25_INCIDENTES_E_LIMIARES.md)), aviso por
+  Telegram e projeção de consumo crescente (ver
+  [38_CRESCIMENTO_E_VAZAMENTO](docs/38_CRESCIMENTO_E_VAZAMENTO.md)) — mas
+  segue sem a profundidade de um monitoramento genérico. A leitura sob demanda (Recursos, Rastreio)
   continua existindo ao lado do monitor contínuo, para quando a pergunta é
   "o que está acontecendo agora, sem esperar o próximo ciclo".
 - **Não instala agente** nos servidores do FindFace. Tudo por SSH.
@@ -66,8 +70,10 @@ Itens conscientemente adiados, para não inflar a primeira entrega:
   servidor de teste.
 - **Sincronização incremental das fotos de evento** (rsync com tiered
   storage). Depende de saber o volume real de `findface-upload` em cada VM.
-- **Alerta ativo** (e-mail/Telegram quando backup falha). O Zabbix pode
-  monitorar `/api/saude` e o histórico; integração dedicada fica para depois.
+- **Alerta por e-mail.** O aviso por **Telegram** existe desde 2026 (ver
+  [docs/28_AVISOS_TELEGRAM.md](docs/28_AVISOS_TELEGRAM.md)), com regra por
+  servidor, serviço e tipo de evento. E-mail continua fora: exigiria
+  servidor SMTP, e o plantão já lê o grupo do Telegram.
 - **Replicação entre servidores** (`findface-multi-replication-*`). A
   plataforma tem isso nativo; o painel só observaria.
 - **Multi-tenant.** O painel atende uma instalação.

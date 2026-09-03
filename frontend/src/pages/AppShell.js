@@ -13,6 +13,7 @@ import {
   IconLua,
   IconServicos,
   IconServidor,
+  IconTendencia,
   IconChevron,
   IconLogs,
   IconMenu,
@@ -25,6 +26,7 @@ import DestinosView from "../components/views/DestinosView";
 import LogsView from "../components/views/LogsView";
 import MonitorView from "../components/views/MonitorView";
 import DescobertaView from "../components/views/DescobertaView";
+import CrescimentoView from "../components/views/CrescimentoView";
 import DiagnosticoView from "../components/views/DiagnosticoView";
 import NotificacoesView from "../components/views/NotificacoesView";
 import TopologiaView from "../components/views/TopologiaView";
@@ -76,6 +78,7 @@ const MENU = [
     itens: [
       { id: "diagnostico", chave: "menu.diagnostico", icone: IconAlerta, perm: "metrics.view" },
       { id: "recursos", chave: "menu.recursos", icone: IconRecursos, perm: "metrics.view" },
+      { id: "crescimento", chave: "menu.crescimento", icone: IconTendencia, perm: "metrics.view" },
       { id: "processos", chave: "menu.processos", icone: IconRecursos, perm: "metrics.view" },
       { id: "servicos", chave: "menu.servicos", icone: IconServicos, perm: "services.view" },
     ],
@@ -167,7 +170,7 @@ export default function AppShell() {
 
   // Leitura única, na montagem. O rodapé responde "qual versão está no
   // ar?" e nada nele muda enquanto a tela está aberta — intervalo aqui
-  // seria consulta de graça (regra 24 das regras de desenvolvimento).
+  // seria consulta de graça (regra 29 das regras de desenvolvimento).
   useEffect(() => {
     let vivo = true;
     api
@@ -455,6 +458,7 @@ export default function AppShell() {
           <LimiteDeErro key={abaValida}>
           {abaValida === "painel" && <PainelView />}
           {abaValida === "rastreio" && <RastreioView />}
+          {abaValida === "crescimento" && <CrescimentoView />}
           {abaValida === "monitor" && <MonitorView alvo={alvo} nav={nav} />}
           {abaValida === "diagnostico" && <DiagnosticoView nav={nav} />}
           {abaValida === "notificacoes" && <NotificacoesView />}

@@ -204,6 +204,12 @@ Ver [23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md) e
 | GET | `/monitor/pico` | `metrics.view` |
 | GET | `/incidentes/abertos` | `metrics.view` |
 | GET | `/incidentes/recentes` | `metrics.view` |
+| GET | `/crescimento/analise/{host_id}` | `metrics.view` |
+| GET | `/crescimento/containers/{host_id}` | `metrics.view` |
+| GET | `/crescimento` | `metrics.view` |
+| GET | `/crescimento/{id}` | `metrics.view` |
+| POST | `/crescimento/{id}/rastrear` | `metrics.view` |
+| POST | `/crescimento/rastrear/{host_id}` | `metrics.view` |
 | GET | `/limiares` | `hosts.view` |
 | PUT | `/limiares` | `users.manage` |
 | DELETE | `/limiares/{override_id}` | `users.manage` |
@@ -217,6 +223,12 @@ Ver [23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md) e
 | GET/PUT | `/notificacoes/regras` | `users.manage` |
 | DELETE | `/notificacoes/regras/{id}` | `users.manage` |
 | GET | `/notificacoes/envios` | `users.manage` |
+
+As rotas de `/crescimento` seguem a mesma divisão: as de `GET` leem só o
+banco (a série que o coletor já gravou) e podem ser chamadas à vontade; as
+duas de `POST` abrem **uma** execução SSH de leitura no servidor, com
+prioridade baixa de E/S — por isso são POST e só rodam no clique. Ver
+[38_CRESCIMENTO_E_VAZAMENTO](38_CRESCIMENTO_E_VAZAMENTO.md).
 
 As rotas de `/diagnostico` são leitura barata (banco do painel), com uma
 exceção: `POST /diagnostico/analisar/{host_id}?servico=` **lê o log no

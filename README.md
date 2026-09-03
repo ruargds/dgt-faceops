@@ -230,5 +230,5 @@ para depois.
 Antes de commitar:
 
 ```bash
-cd backend && python tests/verificar.py     # 26 cenários, sem Postgres
+cd backend && python tests/verificar.py     # todos os cenários, sem Postgres
 ```

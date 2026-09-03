@@ -9,8 +9,10 @@ from app.models.backup import (
     Schedule,
 )
 from app.models.amostra import Amostra
+from app.models.amostra_container import AmostraContainer
 from app.models.licenca_amostra import LicencaAmostra
 from app.models.configuracao import Configuracao
+from app.models.crescimento import Crescimento
 from app.models.destino import TIPOS as TIPOS_DESTINO, Destino
 from app.models.host import Host
 from app.models.incidente import Incidente
@@ -32,8 +34,10 @@ __all__ = [
     "Destino",
     "Configuracao",
     "Amostra",
+    "AmostraContainer",
     "LicencaAmostra",
     "Incidente",
+    "Crescimento",
     "LimiarOverride",
     "LogPadrao",
     "NotificacaoConta",

@@ -12,6 +12,7 @@
 | **Quem vai instalar (Linux)** | [04_INSTALACAO](04_INSTALACAO.md) → [06_SEGURANCA](06_SEGURANCA.md) → [02_ESTRATEGIA_BACKUP](02_ESTRATEGIA_BACKUP.md) |
 | **Quem vai instalar (Windows)** | [12_INSTALACAO_WINDOWS](12_INSTALACAO_WINDOWS.md) → [04_INSTALACAO](04_INSTALACAO.md) (seções de rede e sudoers) |
 | **Quem vai operar / plantão** | [11_OPERACAO_DIARIA](11_OPERACAO_DIARIA.md) → [02_ESTRATEGIA_BACKUP](02_ESTRATEGIA_BACKUP.md) → [14_MANUTENCAO](14_MANUTENCAO.md) → [10_ERROS_CONHECIDOS](10_ERROS_CONHECIDOS.md) |
+| **Quem tem servidor enchendo de RAM ou disco** | [38_CRESCIMENTO_E_VAZAMENTO](38_CRESCIMENTO_E_VAZAMENTO.md) → [33_SATURACAO_DE_DISCO](33_SATURACAO_DE_DISCO.md) → [14_MANUTENCAO](14_MANUTENCAO.md) |
 | **Quem precisa restaurar agora** | [03_RESTORE](03_RESTORE.md) — vá direto, o resto espera |
 | **Quem vai desenvolver** | [01_ARQUITETURA](01_ARQUITETURA.md) → [09_REGRAS_DESENVOLVIMENTO](09_REGRAS_DESENVOLVIMENTO.md) → [08_API](08_API.md) |
 | **Quem vai auditar** | [06_SEGURANCA](06_SEGURANCA.md) → [05_PERMISSOES](05_PERMISSOES.md) → [07_INTERMINAL](07_INTERMINAL.md) |
@@ -124,6 +125,11 @@
   de IOPS derruba a máquina inteira, o que o painel passou a medir, e a
   auditoria honesta de quando o causador é o próprio backup.
 
+- **[38_CRESCIMENTO_E_VAZAMENTO](38_CRESCIMENTO_E_VAZAMENTO.md)** — o
+  consumo que sobe sozinho: como a subida é detectada sem custo, quando
+  ela estoura, o que quebra lá, qual container está comendo a RAM e o que
+  a NtechLab recomenda para cada causa.
+
 - **[32_SESSAO_E_PERFIS](32_SESSAO_E_PERFIS.md)** — os dois relógios da
   sessão (20 min parada, teto de 24 h), por que a renovação não pode vir
   do polling do painel, e o que cada um dos quatro perfis pode fazer.
@@ -192,9 +198,10 @@ Três camadas com papéis diferentes, que não se repetem:
 | Referência rápida | [36_REFERENCIA_RAPIDA](36_REFERENCIA_RAPIDA.md) | o que já foi aprendido na marra, por subsistema |
 | Specs | `specs/` | o que precisa continuar verdadeiro, e o que está aberto |
 
-- **[specs/invariantes.md](../specs/invariantes.md)** — 21 invariantes,
-  cada um com o motivo, o estrago se quebrar e o cenário de teste que o
-  trava.
+- **[specs/invariantes.md](../specs/invariantes.md)** — os invariantes do
+  projeto, cada um com o motivo, o estrago se quebrar e o cenário de teste
+  que o trava. A contagem fica lá, num lugar só — repeti-la aqui garantia
+  que os dois números divergissem.
 - **[specs/pendencias.md](../specs/pendencias.md)** — o que está aberto,
   com evidência levantada e próximo passo.
 - **[36_REFERENCIA_RAPIDA](36_REFERENCIA_RAPIDA.md)** — uma página com o
