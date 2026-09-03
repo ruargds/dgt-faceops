@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { api, formatData, formatDuracao } from "../../api";
 import { t } from "../../i18n";
+import {
+  ajudaDeBusca, casaBusca, pontuacaoBusca, termosDaBusca,
+} from "../../utils/buscaInteligente";
 import { usePermissions } from "../../usePermissions";
 import {
   fecharSeForaLimpo,
@@ -334,6 +337,7 @@ export default function ServicosView({ alvo }) {
   const [verHistorico, setVerHistorico] = useState(null);
   const [parando, setParando] = useState(null);
   const [confirmarParada, setConfirmarParada] = useState(null);
+  const [busca, setBusca] = useState("");
   const [verApuracao, setVerApuracao] = useState(null);
 
   const JANELA_DIAS = 7;
@@ -364,6 +368,22 @@ export default function ServicosView({ alvo }) {
       setCarregando(false);
     }
   }, [hostId]);
+
+  // A lista filtrada. Trinta e três containers não cabem na tela, e
+  // achar um deles rolando é o que a busca evita. Ordena por qualidade
+  // do casamento, sem esconder o que casou no meio da palavra.
+  const servicosFiltrados = useMemo(() => {
+    const termos = termosDaBusca(busca);
+    const lista = (dados && dados.servicos) || [];
+    if (termos.length === 0) return lista;
+    return lista
+      .filter((s) => casaBusca(termos, s.servico, s.nome, s.estado, s.saude))
+      .sort(
+        (a, b) =>
+          pontuacaoBusca(termos, a.servico, a.nome) -
+          pontuacaoBusca(termos, b.servico, b.nome),
+      );
+  }, [dados, busca]);
 
   // Resumo por serviço, calculado uma vez. Sem isto, cada linha da
   // tabela varreria o histórico inteiro a cada render.
@@ -496,6 +516,24 @@ export default function ServicosView({ alvo }) {
               existe container nenhum com o rótulo deste projeto — eles
               foram REMOVIDOS, não parados. A tela precisa dizer isso e o
               que fazer, senão parece que o painel não conseguiu ler. */}
+          <div className="filtros" style={{ marginBottom: 10 }}>
+            <div className="filtro-busca">
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder={t("Buscar serviço…")}
+                title={ajudaDeBusca(t("Procura no nome do serviço, do container, no estado e na saúde."))}
+                aria-label={t("Buscar serviço")}
+              />
+            </div>
+            <span className="small muted">
+              {busca
+                ? `${servicosFiltrados.length} ${t("de")} ${dados.servicos.length}`
+                : `${dados.servicos.length} ${t("serviço(s)")}`}
+            </span>
+          </div>
+
           {dados.servicos.length === 0 ? (
             <Vazio titulo={t("Nenhum container existe neste projeto")}>
               <div className="small muted" style={{ marginTop: 8, maxWidth: 680 }}>
@@ -535,7 +573,7 @@ export default function ServicosView({ alvo }) {
                 </tr>
               </thead>
               <tbody>
-                {dados.servicos.map((s) => (
+                {servicosFiltrados.map((s) => (
                   <tr key={s.nome}>
                     <td>
                       <div className="stack-h" style={{ gap: 6 }}>
@@ -669,6 +707,11 @@ export default function ServicosView({ alvo }) {
                 ))}
               </tbody>
             </table>
+            {servicosFiltrados.length === 0 && (
+              <div className="small muted" style={{ padding: "14px 4px" }}>
+                {t("Nenhum serviço bate com a busca.")}
+              </div>
+            )}
           </div>
           )}
         </div>

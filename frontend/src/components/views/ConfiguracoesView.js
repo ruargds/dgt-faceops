@@ -1,6 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { api, enviarLogo } from "../../api";
 import { t } from "../../i18n";
+import {
+  ajudaDeBusca, casaBusca, termosDaBusca,
+} from "../../utils/buscaInteligente";
 import { usePermissions } from "../../usePermissions";
 import { Carregando, Erro, useHosts } from "../Comuns";
 import { IconAtualizar, IconLixeira, IconOk } from "../Icons";
@@ -349,6 +352,8 @@ export default function ConfiguracoesView() {
   const { has } = usePermissions();
   const podeEditar = has("users.manage");
 
+  const [buscaCfg, setBuscaCfg] = useState("");
+
   const [grupos, setGrupos] = useState([]);
   const [rascunho, setRascunho] = useState({});
   const [erro, setErro] = useState("");
@@ -410,6 +415,31 @@ export default function ConfiguracoesView() {
 
   if (carregando) return <Carregando />;
 
+  const gruposFiltrados = useMemo(() => {
+
+    const termos = termosDaBusca(buscaCfg);
+
+    if (termos.length === 0) return grupos;
+
+    return grupos
+
+      .map((g) => ({
+
+        ...g,
+
+        itens: g.itens.filter((i) =>
+
+          casaBusca(termos, i.rotulo, i.chave, i.ajuda, g.titulo),
+
+        ),
+
+      }))
+
+      .filter((g) => g.itens.length > 0);
+
+  }, [grupos, buscaCfg]);
+
+
   return (
     <>
       <div className="page-head">
@@ -460,8 +490,34 @@ export default function ConfiguracoesView() {
         </div>
       )}
 
+      {/* Sessenta parâmetros em sete categorias. Achar um deles rolando
+          a tela é o que a busca evita. Some a categoria que ficou sem
+          nenhum item, senão a tela vira uma sequência de títulos vazios. */}
+      <div className="filtros" style={{ marginBottom: 14 }}>
+        <div className="filtro-busca">
+          <input
+            type="search"
+            value={buscaCfg}
+            onChange={(e) => setBuscaCfg(e.target.value)}
+            placeholder={t("Buscar configuração…")}
+            title={ajudaDeBusca(t("Procura no nome, na chave e na explicação de cada opção."))}
+            aria-label={t("Buscar configuração")}
+          />
+        </div>
+        {buscaCfg && (
+          <span className="small muted">
+            {gruposFiltrados.reduce((n, g) => n + g.itens.length, 0)} {t("opção(ões)")}
+          </span>
+        )}
+      </div>
+
       <div className="stack-v">
-        {grupos.map((g) => (
+        {gruposFiltrados.length === 0 && buscaCfg && (
+          <div className="card card-tight">
+            <span className="small muted">{t("Nenhuma configuração bate com a busca.")}</span>
+          </div>
+        )}
+        {gruposFiltrados.map((g) => (
           <React.Fragment key={g.categoria}>
           <div className="card">
             <div className="section-title" style={{ marginBottom: 4 }}>{g.titulo}</div>

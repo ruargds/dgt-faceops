@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api, formatBytes, formatData } from "../../api";
 import { t } from "../../i18n";
+import {
+  ajudaDeBusca, casaBuscaExata, pontuacaoBusca, termosDaBusca,
+} from "../../utils/buscaInteligente";
 import { Carregando, Erro, Medidor, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { BarraMetrica } from "../Graficos";
 import { IconAtualizar, IconDownload, IconAlerta, IconOk, IconAgenda } from "../Icons";
@@ -360,9 +363,9 @@ function UltimaInteracao({ dados, buscando, filtro }) {
   const v = dados.varredura || {};
   const lista = (dados.cameras || []).filter(
     (c) =>
-      !filtro ||
-      c.nome.toLowerCase().includes(filtro.toLowerCase()) ||
-      String(c.id).includes(filtro)
+      // Antes: `includes` cru. Com 200 câmeras, procurar "12" trazia
+      // 112, 120 e 212, e "camera" não achava "câmera".
+      casaBuscaExata(termosDaBusca(filtro), c.nome, String(c.id))
   );
 
   return (
@@ -652,10 +655,17 @@ export default function DispositivosView() {
   if (carregandoHosts) return <Carregando />;
   if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
+  // Mesma régua da outra lista desta tela, e das demais telas. Com 200
+  // câmeras, `includes` cru trazia 112 e 212 ao procurar 12, e "camera"
+  // não achava "câmera".
   const cameras = dados
-    ? dados.cameras.filter((c) =>
-        !filtro || c.nome.toLowerCase().includes(filtro.toLowerCase())
-      )
+    ? dados.cameras
+        .filter((c) => casaBuscaExata(termosDaBusca(filtro), c.nome, String(c.id)))
+        .sort(
+          (a, b) =>
+            pontuacaoBusca(termosDaBusca(filtro), a.nome) -
+            pontuacaoBusca(termosDaBusca(filtro), b.nome),
+        )
     : [];
 
   return (
@@ -767,10 +777,12 @@ export default function DispositivosView() {
 
           <div className="stack-h" style={{ justifyContent: "space-between" }}>
             <input
+              type="search"
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
-              placeholder={t("filtrar câmera pelo nome…")}
-              style={{ maxWidth: 280 }}
+              title={ajudaDeBusca(t("Procura no nome e no id da câmera."))}
+              placeholder={t("Buscar câmera pelo nome ou id…")}
+              style={{ maxWidth: 320 }}
             />
             {dados.contagem_por_camera === false && (
               <span className="small muted" title="Contar evento por camera custa uma requisicao por camera e por tipo; com centenas de dispositivos isso seria mais de mil chamadas na API de producao">

@@ -701,6 +701,158 @@ async def cenario_apuracao_correlaciona_pico_de_recurso():
     await engine.dispose()
 
 
+async def cenario_busca_entende_acento_e_parte_da_palavra():
+    """
+    A mesma régua do InfraCore, para quem usa os dois painéis digitar do
+    mesmo jeito nos dois — e a gêmea do servidor tem de concordar com a
+    da tela, senão a mesma busca acha na lista e não acha na Auditoria.
+
+    | digitou | acha |
+    |---|---|
+    | `video` | o que COMEÇA uma palavra com "video" |
+    | `%video` | em qualquer parte |
+    | `"video"` | só a palavra inteira |
+    """
+    import sqlalchemy as sa
+
+    from app.core.busca import (
+        SEPARADORES, condicao_de_busca, ler_termo, normalizar, separar_termos,
+    )
+    from app.models.audit import AuditLog
+
+    # Acento não importa nos dois sentidos.
+    assert normalizar("Câmera ÁGUA") == "camera agua"
+    assert normalizar("  Ijuí  ") == "ijui"
+    assert normalizar(None) == ""
+
+    # Os operadores.
+    assert ler_termo("restore") == ("inicio", "restore")
+    assert ler_termo("%erro") == ("contem", "erro")
+    assert ler_termo('"ntls"') == ("exato", "ntls")
+    assert ler_termo("^abc") == ("inicio", "abc")
+    assert ler_termo("") == (None, "")
+
+    # Vírgula, ponto-e-vírgula e quebra de linha separam; espaço NÃO.
+    assert separar_termos("Restore, %erro; x") == ["restore", "%erro", "x"]
+    assert separar_termos("Escola Central") == ["escola central"]
+    assert separar_termos("") == []
+    assert separar_termos(None) == []
+
+    # A pontuação de JSON separa palavras. Sem isso, procurar `timeout`
+    # não acharia `{"erro": "timeout"}` — e o detalhe da auditoria é JSON.
+    for exigido in ('"', "{", ":", "-", " "):
+        assert exigido in SEPARADORES, f"separador ausente: {exigido!r}"
+    assert "_" not in SEPARADORES, "sublinhado liga palavra, não separa"
+
+    # Busca vazia não filtra — nunca "não casa nada".
+    assert condicao_de_busca([AuditLog.action], "") is None
+    assert condicao_de_busca([AuditLog.action], None) is None
+
+    # E o comportamento de ponta a ponta, no banco.
+    engine, fabrica = await nova_sessao()
+    async with fabrica() as db:
+        db.add_all([
+            AuditLog(usuario="admin", action="services.restart",
+                     target="vm-appserver", level="info", success=True,
+                     detail={"servico": "findface-video-worker"}),
+            AuditLog(usuario="joao", action="backups.restore",
+                     target="vm-dbserver", level="critical", success=False,
+                     detail={"erro": "timeout na conexao"}),
+            # Acento numa coluna de TEXTO. Dentro de JSON não serve de
+            # prova: o serializador escapa não-ASCII (`conexão`), e
+            # o que fica gravado depende do banco — JSONB no Postgres
+            # guarda o caractere; o JSON do SQLite, a sequência escapada.
+            AuditLog(usuario="maria", action="hosts.manage",
+                     target="vm-são-paulo", level="info", success=True,
+                     detail={}),
+        ])
+        await db.commit()
+
+        async def achar(termo):
+            cond = condicao_de_busca(
+                [AuditLog.usuario, AuditLog.action, AuditLog.target,
+                 sa.cast(AuditLog.detail, sa.Text)],
+                termo,
+            )
+            consulta = sa.select(AuditLog)
+            if cond is not None:
+                consulta = consulta.where(cond)
+            r = await db.execute(consulta)
+            return sorted(a.usuario for a in r.scalars().all())
+
+        # Começo de palavra: `appserver` acha `vm-appserver` (o hífen
+        # separa), e `restore` acha `backups.restore` (o ponto separa).
+        assert await achar("appserver") == ["admin"]
+        # `restore` casa `backups.restore` e NÃO casa `services.restart`:
+        # são palavras diferentes, e é essa precisão que se ganha ao sair
+        # do `includes` cru.
+        assert await achar("restore") == ["joao"], await achar("restore")
+
+        # Dentro de JSON, entre aspas.
+        assert await achar("timeout") == ["joao"]
+
+        # Meio de palavra NÃO casa por padrão...
+        assert await achar("erver") == []
+        # ...mas casa com `%`, que é o pedido explícito.
+        assert await achar("%erver") == ["admin", "joao"], await achar("%erver")
+        # `maria` não tem "erver" em lugar nenhum.
+
+        # Palavra inteira com aspas. Em `findface-video-worker` o hífen
+        # delimita, então "video" É uma palavra inteira ali.
+        assert await achar('"video"') == ["admin"], await achar('"video"')
+        # Já `vide` começa a palavra mas não a termina.
+        assert await achar('"vide"') == [], await achar('"vide"')
+        assert await achar("video") == ["admin"]
+
+        # Digitar como está escrito sempre acha, com ou sem acento.
+        assert await achar("são") == ["maria"], await achar("são")
+        assert await achar("conexao") == ["joao"]
+
+        # Digitar SEM acento e achar COM depende da extensão `unaccent`.
+        # O SQLite dos testes não a tem, e afirmar que casa seria mentir
+        # sobre o que o painel faz num banco sem a extensão.
+        from app.core.busca import usa_unaccent
+
+        if usa_unaccent():
+            assert await achar("sao") == ["maria"]
+        else:
+            assert await achar("sao") == [], (
+                "sem unaccent isto não deveria casar — se casou, a régua "
+                "mudou e a documentação está desatualizada"
+            )
+
+        # Vírgula soma resultados.
+        assert await achar("appserver, timeout") == ["admin", "joao"]
+
+        # Curinga digitado é literal, não coringa de LIKE: `%` sozinho
+        # depois do operador vira busca vazia, e `_` não casa qualquer
+        # caractere.
+        assert await achar("vm_appserver") == [], "o sublinhado virou curinga"
+
+    await engine.dispose()
+
+    # As duas réguas existem e falam do mesmo contrato.
+    js = (pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src"
+          / "utils" / "buscaInteligente.js").read_text(encoding="utf-8")
+    for fn in ("normalizarTexto", "termosDaBusca", "lerTermo", "casaBusca",
+               "pontuacaoBusca", "casaBuscaExata", "ajudaDeBusca"):
+        assert f"export function {fn}" in js, f"a régua da tela perdeu {fn}"
+
+    # E as telas com lista longa usam a régua, em vez de `includes` cru.
+    telas = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src" / "components" / "views"
+    # A lista precisa cobrir TODA tela com busca. Ela nasceu sem
+    # `ProcessosView` e deixou passar a volta ao `includes` cru ali —
+    # trava que não cobre o que diz cobrir não guarda nada.
+    for nome in ("ServicosView.js", "ConfiguracoesView.js",
+                 "DispositivosView.js", "ProcessosView.js"):
+        fonte = (telas / nome).read_text(encoding="utf-8")
+        assert "buscaInteligente" in fonte, f"{nome} não usa a régua comum"
+        assert ".toLowerCase().includes(" not in fonte, (
+            f"{nome} voltou a filtrar com includes cru — sem acento e sem "
+            "começo de palavra"
+        )
+
+
 async def cenario_servidor_nao_acumula_sobra():
     """
     O diretório da aplicação no servidor tinha CINCO cópias do `.env`
@@ -3203,6 +3355,7 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_busca_entende_acento_e_parte_da_palavra,
     cenario_servidor_nao_acumula_sobra,
     cenario_atualizar_forca_coleta_de_verdade,
     cenario_projeto_sem_marca_de_ferramenta,

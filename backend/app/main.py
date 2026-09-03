@@ -18,6 +18,7 @@ from app.api.routes import (
     diagnostico, exportar, hosts, incidentes, limiares, logs, maintenance, marca,
     monitor, notificacoes, ops, processos, terminal,
 )
+from app.core.busca import habilitar_unaccent
 from app.core.config import como_gerar_chave, settings, verificar_chave
 from app.core.security import hash_password
 from app.db.database import AsyncSessionLocal, Base, engine
@@ -150,6 +151,14 @@ async def _criar_tabelas() -> None:
                 # Tabela pode não existir ainda numa instalação parcial —
                 # não pode impedir a subida.
                 log.warning("coluna %s.%s: %s", tabela, coluna, exc)
+
+    # Extensão que deixa a busca do servidor ignorar acento. Tentada uma
+    # vez; falhar não impede a subida (ver `core.busca`).
+    try:
+        async with engine.begin() as conexao:
+            await habilitar_unaccent(conexao)
+    except Exception:
+        log.info("busca: não deu para testar o unaccent nesta subida")
 
     for comando in ALTERACOES:
         try:

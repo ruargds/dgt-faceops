@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import Text, cast, or_
 
+from app.core.busca import condicao_de_busca
 from app.core.permissions import DESTRUCTIVE_PERMISSIONS
 from app.models.audit import AuditLog
 
@@ -47,15 +48,18 @@ def aplicar_filtros(
     achar "por que o restore falhou" sem saber de cor a ação.
     """
     if busca and busca.strip():
-        termo = f"%{busca.strip()}%"
-        consulta = consulta.where(
-            or_(
-                AuditLog.usuario.ilike(termo),
-                AuditLog.action.ilike(termo),
-                AuditLog.target.ilike(termo),
-                cast(AuditLog.detail, Text).ilike(termo),
-            )
+        # Mesma régua da busca das telas (ver `core.busca` e a gêmea em
+        # `frontend/src/utils/buscaInteligente.js`): começo de palavra por
+        # padrão, `%` para qualquer posição, aspas para a palavra inteira,
+        # vírgula separando termos. Digitar do mesmo jeito nos dois lugares
+        # é o que evita a pergunta "por que ali achou e aqui não?".
+        condicao = condicao_de_busca(
+            [AuditLog.usuario, AuditLog.action, AuditLog.target,
+             cast(AuditLog.detail, Text)],
+            busca,
         )
+        if condicao is not None:
+            consulta = consulta.where(condicao)
     if usuario:
         consulta = consulta.where(AuditLog.usuario == usuario)
     if action:

@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, nivel } from "../../api";
 import { t } from "../../i18n";
+import {
+  ajudaDeBusca, casaBusca, termosDaBusca,
+} from "../../utils/buscaInteligente";
 import { usePermissions } from "../../usePermissions";
 import { Carregando, Erro, SeletorHost, Vazio, useHosts } from "../Comuns";
 import { IconAtualizar } from "../Icons";
@@ -27,6 +30,7 @@ export default function ProcessosView() {
   const [erro, setErro] = useState("");
   // Ordenação por coluna. Números (pid/cpu/mem) ordenam 0-9; texto
   // (usuário/tempo/programa) ordena A-Z. Clicar no cabeçalho inverte.
+  const [buscaProc, setBuscaProc] = useState("");
   const [ordem, setOrdem] = useState({ campo: "cpu", dir: "desc" });
   const [pausado, setPausado] = useState(false);
   const pedido = useRef(0);
@@ -95,8 +99,15 @@ export default function ProcessosView() {
   if (!hosts.length) return <Vazio titulo={t("Cadastre um servidor primeiro")} />;
 
   const NUM = new Set(["pid", "cpu", "mem", "gpu_bytes"]);
+  // A ordenação escolhida na tela manda: aqui a busca só REDUZ a lista,
+  // sem reordenar por relevância. Trocar a ordem de quem clicou numa
+  // coluna seria tirar da pessoa o controle que ela acabou de exercer.
   const processos = dados
-    ? [...dados.processos].sort((a, b) => {
+    ? [...dados.processos]
+        .filter((p) =>
+          casaBusca(termosDaBusca(buscaProc), p.comando, p.usuario, p.container, String(p.pid)),
+        )
+        .sort((a, b) => {
         const { campo, dir } = ordem;
         let r;
         if (NUM.has(campo)) {
@@ -169,6 +180,24 @@ export default function ProcessosView() {
                 <> <strong>{t("GPU")}</strong> é a memória de vídeo que o processo
                   reservou — a mesma leitura que aparece em Recursos.</>
               )}
+            </div>
+
+            <div className="filtros" style={{ marginBottom: 10 }}>
+              <div className="filtro-busca">
+                <input
+                  type="search"
+                  value={buscaProc}
+                  onChange={(e) => setBuscaProc(e.target.value)}
+                  placeholder={t("Buscar processo…")}
+                  title={ajudaDeBusca(t("Procura no comando, no usuário, no container e no PID."))}
+                  aria-label={t("Buscar processo")}
+                />
+              </div>
+              <span className="small muted">
+                {buscaProc
+                  ? `${processos.length} ${t("de")} ${dados.processos.length}`
+                  : `${dados.processos.length} ${t("processo(s)")}`}
+              </span>
             </div>
 
             <div className="table-wrap">

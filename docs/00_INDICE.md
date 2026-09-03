@@ -112,6 +112,10 @@
   e serviços receber, o formato da mensagem (o mesmo template do Zabbix, e
   por quê) e as travas contra virar spam.
 
+- **[37_BUSCA](37_BUSCA.md)** — como digitar (começo de palavra, `%`,
+  aspas, vírgula), onde tem busca, e os dois limites da implementação do
+  servidor ditos com todas as letras.
+
 - **[34_PESO_DO_PAINEL](34_PESO_DO_PAINEL.md)** — auditoria de custo item
   por item: o que roda nos servidores, o que roda na VM do painel, e os
   quatro compromissos que impedem o FaceOps de pesar no que monitora.
