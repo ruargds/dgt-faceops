@@ -180,6 +180,52 @@ em que os backups rodam, e o script (corretamente) recusaria.
 Se quiser automatizar de verdade, escolha uma janela sem agendamento —
 por exemplo domingo às 10h, com os backups às 02:00.
 
+## O que fica no servidor, e o que é lixo
+
+O diretório da aplicação chegou a ter **cinco cópias do `.env`** em duas
+horas. Cada uma carrega a `SECRET_KEY` e a senha do banco — não era só
+lixo, era o segredo espalhado em cinco lugares.
+
+**A causa era este script.** Ele grava `FACEOPS_REVISAO` no `.env` a cada
+execução, então o arquivo sempre diferia da última cópia e toda
+atualização gerava um backup novo. A cópia existe para proteger o que o
+**operador** configurou; se só mudou o que o script escreve sozinho, não
+há o que proteger.
+
+Hoje a comparação ignora essa linha, ficam as **3 mais recentes**, e todas
+com permissão `600`.
+
+### Sobra do Docker
+
+Cada atualização deixa a imagem anterior **sem tag**. Numa VM pequena isso
+enche o disco em poucas semanas.
+
+Ao fim de uma atualização bem-sucedida o script poda:
+
+| O que | Filtro |
+|---|---|
+| imagens penduradas | `docker image prune -f` — **nunca `-a`**, que levaria imagem de container parado |
+| cache de build | só o que tem mais de 7 dias; o recente acelera a próxima atualização e vale o espaço |
+
+E poda **só depois** de a versão nova responder ao teste de saúde. Podar
+antes de saber que deu certo é apagar a rede enquanto se atravessa o rio.
+O espaço liberado aparece no fim da execução.
+
+### O que NÃO é lixo
+
+| Diretório | Para quê |
+|---|---|
+| `data/backups`, `data/sessions`, `data/marca` | volumes de execução — cada um com retenção própria, aplicada pela faxina diária |
+| `tls/` | certificado, gerado na instalação |
+| `.git` | é como este script sabe o que mudou e para onde voltar |
+| `docs/`, `scripts/`, `specs/` | ~500 KB somados, e `scripts/` é usado pela própria atualização |
+
+Nada aqui justifica poda: o que ocupa disco de verdade são artefato de
+backup e imagem do Docker, e os dois têm prazo.
+
+**Trava:** `servidor nao acumula sobra`.
+
+
 ## Nos servidores do FindFace
 
 **Nada muda neles.** O painel é agentless: o script de backup vai pela

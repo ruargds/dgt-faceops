@@ -701,6 +701,81 @@ async def cenario_apuracao_correlaciona_pico_de_recurso():
     await engine.dispose()
 
 
+async def cenario_servidor_nao_acumula_sobra():
+    """
+    O diretório da aplicação no servidor tinha CINCO cópias do `.env`
+    acumuladas em duas horas — e cada uma carrega a SECRET_KEY e a senha
+    do banco. Não era só lixo: era o segredo espalhado em cinco lugares.
+
+    A causa era o próprio `atualizar.sh`: ele grava `FACEOPS_REVISAO` no
+    `.env` a cada execução, então o arquivo sempre diferia da última cópia
+    e toda atualização gerava um backup novo. A cópia existe para proteger
+    o que o OPERADOR configurou; se só mudou o que o script escreve
+    sozinho, não há o que proteger.
+    """
+    script = (pathlib.Path(__file__).resolve().parents[2]
+              / "atualizar.sh").read_text(encoding="utf-8")
+
+    # A comparação ignora a linha que o próprio script escreve.
+    assert "_sem_revisao" in script, (
+        "a cópia do .env voltou a ser feita a cada execução"
+    )
+    assert "grep -v '^FACEOPS_REVISAO='" in script, script[:200]
+
+    # Três cópias bastam para voltar atrás; mais é ampliar a superfície.
+    assert "tail -n +4" in script, "a retenção das cópias do .env mudou"
+
+    # Elas guardam a chave do cofre: permissão fechada.
+    assert "chmod 600 .env" in script, "cópia do .env sem permissão fechada"
+
+    # ── Sobra do Docker ────────────────────────────────────────────────
+    #
+    # Cada atualização deixa a imagem anterior sem tag. Numa VM pequena
+    # isso enche o disco em poucas semanas.
+    assert "docker image prune -f" in script, "as imagens penduradas ficam"
+    # NUNCA `-a`: isso levaria imagem de container parado junto.
+    assert "image prune -f -a" not in script and "prune -af" not in script, (
+        "poda agressiva: `-a` remove imagem de container parado"
+    )
+    # Cache de build recente acelera a próxima atualização e vale o
+    # espaço; só o antigo sai.
+    assert "builder prune" in script and "until=" in script, (
+        "o cache de build é podado sem filtro de idade"
+    )
+
+    # A poda acontece DEPOIS de a versão nova responder. Podar antes de
+    # saber que deu certo é apagar rede enquanto se atravessa o rio.
+    i_prune = script.index("docker image prune")
+    i_reversao = script.index("# ── Reversão")
+    assert i_prune < i_reversao, (
+        "a poda saiu do caminho de sucesso — se rodar antes da verificação, "
+        "apaga a imagem no momento em que ela ainda pode ser necessária"
+    )
+
+    # E o `.env` real nunca entra no repositório.
+    ignore = (pathlib.Path(__file__).resolve().parents[2]
+              / ".gitignore").read_text(encoding="utf-8")
+    assert ".env" in ignore, ".env fora do .gitignore"
+
+    import subprocess
+
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+    try:
+        saida = subprocess.run(
+            ["git", "ls-files"], cwd=raiz,
+            capture_output=True, text=True, timeout=60,
+        )
+    except Exception:
+        return
+    rastreados = saida.stdout.splitlines()
+    vazando = [
+        f for f in rastreados
+        if f == ".env" or f.startswith(".env.backup") or f.endswith(".pem")
+        or f.endswith(".key")
+    ]
+    assert not vazando, f"segredo versionado: {vazando}"
+
+
 async def cenario_atualizar_forca_coleta_de_verdade():
     """
     Regressão introduzida pelo cache do resumo: com o payload cacheado
@@ -3128,6 +3203,7 @@ CENARIOS = [
     cenario_notificacao_filtra_por_tipo_e_gravidade,
     cenario_notificacao_espera_antes_de_avisar,
     cenario_apuracao_correlaciona_pico_de_recurso,
+    cenario_servidor_nao_acumula_sobra,
     cenario_atualizar_forca_coleta_de_verdade,
     cenario_projeto_sem_marca_de_ferramenta,
     cenario_coletor_desacelera_sem_ninguem_olhando,

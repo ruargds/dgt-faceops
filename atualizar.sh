@@ -191,13 +191,29 @@ if [ -f .env ]; then
     # deixava um arquivo: 21 copias do .env em dois dias, no ambiente real.
     # Backup que ninguem apaga vira lixo, e lixo no diretorio da aplicacao
     # e o tipo de coisa que esconde o arquivo que importa.
+    #
+    # A comparacao IGNORA `FACEOPS_REVISAO`. Essa linha e escrita por este
+    # proprio script a cada atualizacao, entao o .env sempre diferia da
+    # ultima copia e TODA execucao gerava um arquivo novo — cinco copias
+    # em duas horas no ambiente real. E cada copia carrega a SECRET_KEY e
+    # a senha do banco: nao e so lixo, e o segredo espalhado em cinco
+    # lugares.
+    #
+    # A copia existe para proteger o que o OPERADOR configurou. Se so
+    # mudou o que o script escreve sozinho, nao ha o que proteger.
+    _sem_revisao() { grep -v '^FACEOPS_REVISAO=' "$1" 2>/dev/null; }
+
     ULTIMA_COPIA="$(ls -1t .env.backup-* 2>/dev/null | head -1)"
-    if [ -z "$ULTIMA_COPIA" ] || ! cmp -s .env "$ULTIMA_COPIA"; then
+    if [ -z "$ULTIMA_COPIA" ] \
+       || ! diff -q <(_sem_revisao .env) <(_sem_revisao "$ULTIMA_COPIA") >/dev/null 2>&1; then
         cp -a .env ".env.backup-$(date +%Y%m%d-%H%M%S)"
+        chmod 600 ".env.backup-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
+        ok "cópia de segurança do .env (a configuração mudou)"
     fi
-    # Mantem as 5 mais recentes e apaga o resto.
-    ls -1t .env.backup-* 2>/dev/null | tail -n +6 | xargs -r rm -f
-    ok "cópia de segurança do .env (mantidas as 5 mais recentes)"
+    # Tres bastam para voltar atras. Sao arquivos com a chave do cofre
+    # dentro; guardar mais e ampliar a superficie sem ganhar nada.
+    ls -1t .env.backup-* 2>/dev/null | tail -n +4 | xargs -r rm -f
+    chmod 600 .env .env.backup-* 2>/dev/null || true
 fi
 
 REVERTER_PARA="$ATUAL"
@@ -283,6 +299,30 @@ if [ "$PRONTO" = "1" ]; then
     echo "  O FindFace Multi não foi tocado. Os agendamentos voltaram"
     echo "  sozinhos — a tabela é a fonte de verdade, e o agendador é"
     echo "  remontado a partir dela na subida."
+
+    # ── Sobra do build ─────────────────────────────────────────────────
+    #
+    # So aqui, DEPOIS de a versao nova responder: a reversao reconstroi,
+    # mas podar antes de saber que deu certo e apagar rede enquanto se
+    # atravessa o rio.
+    #
+    # Apenas imagem PENDURADA (sem tag) — nunca `prune -a`, que levaria
+    # imagem de container parado. Cada atualizacao desta aplicacao deixa
+    # a imagem anterior sem tag, e numa VM pequena isso enche o disco em
+    # poucas semanas.
+    LIVRE_ANTES="$(df -B1 --output=avail . 2>/dev/null | tail -1)"
+    $SUDO docker image prune -f >/dev/null 2>&1 || true
+    # Cache de build com mais de 7 dias. O recente acelera a proxima
+    # atualizacao e vale o espaco; o antigo, nao.
+    $SUDO docker builder prune -f --filter until=168h >/dev/null 2>&1 || true
+    LIVRE_DEPOIS="$(df -B1 --output=avail . 2>/dev/null | tail -1)"
+
+    if [ -n "$LIVRE_ANTES" ] && [ -n "$LIVRE_DEPOIS" ] \
+       && [ "$LIVRE_DEPOIS" -gt "$LIVRE_ANTES" ] 2>/dev/null; then
+        LIBERADO=$(( (LIVRE_DEPOIS - LIVRE_ANTES) / 1048576 ))
+        [ "$LIBERADO" -gt 0 ] && ok "faxina do Docker: ${LIBERADO} MB liberados"
+    fi
+
     echo
     exit 0
 fi
