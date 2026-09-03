@@ -38,7 +38,7 @@ export function AvisoSessao({ segundos, minutos, onContinuar }) {
             </div>
           </div>
           <div className="small muted">
-            {t("O painel encerra sessão parada para proteger uma estação deixada aberta. Continuar não reinicia o tempo máximo de 24 h, contado desde o login.")}
+            {t("Continuar não estende o limite de 24 h, contado desde o login.")}
           </div>
         </div>
         <div className="modal-foot">

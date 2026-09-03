@@ -126,84 +126,69 @@ def permissions_for(role: str, is_super_admin: bool = False) -> set[str]:
 
 AREAS: list[tuple[str, str, str]] = [
     ("servidores", "Servidores e acesso",
-     "Quem existe, como o painel entra neles e quem pode mexer nisso."),
+     "Quais servidores existem e quem mexe neles."),
     ("monitoramento", "Monitoramento",
-     "Ver estado, métrica, incidente e diagnóstico. Nada aqui altera nada."),
+     "Estado, métricas e incidentes. Só leitura."),
     ("servicos", "Serviços do FindFace",
-     "Agir sobre os containers: reiniciar, parar, subir."),
+     "Reiniciar, parar e subir containers."),
     ("manutencao", "Manutenção e limpeza",
-     "Conter o crescimento de log e liberar disco no servidor."),
+     "Conter log e liberar disco no servidor."),
     ("backup", "Backup e restauração",
-     "Copiar, baixar, restaurar e apagar — onde mora o risco de perda."),
+     "Copiar, baixar, restaurar e apagar."),
     ("terminal", "Terminal remoto",
-     "Acesso a linha de comando nos servidores, e o registro dele."),
+     "Linha de comando nos servidores, e o registro dela."),
     ("administracao", "Administração do painel",
-     "Usuários, perfis e a trilha de auditoria."),
+     "Usuários, perfis e auditoria."),
 ]
 
 # permissão -> (área, o que ela permite na prática)
 PERMISSION_INFO: dict[str, tuple[str, str]] = {
     "hosts.view": ("servidores",
-                   "Ver a lista de servidores, papel e endereço. Não vê credencial."),
+                   "Ver a lista de servidores. Não vê credencial."),
     "hosts.manage": ("servidores",
-                     "Cadastrar, editar e remover servidor — inclusive trocar a chave "
-                     "SSH e a senha de sudo. Na prática é acesso root aos servidores."),
+                     "Cadastrar, editar e remover servidor, com as credenciais. Equivale a acesso root neles."),
     "hosts.reboot": ("servidores",
-                     "Reiniciar a máquina inteira. Derruba o reconhecimento, o "
-                     "SSH e o próprio caminho de volta até ela subir — é mais "
-                     "amplo que parar o stack."),
+                     "Reiniciar a máquina inteira. Derruba o reconhecimento e o SSH até ela voltar."),
     "metrics.view": ("monitoramento",
-                     "Ver CPU, memória, disco, GPU, incidentes e diagnóstico."),
+                     "Ver CPU, memória, disco, GPU e incidentes."),
     "services.view": ("monitoramento",
-                      "Ver quais containers do FindFace estão de pé e o log deles."),
+                      "Ver os containers do FindFace e o log deles."),
     "services.restart": ("servicos",
-                         "Reiniciar UM container. Ele volta sozinho — é a ação de "
-                         "destravar, e a de menor risco."),
+                         "Reiniciar um container. Ele volta sozinho."),
     "services.power": ("servicos",
-                       "Parar ou subir UM container. Parado FICA parado: um serviço "
-                       "de vídeo desligado é reconhecimento fora do ar sem gerar erro."),
+                       "Parar ou subir um container. Parado fica parado, sem gerar erro."),
     "services.stack": ("servicos",
-                       "Parar ou subir o stack INTEIRO. Derruba o reconhecimento "
-                       "facial do servidor enquanto estiver parado."),
+                       "Parar ou subir o stack inteiro. Derruba o reconhecimento do servidor."),
     "maintenance.view": ("manutencao",
-                         "Ver o que ocupa disco e a velocidade de crescimento do log."),
+                         "Ver o que ocupa disco e como o log cresce."),
     "maintenance.apply": ("manutencao",
-                          "Escrever configuração de log no servidor e arquivar log "
-                          "antigo. Reinicia rsyslog e journald; o FindFace não é afetado."),
+                          "Ajustar a rotação de log e arquivar log antigo. Não afeta o FindFace."),
     "cleanup.run": ("manutencao",
-                    "Apagar eventos antigos do FindFace para liberar disco. "
-                    "IRREVERSÍVEL — o evento apagado não volta."),
-    "backups.view": ("backup", "Ver histórico de execuções e os artefatos."),
+                    "Apagar eventos antigos do FindFace para liberar disco. Irreversível."),
+    "backups.view": ("backup", "Ver o histórico de execuções e os artefatos."),
     "backups.run": ("backup", "Disparar backup agora, fora do agendamento."),
     "backups.download": ("backup",
-                         "Baixar o artefato. Ele contém dado do FindFace — tratar "
-                         "o arquivo baixado com o mesmo cuidado do servidor."),
+                         "Baixar o artefato. Ele contém dado do FindFace."),
     "backups.restore": ("backup",
-                        "Restaurar sobre o servidor. SOBRESCREVE o banco atual: o que "
-                        "existir e não estiver no backup é perdido."),
+                        "Restaurar sobre o servidor. Sobrescreve o banco atual."),
     "backups.delete": ("backup",
                        "Apagar artefato em todos os destinos. Irreversível."),
     "destinations.manage": ("backup",
-                            "Cadastrar destino de backup e suas credenciais "
-                            "(Azure, rclone). Define para ONDE o dado sai."),
+                            "Cadastrar destinos de backup e suas credenciais."),
     "schedules.view": ("backup",
-                       "Ver quais backups estão agendados, com que frequência e "
-                       "quando rodaram pela última vez."),
+                       "Ver os backups agendados e quando rodaram."),
     "schedules.manage": ("backup",
                          "Criar, editar, pausar e remover agendamento."),
     "terminal.use": ("terminal",
-                     "Abrir terminal SSH no servidor pelo painel. Tudo é gravado."),
+                     "Abrir terminal SSH pelo painel. A sessão é gravada."),
     "terminal.sudo": ("terminal",
-                      "Rodar comando como root no terminal. Sem limite de escopo — "
-                      "é a permissão mais ampla do painel."),
+                      "Rodar comando como root no terminal, sem limite de escopo."),
     "terminal.sessions.view": ("terminal",
-                               "Assistir às gravações de sessões de terminal."),
+                               "Assistir às gravações das sessões de terminal."),
     "audit.view": ("administracao",
-                   "Ver quem fez o quê nos servidores, com busca e filtro, e as "
-                   "gravações das sessões de terminal."),
+                   "Ver quem fez o quê, com busca e filtro."),
     "users.manage": ("administracao",
-                     "Criar usuário, trocar perfil e senha de outro, desativar. "
-                     "Permite conceder a si mesmo qualquer permissão."),
+                     "Criar usuário, trocar perfil e senha, desativar."),
 }
 
 # Por que os perfis são FIXOS e não editáveis pela tela.
@@ -219,30 +204,24 @@ PERMISSION_INFO: dict[str, tuple[str, str]] = {
 # numa tela às três da manhã.
 ROLE_INFO: dict[str, dict] = {
     "observador": {
-        "resumo": "Enxerga tudo, não muda nada.",
-        "para_quem": "Gestor, auditor, cliente acompanhando. Também serve como "
-                     "perfil seguro para uma tela em parede.",
-        "nao_pode": "Nenhuma ação: não reinicia, não baixa backup, não abre terminal.",
+        "resumo": "Só leitura.",
+        "para_quem": "Gestor, auditor, ou uma tela em parede.",
+        "nao_pode": "Nada. Nem reiniciar, nem baixar backup, nem abrir terminal.",
     },
     "operador": {
-        "resumo": "Plantão: destrava o que travou.",
-        "para_quem": "Quem atende o chamado de madrugada e precisa pôr o "
-                     "reconhecimento de volta no ar.",
-        "nao_pode": "Deixar serviço parado, restaurar backup, mexer em cadastro "
-                    "ou usar sudo. Reiniciar volta sozinho; parar, não.",
+        "resumo": "Plantão: religa o que caiu.",
+        "para_quem": "Quem atende chamado fora do horário.",
+        "nao_pode": "Deixar serviço parado, restaurar backup, mexer em cadastro, usar sudo.",
     },
     "tecnico": {
-        "resumo": "Opera e mantém, sem poder de destruição.",
-        "para_quem": "Quem cuida do ambiente no dia a dia: backup, manutenção, "
-                     "terminal com sudo.",
-        "nao_pode": "Restaurar ou apagar backup, parar o stack inteiro, cadastrar "
-                    "servidor ou gerenciar usuário.",
+        "resumo": "Opera e mantém.",
+        "para_quem": "Quem cuida do ambiente no dia a dia.",
+        "nao_pode": "Restaurar ou apagar backup, parar o stack, cadastrar servidor, gerenciar usuário.",
     },
     "admin": {
-        "resumo": "Tudo, inclusive o que não tem volta.",
-        "para_quem": "Responsável pelo painel. Devem existir poucos.",
-        "nao_pode": "Nada é bloqueado — por isso toda ação destrutiva pede "
-                    "confirmação digitada e vira auditoria de nível crítico.",
+        "resumo": "Acesso total.",
+        "para_quem": "Responsável pelo painel. Devem ser poucos.",
+        "nao_pode": "Nada é bloqueado. Ação destrutiva pede confirmação digitada.",
     },
 }
 

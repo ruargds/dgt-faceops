@@ -456,7 +456,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               dos artefatos de backup no disco. O apelido é só rótulo —
               trocá-lo não move nem renomeia nada. */}
           <div className="form-ajuda" style={{ marginBottom: 14 }}>
-            {t("O apelido é o que aparece nas telas e nos avisos do Telegram. O nome continua sendo a identidade técnica do servidor — em auditoria, nos arquivos de backup e na confirmação de ações destrutivas.")}
+            {t("O apelido aparece nas telas e nos avisos. O nome continua valendo na auditoria e nos arquivos de backup.")}
           </div>
           <div className="field">
             <label className="label">{t("Descrição")}</label>

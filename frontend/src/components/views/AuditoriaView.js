@@ -231,7 +231,7 @@ function Acoes() {
         <Vazio titulo={filtrando ? t("Nada encontrado") : t("Nenhum registro")}>
           {filtrando && (
             <div className="small muted" style={{ marginTop: 6 }}>
-              {t("Nenhuma ação registrada corresponde a esses filtros. Tente limpar algum deles ou ampliar o período.")}
+              {t("Nada corresponde a esses filtros. Tente limpar algum, ou ampliar o período.")}
             </div>
           )}
         </Vazio>

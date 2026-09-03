@@ -307,7 +307,7 @@ export default function NotificacoesView() {
                 <br />
                 <strong>{t("pessoa")}</strong> — {t("ela precisa abrir conversa com o bot e mandar /start.")}
                 <br />
-                {t("O Telegram não deixa o bot iniciar conversa nem entrar em grupo sozinho — isso é limite da plataforma. Ele também só guarda as mensagens recentes (~24h).")}
+                {t("Limite do Telegram: o bot precisa ser adicionado ao grupo, ou receber um /start. A lista só mostra quem falou nas últimas 24h.")}
               </div>
             ) : (
               <div className="stack-v" style={{ gap: 6 }}>
@@ -476,7 +476,7 @@ export default function NotificacoesView() {
               {t("3. Regras — o que mandar, e para quem")}
             </div>
             <div className="small muted">
-              {t("Sem regra ligada, nada é enviado. Regras diferentes valem ao mesmo tempo: o plantão pode receber tudo e o dono de um serviço só o dele.")}
+              {t("Sem regra ligada, nada é enviado. Regras diferentes valem ao mesmo tempo.")}
             </div>
           </div>
           <button
@@ -495,7 +495,7 @@ export default function NotificacoesView() {
         {semRegra && !novaRegra ? (
           <div style={{ marginTop: 12 }}>
             <Vazio titulo={t("Nenhuma regra")}>
-              {t("Nada é enviado até existir uma regra. Comece com uma regra geral: todos os destinos, todos os servidores, os tipos que interessam.")}
+              {t("Nada é enviado até existir uma regra. Comece por uma geral: todos os destinos e servidores.")}
             </Vazio>
           </div>
         ) : (
@@ -528,7 +528,7 @@ export default function NotificacoesView() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="section-title" style={{ marginBottom: 4 }}>{t("Como a mensagem chega")}</div>
         <div className="small muted" style={{ marginBottom: 10 }}>
-          {t("Mesmo desenho do template do Zabbix que a equipe já lê: um ícone e um rótulo por campo, linha em branco entre eles e o servidor entre ícones no cabeçalho — dobrado quando é boa notícia. A primeira linha assina a origem, porque no mesmo grupo caem avisos de mais de uma ferramenta e o caminho de resolução é diferente em cada caso.")}
+          {t("Mesmo formato do Zabbix, para não haver dois padrões no mesmo grupo. A primeira linha diz de onde veio o aviso.")}
         </div>
         <div className="small muted" style={{ marginBottom: 10 }}>
           {t("O nome do cliente vem de Configurações → Identidade do projeto — o mesmo campo que já nomeia o painel.")}
@@ -812,7 +812,7 @@ function FormRegra({
       )}
       {host && (host.servicos || []).length === 0 && (
         <div className="form-ajuda">
-          {t("Ainda não conheço os serviços deste servidor — o coletor preenche a lista na próxima passada. Até lá, escreva o nome do serviço (ou deixe vazio para todos).")}
+          {t("O coletor ainda não listou os serviços deste servidor. Escreva o nome, ou deixe vazio para todos.")}
         </div>
       )}
 

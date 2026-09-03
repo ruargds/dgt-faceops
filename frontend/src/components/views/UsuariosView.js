@@ -50,7 +50,7 @@ function MatrizPerfis() {
         {t("O que cada perfil pode")}
       </div>
       <div className="small muted" style={{ marginBottom: 14 }}>
-        {t("Os perfis são fixos no código, não editáveis por tela. Perfil editável pareceria flexibilidade e seria uma porta: quem pudesse editar se concederia acesso root sem passar por ninguém. Conceder poder aqui é trocar o perfil de alguém — uma ação, um registro, um responsável.")}
+        {t("Os perfis são fixos. Para dar mais acesso a alguém, troque o perfil da pessoa.")}
       </div>
 
       {/* Os quatro perfis, com para quem serve e o que NÃO pode. O que
@@ -143,7 +143,7 @@ function MatrizPerfis() {
                             {item.destrutiva && (
                               <span
                                 className="pill pill-err"
-                                title={t("Ação destrutiva: exige confirmação digitada e vira auditoria de nível crítico")}
+                                title={t("Pede confirmação digitada e vira auditoria crítica")}
                               >
                                 {t("destrutiva")}
                               </span>
@@ -178,7 +178,7 @@ function MatrizPerfis() {
       })}
 
       <div className="small muted" style={{ marginTop: 12 }}>
-        {t("Botão sem permissão não aparece na tela — não fica cinza. Botão cinza que não faz nada gera chamado; botão ausente não gera dúvida.")}
+        {t("Botão sem permissão não aparece na tela.")}
       </div>
     </div>
   );

@@ -58,7 +58,7 @@ function HistoricoServico({ servico, dias, itens, onApuracao, onFechar }) {
           {itens.length === 0 ? (
             <Vazio titulo={t("Nenhuma queda registrada")}>
               <div className="small muted" style={{ marginTop: 6 }}>
-                {t("Este serviço não saiu do ar na janela — ou o monitor ainda não o observou cair.")}
+                {t("Não saiu do ar na janela.")}
               </div>
             </Vazio>
           ) : (
@@ -148,7 +148,7 @@ function HistoricoServico({ servico, dias, itens, onApuracao, onFechar }) {
           )}
 
           <div className="small muted" style={{ marginTop: 12 }}>
-            {t("Quem parou, subiu ou reiniciou este serviço pelo painel fica em Auditoria, com busca e filtro. Aqui só o que o monitor observou.")}
+            {t("Quem parou ou reiniciou pelo painel fica em Auditoria. Aqui, só o que o monitor observou.")}
           </div>
         </div>
       </div>
@@ -235,7 +235,7 @@ function ApuracaoIncidente({ incidente, onFechar }) {
           ) : !a ? (
             <Vazio titulo={t("Este incidente não foi apurado")}>
               <div className="small muted" style={{ marginTop: 6, marginBottom: 12 }}>
-                {t("A apuração roda sozinha quando o incidente fecha. Este é anterior a isso, ou o servidor ainda não atendia naquele momento.")}
+                {t("A apuração roda quando o incidente fecha. Este é anterior, ou o servidor não atendia.")}
               </div>
               <button
                 className="btn btn-primary btn-sm"
@@ -289,12 +289,12 @@ function ApuracaoIncidente({ incidente, onFechar }) {
                   evidência. */}
               {a.truncado > 0 && (
                 <div className="small muted" style={{ marginTop: 8 }}>
-                  {t("Mais")} {a.truncado} {t("linha(s) foram cortadas pelo limite de registro. Para guardar mais, mude a profundidade da apuração em Configurações → Monitoramento.")}
+                  {t("Mais")} {a.truncado} {t("linha(s) cortadas pelo limite. Para guardar mais, ajuste a profundidade da apuração em Configurações.")}
                 </div>
               )}
 
               <div className="small muted" style={{ marginTop: 12 }}>
-                {t("Leitura feita no servidor no momento em que ele voltou. O log completo continua na tela de Logs; aqui fica só o que aponta a causa.")}
+                {t("Lido no servidor quando ele voltou. O log completo fica na tela de Logs.")}
               </div>
 
               <div style={{ marginTop: 12 }}>

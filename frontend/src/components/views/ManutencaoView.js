@@ -285,7 +285,7 @@ function Faxina() {
     <div className="card">
       <div className="section-title" style={{ marginBottom: 4 }}>{t("Faxina do painel")}</div>
       <div className="small muted" style={{ marginBottom: 14 }}>
-        Roda sozinha uma vez por dia. Impede o painel de crescer sem fim.
+        Roda sozinha uma vez por dia.
         O artefato de backup não é tocado aqui — tem retenção própria, por
         destino.
       </div>

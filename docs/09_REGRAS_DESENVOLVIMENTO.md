@@ -244,6 +244,32 @@ Três utilidades em `styles.css` resolvem, e a regra é:
 `.field-help` continua valendo para ajuda de um campo só — desde que ela
 não seja a única célula alta de uma linha de vários campos.
 
+## Texto de tela: curto, e sem argumentar
+
+A tela diz **o que é** e **o que fazer**. O *porquê* da decisão fica na
+documentação — cartão de interface não é lugar de justificar projeto.
+
+Erros que já apareceram, todos com a mesma cara de texto escrito por
+máquina:
+
+| Estava | Ficou |
+|---|---|
+| "Perfil editável pareceria flexibilidade e seria uma porta: quem pudesse editar se concederia acesso root sem passar por ninguém." | "Os perfis são fixos. Para dar mais acesso, troque o perfil da pessoa." |
+| "Botão sem permissão não aparece na tela — não fica cinza. Botão cinza que não faz nada gera chamado; botão ausente não gera dúvida." | "Botão sem permissão não aparece na tela." |
+| "Este serviço não saiu do ar na janela — ou o monitor ainda não o observou cair." | "Não saiu do ar na janela." |
+
+Sinais de que o texto está longo demais:
+
+* **travessão explicando a frase anterior** — quase sempre dá para cortar
+  da metade em diante;
+* **dois pontos seguidos de justificativa** ("…, porque…");
+* frase que descreve o raciocínio de quem programou, e não o estado do
+  sistema.
+
+Regra prática: **acima de ~120 caracteres, reescreva.** Se a informação
+não couber, ela pertence à documentação, e a tela aponta para lá.
+
+
 ## Onde não mexer sem pensar duas vezes
 
 | Arquivo | Por quê |

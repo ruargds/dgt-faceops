@@ -341,7 +341,7 @@ export default function DiagnosticoView({ nav }) {
           {t("O que o log está dizendo")}
         </div>
         <div className="small muted" style={{ marginBottom: 12 }}>
-          {t("Erros agrupados por molde — id, hora, IP e número viram marcador, então mil linhas iguais viram uma com contador. Lido só de serviço com incidente aberto, ou no botão acima.")}
+          {t("Erros iguais viram uma linha com contador. Lidos só de serviço com incidente aberto.")}
         </div>
 
         {!padroes ? (
