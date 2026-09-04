@@ -557,6 +557,15 @@ CATALOGO: list[ItemConfig] = [
                "religando e cache do kernel produzem subidas curtas que "
                "passam sozinhas.",
                minimo=1, maximo=20),
+    ItemConfig("crescimento.ciclos_para_fechar", "monitor",
+               "Confirmar a estabilização em quantos ciclos antes do aviso de retorno",
+               "numero", 3,
+               "Simétrico ao de cima. Sem isto, o ruído de arredondamento da "
+               "leitura (1 casa decimal) fazia uma vigilância real — disco "
+               "crescendo devagar, de verdade — fechar e reabrir a cada "
+               "poucos minutos, um aviso de 'voltou' atrás do outro para um "
+               "consumo que nunca parou de subir.",
+               minimo=1, maximo=20),
     ItemConfig("crescimento.rastrear_sozinho", "monitor",
                "Rastrear o culpado sozinho quando a vigilância abrir",
                "booleano", True,

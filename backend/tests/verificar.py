@@ -3532,9 +3532,19 @@ async def cenario_crescimento_abre_e_fecha_vigilancia_sozinha():
             ))
         await db.flush()
 
+        # Fechar é simétrico a abrir: uma leitura estabilizada não fecha
+        # sozinha — senão o ruído de arredondamento (1 casa decimal)
+        # abriria e fecharia a mesma vigilância a cada poucos minutos.
+        # Precisa de `ciclos_para_fechar` (padrão 3) leituras seguidas
+        # sem preocupação.
+        eventos = await serv.registrar_ciclo(db, host)
+        assert eventos == [], "uma leitura estabilizada já fechou a vigilância"
+        assert vig.fim is None
+
+        await serv.registrar_ciclo(db, host)
         eventos = await serv.registrar_ciclo(db, host)
         await db.flush()
-        assert vig.fim is not None, "não fechou quando o consumo estabilizou"
+        assert vig.fim is not None, "não fechou depois de 3 ciclos estabilizados"
         assert vig.desfecho == "estabilizou", vig.desfecho
         assert any(e["tipo"] == "retorno" for e in eventos), eventos
 

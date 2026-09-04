@@ -741,6 +741,14 @@ class CrescimentoService:
         # Painel reiniciado recomeça a contagem, e o pior que acontece é
         # a vigilância abrir alguns minutos mais tarde.
         self._suspeitas: dict[tuple[int, str], int] = {}
+        # Mesma ideia, do lado de fechar: quantos ciclos seguidos uma
+        # vigilância ABERTA já leu "não preocupa mais". Sem isto, a
+        # reavaliação em janela curta (`_recente`) fechava no primeiro
+        # ciclo em que o ruído de arredondamento (a leitura vem com 1
+        # casa decimal) esconde a inclinação real — abrindo e fechando de
+        # novo minutos depois, para um disco cuja taxa real de 0,15 a
+        # 0,6 ponto por hora nunca mudou.
+        self._suspeitas_fechamento: dict[tuple[int, str], int] = {}
         # Quando cada host teve a última gravação de container. A cadência
         # é própria (padrão 5 min) porque o ciclo roda a cada 60 s e
         # memória de container não muda de forma interessante nesse ritmo
@@ -1076,6 +1084,18 @@ class CrescimentoService:
             if not veredito["preocupa"]:
                 self._suspeitas.pop(chave, None)
                 if aberta is not None:
+                    # Simétrico ao "abrir": uma leitura não fecha
+                    # vigilância. Só depois de N ciclos seguidos sem
+                    # preocupação é que o "estabilizou" é publicado —
+                    # antes disso, é só ruído de arredondamento e a
+                    # vigilância continua aberta, calada.
+                    self._suspeitas_fechamento[chave] = (
+                        self._suspeitas_fechamento.get(chave, 0) + 1
+                    )
+                    minimo_fechar = int(self._cfg("crescimento.ciclos_para_fechar", 3))
+                    if self._suspeitas_fechamento[chave] < minimo_fechar:
+                        continue
+                    self._suspeitas_fechamento.pop(chave, None)
                     eventos.append(self._fechar(host, aberta, veredito))
                 continue
 
@@ -1102,6 +1122,11 @@ class CrescimentoService:
                     rastreios += 1
                 eventos.append(self._evento(host, nova, "crescimento"))
                 continue
+
+            # Chegou até aqui: preocupa de novo. Zera a contagem de
+            # fechamento — a subida não parou o suficiente para justificar
+            # o "estabilizou" que estava sendo acumulado.
+            self._suspeitas_fechamento.pop(chave, None)
 
             # Já aberta: atualiza a projeção e re-rastreia quando vence o
             # intervalo. É a "busca persistente" — o culpado do primeiro
