@@ -98,7 +98,7 @@ saída HTTP nova.
 
 Colunas `*_enc` cifradas com Fernet. Nenhum schema de saída as expõe; a
 tela confirma por fingerprint. Vale para chave SSH, senha de sudo,
-credencial da API do FindFace e token do bot do Telegram.
+credencial da API do Face Detect e token do bot do Telegram.
 
 **Trava:** `token do telegram nunca aparece`
 
@@ -122,7 +122,7 @@ que existir perfil só de métrica
 
 ## 4. Ação destrutiva
 
-### INV-12 — Ação em container só dentro do projeto do FindFace
+### INV-12 — Ação em container só dentro do projeto do Face Detect
 
 `_garantir_do_projeto()` antes de qualquer reinício ou ação de stack.
 
@@ -307,7 +307,7 @@ prioridade baixa de E/S, e o rastreio tem teto de um por passada do
 monitor. Estourar o prazo devolve "não medido".
 
 *Por quê:* num disco com teto de IOPS, o diagnóstico compete com o
-FindFace — e o pior momento para competir é quando o recurso já está no
+Face Detect — e o pior momento para competir é quando o recurso já está no
 limite. Mesma lição de [33_SATURACAO_DE_DISCO](../docs/33_SATURACAO_DE_DISCO.md).
 
 **Trava:** `rastreio de crescimento so le`

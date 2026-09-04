@@ -89,7 +89,7 @@ const FRASES = {
   "Usuário da API": "API username",
   "URL da API": "API URL",
   "Token da API": "API token",
-  "API do FindFace": "FindFace API",
+  "API do Face Detect": "Face Detect API",
   "Chave PEM": "PEM key",
   "Autenticação": "Authentication",
   "Acesso SSH": "SSH access",
@@ -220,8 +220,8 @@ const FRASES = {
   "Serviços de dados": "Data services",
   "Serviços com problema": "Services with problems",
   "Servidores e o que cada um carrega": "Servers and what each one carries",
-  "Onde o disco do FindFace está sendo gasto":
-    "Where the FindFace disk is being spent",
+  "Onde o disco do Face Detect está sendo gasto":
+    "Where the Face Detect disk is being spent",
   "Quanto a leitura custou": "What the reading cost",
   "Licenciamento": "Licensing",
   "Lido de": "Read from",
@@ -250,11 +250,11 @@ const FRASES = {
   "com parada": "with downtime",
   "no período": "in the period",
   "contadas agora, pela API": "counted now, through the API",
-  "no servidor do FindFace": "on the FindFace server",
+  "no servidor do Face Detect": "on the Face Detect server",
   "dentro do container": "inside the container",
   "geraram ao menos um evento": "generated at least one event",
   "nada no período — pode estar offline": "nothing in the period — it may be offline",
-  "nenhuma do FindFace": "none from FindFace",
+  "nenhuma do Face Detect": "none from Face Detect",
   "esvazia o texto, mantém a linha do histórico":
     "empties the text, keeps the history line",
   "sobra de execução que falhou no meio": "leftover from a run that failed midway",
@@ -277,7 +277,7 @@ const FRASES = {
   "Cadastre um servidor primeiro": "Register a server first",
   "Clique em Consultar": "Click Query",
   "Clique em Diagnosticar": "Click Run diagnosis",
-  "FindFace não roda neste servidor": "FindFace does not run on this server",
+  "Face Detect não roda neste servidor": "Face Detect does not run on this server",
   "Abertas neste momento": "Open right now",
   "O painel nunca foi salvo.": "The panel has never been backed up.",
   "O servidor não respondeu ao": "The server did not answer the",
@@ -302,12 +302,12 @@ const FRASES = {
   "Carregando destinos…": "Loading destinations…",
   "Consultando o Docker do servidor…": "Querying the server's Docker…",
   "Consultando os servidores…": "Querying the servers…",
-  "Contando eventos no banco do FindFace…":
-    "Counting events in the FindFace database…",
+  "Contando eventos no banco do Face Detect…":
+    "Counting events in the Face Detect database…",
   "Buscando o log…": "Fetching the log…",
   "Lendo a máquina…": "Reading the machine…",
   "Lendo o histórico…": "Reading the history…",
-  "Lendo o licenciamento do FindFace…": "Reading the FindFace licensing…",
+  "Lendo o licenciamento do Face Detect…": "Reading the Face Detect licensing…",
   "Lendo os processos do servidor…": "Reading the server processes…",
   "Somando diretórios no servidor…": "Adding up directories on the server…",
   "Varrendo os servidores por SSH e montando o mapa…":
@@ -359,20 +359,20 @@ const FRASES = {
   "Depois de salvar, use": "After saving, use",
   "Gere com": "Generate it with",
   "Cole a chave ou carregue o arquivo": "Paste the key or load the file",
-  "Cadastre as VMs do FindFace Multi em": "Register the FindFace Multi VMs in",
+  "Cadastre as VMs do Face Detect em": "Register the Face Detect VMs in",
   "Cadastre as máquinas em": "Register the machines in",
   "Cadastre e teste destinos em": "Register and test destinations in",
   "Nenhum destino ativo. Cadastre um em": "No active destination. Register one in",
   "Os containers estão gravando no": "The containers are writing to",
-  "PARA o FindFace Multi": "STOPS FindFace Multi",
+  "PARA o Face Detect": "STOPS Face Detect",
   "Sem sudo o backup e o restart de container não funcionam.":
     "Without sudo, backup and container restart do not work.",
   "Troque a senha logo após o primeiro acesso.":
     "Change the password right after the first sign-in.",
   "Use as credenciais fornecidas pelo administrador.":
     "Use the credentials provided by the administrator.",
-  "o mesmo usuário que entra no FindFace":
-    "the same user that signs into FindFace",
+  "o mesmo usuário que entra no Face Detect":
+    "the same user that signs into Face Detect",
   "tem tudo, inclusive restore e parada do stack.":
     "has everything, including restore and stopping the stack.",
   "Entendo que o perfil Completo": "I understand that the Full profile",

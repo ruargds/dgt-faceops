@@ -18,7 +18,7 @@ const JANELAS = [
 /**
  * O que cada número significa, em português de plantão.
  *
- * A tela é usada por quem nunca abriu o FindFace. "Carga por núcleo:
+ * A tela é usada por quem nunca abriu o Face Detect. "Carga por núcleo:
  * 1,4" não diz nada sozinho; "há processo esperando CPU" diz.
  */
 /** "12,6 GB de 16,0 GB" — o absoluto que o percentual sozinho esconde. */
@@ -449,7 +449,7 @@ export default function MonitorView({ alvo, nav }) {
                       </div>
                       {/* O que o número quer dizer, antes do que fazer:
                           é a pergunta que vem primeiro para quem não
-                          opera o FindFace todo dia. */}
+                          opera o Face Detect todo dia. */}
                       {a.significa && (
                         <div className="small" style={{ marginTop: 4, opacity: 0.92 }}>
                           {a.significa}
@@ -1176,7 +1176,7 @@ function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar, emComparacao
             <span>
               {a.cont_total > 0
                 ? `${a.cont_rodando} de ${a.cont_total} serviços`
-                : "sem serviços do FindFace"}
+                : "sem serviços do Face Detect"}
             </span>
             <span title={t("Quanto a leitura custou")}>{a.coleta_ms} ms</span>
           </div>

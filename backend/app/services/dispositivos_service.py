@@ -1,13 +1,13 @@
 """
-Dispositivos (câmeras) do FindFace — quantos, quando falaram, quanto geram.
+Dispositivos (câmeras) do Face Detect — quantos, quando falaram, quanto geram.
 
-Lê direto do PostgreSQL do FindFace, via a mesma ponte SSH+docker do
+Lê direto do PostgreSQL do Face Detect, via a mesma ponte SSH+docker do
 resto do painel. A API HTTP da NtechLab seria a via "oficial", mas exige
 credencial própria e a documentação pública não fixa os caminhos dos
 endpoints — construir em cima disso seria construir sobre suposição.
 
 **O esquema é descoberto em tempo de execução.** Nomes de tabela e coluna
-mudam entre versões do FindFace, e uma consulta com nome chutado falha
+mudam entre versões do Face Detect, e uma consulta com nome chutado falha
 inteira. Aqui o serviço pergunta ao `information_schema` o que existe,
 casa com os padrões conhecidos, e diz claramente quando não encontrou.
 
@@ -35,7 +35,7 @@ PADRAO_EVENTO = re.compile(r"(face|body|car)_?events?$")
 # Tabelas do banco do PRÓPRIO painel. Se a busca cair nele (acontece
 # quando o painel roda no mesmo servidor), reconhecemos e recusamos com
 # mensagem clara — em vez de listar "amostras, hosts, users..." como se
-# fossem tabelas do FindFace.
+# fossem tabelas do Face Detect.
 TABELAS_PAINEL = frozenset({
     "amostras", "audit_logs", "backup_runs", "configuracoes", "destinos",
     "hosts", "schedules", "terminal_sessions", "users", "visoes_log",
@@ -84,7 +84,7 @@ def _linhas(texto: str) -> list[list[str]]:
 class DispositivosService:
     def __init__(self, ssh: SSHService, ffapi=None) -> None:
         self.ssh = ssh
-        # Cliente da API HTTP do FindFace, preferido quando o host tem
+        # Cliente da API HTTP do Face Detect, preferido quando o host tem
         # URL e token cadastrados — mais limpo que ler o Postgres via SSH.
         self.ffapi = ffapi
         # host_id -> esquema descoberto
@@ -151,7 +151,7 @@ class DispositivosService:
         Descobre banco, tabelas e colunas. Guardado em memória por host.
 
         Perguntar ao banco o que existe, em vez de assumir, é o que faz
-        isso sobreviver a uma atualização do FindFace.
+        isso sobreviver a uma atualização do Face Detect.
         """
         if not forcar and host.id in self._esquema:
             return self._esquema[host.id]
@@ -200,12 +200,12 @@ echo "{SEP}END"
 
         if not todas:
             # Provavelmente conectamos no Postgres do próprio painel (o
-            # FindFace não roda aqui) ou o banco do FindFace está noutro
+            # Face Detect não roda aqui) ou o banco do Face Detect está noutro
             # servidor.
             raise DispositivosError(
-                "não encontrei o banco do FindFace neste servidor. Se o FindFace "
+                "não encontrei o banco do Face Detect neste servidor. Se o Face Detect "
                 "roda em outra máquina, consulte por lá (veja em Topologia onde o "
-                "PostgreSQL está). Ou cadastre a API do FindFace (URL + token) "
+                "PostgreSQL está). Ou cadastre a API do Face Detect (URL + token) "
                 "deste servidor em Servidores — o painel prefere a API quando ela "
                 "existe."
             )
@@ -220,17 +220,17 @@ echo "{SEP}END"
             # despejar a lista de tabelas internas.
             if set(tabelas).issubset(TABELAS_PAINEL):
                 raise DispositivosError(
-                    "este é o banco do próprio painel, não o do FindFace. O "
-                    "FindFace não roda neste servidor — consulte no servidor onde "
-                    "ele está (veja em Topologia), ou cadastre a API do FindFace."
+                    "este é o banco do próprio painel, não o do Face Detect. O "
+                    "Face Detect não roda neste servidor — consulte no servidor onde "
+                    "ele está (veja em Topologia), ou cadastre a API do Face Detect."
                 )
             raise DispositivosError(
-                "nenhuma tabela de câmeras encontrada. Cadastre a API do FindFace "
+                "nenhuma tabela de câmeras encontrada. Cadastre a API do Face Detect "
                 "(URL + token) em Servidores, ou confira se este é mesmo o servidor "
-                "do FindFace. Tabelas vistas: " + ", ".join(tabelas[:25])
+                "do Face Detect. Tabelas vistas: " + ", ".join(tabelas[:25])
             )
 
-        # A base do FindFace costuma ser a que tem a tabela de câmeras
+        # A base do Face Detect costuma ser a que tem a tabela de câmeras
         banco = cameras[0][0]
 
         esquema = {
@@ -281,7 +281,7 @@ echo "{SEP}END"
         if periodo not in PERIODOS:
             raise DispositivosError(f"período inválido: {periodo}")
 
-        # Preferência: API HTTP do FindFace quando cadastrada. Cai para
+        # Preferência: API HTTP do Face Detect quando cadastrada. Cai para
         # SSH+psql se não houver credencial de API ou se a API falhar.
         erro_api = ""
         if self.ffapi is not None:
@@ -291,7 +291,7 @@ echo "{SEP}END"
                     return await self.ffapi.listar(host, periodo)
                 except FFApiError as exc:
                     erro_api = str(exc)
-                    log.warning("API do FindFace falhou em %s, caindo para SSH: %s",
+                    log.warning("API do Face Detect falhou em %s, caindo para SSH: %s",
                                 host.name, exc)
 
         # Quando os DOIS caminhos falham, a tela precisa ver os dois erros.
@@ -302,7 +302,7 @@ echo "{SEP}END"
         except (DispositivosError, SSHError) as exc:
             if erro_api:
                 raise DispositivosError(
-                    f"a API do FindFace falhou ({erro_api}) e a leitura direta "
+                    f"a API do Face Detect falhou ({erro_api}) e a leitura direta "
                     f"do banco também: {exc}"
                 ) from exc
             raise

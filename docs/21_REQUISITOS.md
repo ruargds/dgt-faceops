@@ -75,7 +75,7 @@ Ver [12_INSTALACAO_WINDOWS](12_INSTALACAO_WINDOWS.md).
 
 | Requisito | Detalhe |
 |---|---|
-| Alcance aos servidores | Porta **22** em cada VM do FindFace |
+| Alcance aos servidores | Porta **22** em cada VM do Face Detect |
 | Porta do painel | HTTPS (padrão 30333) e HTTP (8080, só redireciona) |
 | Saída para a internet | Só se usar destino em nuvem (Azure Blob, rclone) |
 
@@ -90,7 +90,7 @@ done
 
 ---
 
-## Servidores do FindFace
+## Servidores do Face Detect
 
 **Nada é instalado neles.** O painel é agentless.
 
@@ -99,7 +99,7 @@ done
 | Usuário SSH | `id -un` |
 | Acesso ao Docker | `docker ps` — com ou sem `sudo`, o painel detecta |
 | `sudo` | `sudo -v` — com senha guardada no cofre ou `NOPASSWD` |
-| FindFace instalado | O painel detecta o caminho sozinho no teste de conexão |
+| Face Detect instalado | O painel detecta o caminho sozinho no teste de conexão |
 
 **Sem `sudo`, o painel só lê métrica.** Backup, reinício de container e
 limpeza de eventos não funcionam.
@@ -127,7 +127,7 @@ Números reais das VMs deste projeto, coletados em 2026-08-24.
 | VM701633 `integração` | — | — | — | — | não |
 
 Instalação em `/media/STORAGE/findface-multi` nos dois servidores
-FindFace — **não** no `/opt/findface-multi` da documentação.
+Face Detect — **não** no `/opt/findface-multi` da documentação.
 
 ### Ocupação medida
 

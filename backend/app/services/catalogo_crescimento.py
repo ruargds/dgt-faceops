@@ -22,7 +22,7 @@ E a `fonte`, com a mesma régua do catálogo de erros:
 * **manual** — documentado pela NtechLab, com a página citada;
 * **campo+manual** — visto aqui e confirmado pelo fabricante.
 
-Páginas do manual usadas (FindFace Multi 2.4.1): `logs.html`,
+Páginas do manual usadas (Face Detect 2.4.1): `logs.html`,
 `event-cleaner.html`, `architecture.html`, `backup-restore.html`,
 `configuration.html`.
 
@@ -43,7 +43,7 @@ CAUSAS: list[dict] = [
         "recurso": "disco",
         "caminho": re.compile(r"^/var/log(/|$)|journal", re.I),
         "titulo": "Log do sistema crescendo",
-        "por_que": "O log de acesso HTTP do próprio FindFace grava toda "
+        "por_que": "O log de acesso HTTP do próprio Face Detect grava toda "
                    "requisição bem-sucedida. Em operação normal, sem erro "
                    "nenhum, isso deu 8 GB por dia num servidor deste "
                    "ambiente — e 99 GB de /var/log num disco de 123 GB.",
@@ -52,7 +52,7 @@ CAUSAS: list[dict] = [
                 "conseguir escrever qualquer coisa — um caso ficou 17 dias "
                 "com 0 byte livre, e o sintoma foi falha de login.",
         "contorno": "Em Manutenção: 'Conter crescimento' aplica o filtro na "
-                    "chegada ao rsyslog (nada do FindFace reinicia) e "
+                    "chegada ao rsyslog (nada do Face Detect reinicia) e "
                     "'Arquivar log antigo' move o que já rotacionou para um "
                     "disco com folga.",
         "fabricante": "A NtechLab recomenda teto no journal "
@@ -81,7 +81,7 @@ CAUSAS: list[dict] = [
                       "daemon.json (logs.html), que passa a saída para o "
                       "journal — onde o teto de 3 GB dela vale. Trocar "
                       "driver exige reiniciar o Docker, e isso derruba o "
-                      "FindFace: é janela de manutenção, não clique de "
+                      "Face Detect: é janela de manutenção, não clique de "
                       "plantão.",
         "onde": "logs",
         "fonte": "manual",
@@ -107,7 +107,7 @@ CAUSAS: list[dict] = [
                       "em segundos por tipo de evento, e a recorrência em "
                       "`CLEANUP_SCHEDULE` / `vms_cleanup` — manual 2.4.1, "
                       "event-cleaner.html. O manual também proíbe reiniciar "
-                      "container do FindFace enquanto a purga roda.",
+                      "container do Face Detect enquanto a purga roda.",
         "onde": "manutencao",
         "fonte": "campo+manual",
     },
@@ -140,7 +140,7 @@ CAUSAS: list[dict] = [
         "chave": "banco_do_findface",
         "recurso": "disco",
         "caminho": re.compile(r"postgres|timescale|mongo|clickhouse|etcd", re.I),
-        "titulo": "Banco de dados do FindFace crescendo",
+        "titulo": "Banco de dados do Face Detect crescendo",
         "por_que": "Os eventos vivem no banco antes de virar arquivo. WAL do "
                    "Postgres e coleção do Mongo crescem com a carga de "
                    "gravação; o que apaga isso é a purga de eventos, não a "
@@ -151,7 +151,7 @@ CAUSAS: list[dict] = [
         "contorno": "Em Manutenção → Limpeza de eventos: é ela que reduz o "
                     "banco. Arquivar log não ajuda em nada aqui.",
         "fabricante": "A retenção de evento é configurada no próprio "
-                      "FindFace (`manage.py cleanup`, event-cleaner.html). "
+                      "Face Detect (`manage.py cleanup`, event-cleaner.html). "
                       "O manual não documenta manutenção manual dos bancos "
                       "— mexer neles por fora é risco sem respaldo.",
         "onde": "manutencao",
@@ -172,7 +172,7 @@ CAUSAS: list[dict] = [
                     "problema nosso, e o primeiro a descartar antes de "
                     "procurar culpado fora.",
         "fabricante": "Não se aplica — é código deste painel, não do "
-                      "FindFace.",
+                      "Face Detect.",
         "onde": "backups",
         "fonte": "campo",
     },
@@ -190,7 +190,7 @@ CAUSAS: list[dict] = [
         "contorno": "Reinicie quem segura o arquivo (costuma ser o rsyslog). "
                     "E no arquivo de log ATIVO use `truncate -s 0`, nunca "
                     "`rm` — é o que a tela de Manutenção faz.",
-        "fabricante": "Comportamento do Linux, não do FindFace.",
+        "fabricante": "Comportamento do Linux, não do Face Detect.",
         "onde": "manutencao",
         "fonte": "campo",
     },

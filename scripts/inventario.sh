@@ -9,7 +9,7 @@
 # Roda no servidor, ou de fora sem copiar arquivo:
 #   ssh usuario@ip 'bash -s' < scripts/inventario.sh | tee inventario-ip.txt
 #
-# As seções que mais decidem coisa: COMPOSE (onde o FindFace realmente
+# As seções que mais decidem coisa: COMPOSE (onde o Face Detect realmente
 # está), ONDE OS DADOS MORAM (se o disco certo está sendo usado) e
 # DOCKER (qual driver de log, que define se a correção tem downtime).
 # ============================================================================

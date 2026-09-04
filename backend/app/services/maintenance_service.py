@@ -1,12 +1,12 @@
 """
-Manutenção de disco e log dos servidores do FindFace.
+Manutenção de disco e log dos servidores do Face Detect.
 
 Existe porque o problema mais comum em servidor de reconhecimento facial
-não é o FindFace: é o disco raiz enchendo de log. Num servidor real
+não é o Face Detect: é o disco raiz enchendo de log. Num servidor real
 encontramos 99 GB de `/var/log` num disco de 123 GB, gerados pelo log de
 acesso HTTP em operação NORMAL — cerca de 8 GB por dia.
 
-Três operações, todas pela web e nenhuma reiniciando o FindFace:
+Três operações, todas pela web e nenhuma reiniciando o Face Detect:
 
 * **Diagnóstico** — o que está enchendo, a que velocidade, e o que já
   está configurado. Só leitura.
@@ -39,7 +39,7 @@ CONF_RSYSLOG = r"""# FaceOps — reduz log de container no /var/log/syslog.
 # acessivel por `docker logs` e `journalctl` — aqui so evitamos gravar o
 # ruido no disco raiz.
 #
-# Nada do FindFace reinicia: o filtro age na chegada ao rsyslog.
+# Nada do Face Detect reinicia: o filtro age na chegada ao rsyslog.
 if re_match($programname, "^[0-9a-f]{12}$") then {
     if re_match($msg, "status=(200|204|206|304)") then stop
     if re_match($msg, "HTTP/1\.[01]\" (200|204|206|304) ") then stop

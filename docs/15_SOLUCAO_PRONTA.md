@@ -1,7 +1,7 @@
 # Solução pronta — Ubuntu
 
 Guia completo, do zero ao backup rodando. Feito para o ambiente real
-levantado neste projeto: quatro VMs no Azure, FindFace Multi 2.4.1
+levantado neste projeto: quatro VMs no Azure, Face Detect 2.4.1
 distribuído.
 
 ---
@@ -111,7 +111,7 @@ ambiente levantado:
 
 | Nome | Papel | Endereço | Usuário | O que roda |
 |---|---|---|---|---|
-| `vm-appserver` | Aplicação | `10.50.153.10` | `azureadmin` | FindFace app, PostgreSQL, MongoDB, etcd, **fotos de evento (242 GB)** |
+| `vm-appserver` | Aplicação | `10.50.153.10` | `azureadmin` | Face Detect app, PostgreSQL, MongoDB, etcd, **fotos de evento (242 GB)** |
 | `vm-extraction` | Extração / GPU | `10.50.153.11` | `azureadmin` | Extração facial, GPU |
 | `vm-integracao` | Outro | `10.50.153.12` | `azureadmin` | Aplicação DGT — 80 workers, Grafana, cloudflared |
 | `vm-dbserver` | Banco de dados | `10.50.155.4` | `azureadmin` | **Tarantool, 16 shards — os vetores faciais** |
@@ -126,7 +126,7 @@ Em cada um:
 
 O teste precisa vir verde com `sudo: sim` e `docker: sim`. Ele também
 corrige o caminho de instalação automaticamente: nestes servidores o
-FindFace está em `/media/STORAGE/findface-multi`, não no
+Face Detect está em `/media/STORAGE/findface-multi`, não no
 `/opt/findface-multi` da documentação.
 
 ---
@@ -174,7 +174,7 @@ Nesta ordem, sem pular:
 ```
 [ ] Testar conexão verde nos 4 servidores
 [ ] Recursos → Atualizar traz RAM e disco; GPU aparece no vm-extraction
-[ ] Serviços lista os containers do FindFace no appserver e no dbserver
+[ ] Serviços lista os containers do Face Detect no appserver e no dbserver
 [ ] Manutenção → Diagnosticar no appserver (mede o crescimento do log)
 [ ] Backups → Novo backup → perfil 'config' no vm-appserver
 [ ] O backup terminou em sucesso, com destinos verdes
@@ -212,7 +212,7 @@ Os horários são deslocados de propósito (02:00 e 02:15) para os dois
 uploads não competirem pela mesma banda de saída.
 
 O **completo** exige marcar o aceite de janela de manutenção — ele para
-o FindFace durante a cópia.
+o Face Detect durante a cópia.
 
 ### O par que não pode ser separado
 
@@ -243,7 +243,7 @@ Depois:
 1. **Ver o que será alterado** — mostra os três arquivos, sem escrever nada
 2. **Aplicar contenção** — filtra o ruído na chegada ao rsyslog
 
-Nada do FindFace reinicia. Só `rsyslog` e `journald`, ambos instantâneos.
+Nada do Face Detect reinicia. Só `rsyslog` e `journald`, ambos instantâneos.
 
 Se ainda houver `syslog.1` grande sobrando, use **Arquivar log antigo**:
 move para o disco com folga e comprime lá. Nada é apagado.

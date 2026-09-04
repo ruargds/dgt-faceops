@@ -175,7 +175,7 @@ volume de eventos por dispositivo.
 O painel lê os dados das câmeras de uma de duas formas, preferindo a
 primeira:
 
-**1. API HTTP do FindFace** (preferida) — quando o servidor tem URL e
+**1. API HTTP do Face Detect** (preferida) — quando o servidor tem URL e
 token da API cadastrados. É a via oficial, limpa, e não depende de acesso
 ao banco. Autenticação `Authorization: Token`, contagens em
 `/cameras/count/` e `/events/{tipo}/count/`.
@@ -185,9 +185,9 @@ credencial de API. O painel descobre o esquema em tempo de execução,
 perguntando ao banco quais tabelas existem, e conta os eventos com filtro
 de data.
 
-A segunda existe para quem não quer expor a API do FindFace. A primeira é
+A segunda existe para quem não quer expor a API do Face Detect. A primeira é
 melhor onde a credencial estiver disponível — configure em **Servidores →
-Editar → API do FindFace**.
+Editar → API do Face Detect**.
 
 ### O que mostra
 
@@ -224,7 +224,7 @@ sem avisar ninguém.
 
 ### Credencial da API: usuário e senha
 
-O FindFace é acessado com **usuário e senha** — os mesmos da plataforma da
+O Face Detect é acessado com **usuário e senha** — os mesmos da plataforma da
 NtechLab. O contrato está na documentação da própria instalação
 (`/api-docs/`, spec em `/swagger.json`):
 
@@ -251,7 +251,7 @@ O botão **Testar API** consulta `/users/me/` antes da contagem de câmeras
 e mostra sob que conta o painel entrou: conta errada aparece ali, e não
 depois, numa permissão negada no meio de uma operação.
 
-O certificado do FindFace é autoassinado em rede interna, então a
+O certificado do Face Detect é autoassinado em rede interna, então a
 verificação de cadeia é dispensada **nesta chamada e em mais nenhuma** —
 exigir cadeia válida aqui só impediria o painel de ler a plataforma que
 ele opera.
@@ -285,7 +285,7 @@ ao lado, onde é só o que é.
 O aviso de vencimento usa o mesmo limiar da interface do fabricante: 60
 dias.
 
-**A licença não vem da API do FindFace.** Ela é servida pelo **NTLS**, um
+**A licença não vem da API do Face Detect.** Ela é servida pelo **NTLS**, um
 serviço à parte, e por isso os caminhos saem da *raiz* do site — se a API
 foi cadastrada como `https://ip/api`, a licença continua em
 `https://ip/ntls/...`:
@@ -298,7 +298,7 @@ foi cadastrada como `https://ip/api`, a licença continua em
 Cada recurso traz **`current`** (em uso) e **`value`** (liberado); a tela
 do fabricante rotula `source` como "File" e `type` como "Type of license".
 Isso não está no swagger da API: saiu da leitura do bundle da própria
-interface do FindFace da instalação, que é quem chama esses endereços.
+interface do Face Detect da instalação, que é quem chama esses endereços.
 
 Um detalhe de honestidade:
 
@@ -314,7 +314,7 @@ Um detalhe de honestidade:
   JSON como veio — melhor mostrar JSON do que esconder o dado.
 
 Sem URL e token cadastrados, o cartão diz isso e aponta para **Servidores
-→ Editar → API do FindFace**. O limite de licença **não** existe no banco
+→ Editar → API do Face Detect**. O limite de licença **não** existe no banco
 lido por SSH; é a única informação desta tela que exige a API.
 
 ### Quando as duas vias falham

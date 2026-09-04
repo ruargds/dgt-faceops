@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# FaceOps — backup do FindFace Multi 2.4.1
+# FaceOps — backup do Face Detect 2.4.1
 #
 # Roda NO SERVIDOR alvo, enviado pelo painel via SSH. Não deixa rastro:
 # grava só no diretório de staging, que o painel busca e limpa depois.
@@ -15,7 +15,7 @@
 #              diario: recupera cadastros, usuarios, cameras, dossies e os
 #              vetores faciais. NAO leva as fotos originais de evento.
 #
-#              Funciona tambem em host que NAO e FindFace (aplicacao de
+#              Funciona tambem em host que NAO e Face Detect (aplicacao de
 #              integracao, coletor, dashboards): sem configs/, arquiva os
 #              arquivos de configuracao do projeto, e faz dump do que
 #              encontrar.
@@ -78,7 +78,7 @@ fi
 #
 # O backup le o banco inteiro: pg_dump, mongodump, snapshot do Tarantool e
 # tar, tudo em sequencia. Ate aqui isso rodava em prioridade NORMAL de
-# disco, disputando E/S de igual para igual com o FindFace em producao.
+# disco, disputando E/S de igual para igual com o Face Detect em producao.
 #
 # Em disco gerenciado de nuvem existe um teto de IOPS contratado. Ao
 # encostar nele o provedor enfileira, a latencia explode e TUDO que toca
@@ -146,7 +146,7 @@ STACK_PARADO=0
 parar_stack() {
   local bin; bin="$(compose_bin)"
   [ -z "$bin" ] && die "docker compose não encontrado"
-  log "Parando o stack do FindFace Multi (haverá downtime)..."
+  log "Parando o stack do Face Detect (haverá downtime)..."
   DOWNTIME_START=$(date +%s)
   (cd "$FF_DIR" && $bin -f "$COMPOSE_FILE" stop) || die "falha ao parar o stack"
   STACK_PARADO=1
@@ -181,7 +181,7 @@ backup_configs() {
   log "Copiando configuracao..."
   mkdir -p "$WORK/config"
 
-  # Instalacao do FindFace tem configs/. Um host com outra aplicacao
+  # Instalacao do Face Detect tem configs/. Um host com outra aplicacao
   # (ponte de integracao, coletor, dashboards) nao tem — e mesmo assim
   # precisa do compose e dos arquivos de configuracao salvos.
   if [ -d "$FF_DIR/configs" ]; then
@@ -213,8 +213,8 @@ backup_configs() {
   [ -f "$COMPOSE_FILE" ] && cp "$COMPOSE_FILE" "$WORK/config/"
   [ -f "$FF_DIR/.env" ] && cp "$FF_DIR/.env" "$WORK/config/env.bak"
 
-  # Licenca do ntls — sem ela o FindFace restaurado nao sobe. Em host
-  # que nao e FindFace simplesmente nao acha nada, e tudo bem.
+  # Licenca do ntls — sem ela o Face Detect restaurado nao sobe. Em host
+  # que nao e Face Detect simplesmente nao acha nada, e tudo bem.
   find "$FF_DIR" -maxdepth 3 \( -name "*.key" -o -name "license*" -o -name "*.lic" \) \
        -size -10M 2>/dev/null | while read -r f; do
     mkdir -p "$WORK/config/licenca"
@@ -257,7 +257,7 @@ backup_postgres() {
     com_teto "$T_DUMP" docker exec "$c" sh -c "$IO_BAIXO_SH" _ pg_dumpall -U "$PGUSER" --globals-only       > "$WORK/postgres/$svc/globals.sql" 2>"$WORK/postgres/$svc/globals.err"       || log "    AVISO: pg_dumpall --globals-only falhou"
 
     # Enumera os bancos em vez de chutar nomes: a lista muda conforme os
-    # modulos habilitados do FindFace.
+    # modulos habilitados do Face Detect.
     local bancos
     bancos="$(com_teto "$T_RAPIDO" docker exec "$c" psql -U "$PGUSER" -tAc       "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres';" 2>/dev/null)"
 
@@ -566,7 +566,7 @@ backup_grafana() {
 
 escrever_manifesto() {
   # Versao das imagens em uso. O Tarantool NAO e compativel entre versoes
-  # maiores do FindFace: restaurar a base biometrica num sistema de outra
+  # maiores do Face Detect: restaurar a base biometrica num sistema de outra
   # versao nao funciona. Sem registrar isso aqui, alguem descobriria no
   # pior momento possivel.
   local VERSOES
@@ -579,7 +579,7 @@ Perfil.............: $PROFILE
 Rótulo.............: $LABEL
 Servidor...........: $(hostname -f 2>/dev/null || hostname)
 Data...............: $(date '+%Y-%m-%d %H:%M:%S %Z')
-Diretório FindFace.: $FF_DIR
+Diretório Face Detect.: $FF_DIR
 Projeto compose....: $PROJETO
 Downtime...........: ${DOWNTIME_TOTAL}s
 
@@ -588,7 +588,7 @@ VERSAO DAS IMAGENS
 $VERSOES
 
   ATENCAO: a base do Tarantool (vetores faciais) NAO e compativel entre
-  versoes maiores do FindFace. Restaurar este backup num sistema de outra
+  versoes maiores do Face Detect. Restaurar este backup num sistema de outra
   versao nao vai funcionar para os vetores — os cadastros do PostgreSQL
   ate voltam, mas o reconhecimento nao. Para migrar de versao, use o
   procedimento de atualizacao do fabricante, nao o restore.
@@ -606,10 +606,10 @@ Perfil config/essencial — restore quente, ver docs/03_RESTORE.md:
   3. tarantool             -> parar os shards, extrair, subir
   4. mongodb/mongodump.gz  -> mongorestore --archive --gzip
   5. etcd/snapshot.db      -> etcdctl snapshot restore
-  6. subir o stack e conferir o painel do FindFace
+  6. subir o stack e conferir o painel do Face Detect
 
 Perfil completo — procedimento oficial NtechLab:
-  1. Instalar o FindFace Multi pelo .run da mesma versão (2.4.1)
+  1. Instalar o Face Detect pelo .run da mesma versão (2.4.1)
   2. sudo docker-compose stop
   3. sudo rm -r $FF_DIR/configs/* && tar -xf configs.tar.gz -C $FF_DIR/
   4. sudo rm -r $FF_DIR/data/*    && tar -xf data.tar.gz    -C $FF_DIR/
@@ -625,7 +625,7 @@ log " FaceOps — backup perfil '$PROFILE'"
 log "════════════════════════════════════════════════════"
 
 command -v docker >/dev/null 2>&1 || die "docker não encontrado neste servidor"
-# O caminho cadastrado pode estar errado -- ou o FindFace pode nem rodar
+# O caminho cadastrado pode estar errado -- ou o Face Detect pode nem rodar
 # nesta maquina, o que e comum em instalacao distribuida. Em vez de so
 # dizer "nao existe", o script PROCURA: o diretorio de trabalho do compose
 # de um container em execucao e a resposta autoritativa, porque e de onde a
@@ -652,7 +652,7 @@ if [ ! -d "$FF_DIR" ]; then
 
     if [ -n "$ACHADO" ] && [ -d "$ACHADO" ]; then
         # Achou a instalacao de verdade: USA ela e avisa. Morrer aqui,
-        # sabendo onde o FindFace esta, seria fazer o operador ir corrigir
+        # sabendo onde o Face Detect esta, seria fazer o operador ir corrigir
         # o cadastro e voltar -- trabalho que o script acabou de fazer.
         # A linha FACEOPS: leva o caminho ao painel, que corrige o cadastro.
         log "AVISO: $FF_DIR nao existe; usando a instalacao encontrada em $ACHADO"
@@ -663,7 +663,7 @@ if [ ! -d "$FF_DIR" ]; then
     fi
     if [ ! -d "$FF_DIR" ]; then
     if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | grep -qv -i faceops; then
-            die "$FF_DIR nao existe e nenhum container do FindFace roda neste servidor. Provavelmente a aplicacao esta em outra maquina -- veja em Topologia."
+            die "$FF_DIR nao existe e nenhum container do Face Detect roda neste servidor. Provavelmente a aplicacao esta em outra maquina -- veja em Topologia."
         fi
         die "$FF_DIR nao existe. Confira o caminho cadastrado para este servidor."
     fi

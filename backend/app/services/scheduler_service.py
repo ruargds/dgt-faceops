@@ -254,7 +254,7 @@ class SchedulerService:
         Limpeza de eventos agendada.
 
         As travas vêm do manual da NtechLab, que é explícito: *"Do not
-        restart any FindFace Multi service containers or the Docker daemon
+        restart any Face Detect service containers or the Docker daemon
         while manually purging old data from the database as this will
         cause system errors!"*.
 

@@ -109,7 +109,7 @@ diagnóstico.
 | GET | `/metrics/{id}/armazenamento` | `metrics.view` |
 
 `GET /api/dispositivos/{host_id}/licenca` (`metrics.view`) devolve o
-licenciamento do FindFace daquele servidor: `itens[]` com `recurso`,
+licenciamento do Face Detect daquele servidor: `itens[]` com `recurso`,
 `limite`, `usado`, `restante` e `ilimitado`, mais `cameras_cadastradas`,
 o `caminho` que respondeu e o corpo `bruto`. Exige URL e token da API
 cadastrados no host — responde 400 explicando quando não há.

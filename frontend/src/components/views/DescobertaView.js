@@ -10,12 +10,12 @@ import { IconAtualizar, IconOk, IconServidor } from "../Icons";
  * Sob demanda: uma sondagem por SSH, nunca no coletor contínuo. Responde
  * "onde está o banco?", "tem GPU?", "que portas estão abertas?" — as
  * mesmas perguntas que a topologia foi levantada respondendo na mão.
- * Serve igual para FindFace distribuído e para tudo num servidor só.
+ * Serve igual para Face Detect distribuído e para tudo num servidor só.
  */
 /**
- * Componentes internos do FindFace.
+ * Componentes internos do Face Detect.
  *
- * Cada serviço do FindFace atende numa porta que o manual do fabricante
+ * Cada serviço do Face Detect atende numa porta que o manual do fabricante
  * documenta — `findface-extraction-api` na 18666, `findface-sf-api` na
  * 18411, `findface-video-manager` na 18810, `findface-ntls` na 3185, e
  * assim por diante. O painel bate nessas portas **de dentro do servidor**,
@@ -56,7 +56,7 @@ function Internos({ hostId }) {
     <div className="card">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
         <div className="section-title" style={{ marginBottom: 0 }}>
-          Componentes internos do FindFace
+          Componentes internos do Face Detect
         </div>
         <button className="btn btn-secondary btn-sm" onClick={consultar} disabled={lendo}>
           <IconAtualizar size={14} /> {lendo ? "Consultando…" : "Consultar"}
@@ -113,7 +113,7 @@ function Internos({ hostId }) {
                         ) : c.escutando ? (
                           <span
                             className="pill pill-warn"
-                            title="A porta está escutando, mas o caminho de status não respondeu — alguns serviços do FindFace não expõem HTTP nessa porta"
+                            title="A porta está escutando, mas o caminho de status não respondeu — alguns serviços do Face Detect não expõem HTTP nessa porta"
                           >
                             escutando
                           </span>
@@ -134,7 +134,7 @@ function Internos({ hostId }) {
           </div>
           {dados.componentes.filter((c) => c.escutando || c.container).length === 0 && (
             <div className="small muted" style={{ marginTop: 8 }}>
-              Nenhum componente do FindFace neste servidor — é uma máquina de
+              Nenhum componente do Face Detect neste servidor — é uma máquina de
               outra função na topologia.
             </div>
           )}
@@ -297,10 +297,10 @@ function ResumoServidor({ d }) {
         <span className={`pill ${d.docker.rodando ? "pill-ok" : "pill-warn"}`}>
           {d.docker.rodando}/{d.docker.total_containers} containers de pé
         </span>
-        {ff.presente && <span className="pill pill-ok">FindFace aqui ({ff.containers})</span>}
+        {ff.presente && <span className="pill pill-ok">Face Detect aqui ({ff.containers})</span>}
         {ff.tem_banco && <span className="pill pill-ok">{t("banco aqui")}</span>}
         {ff.tem_tarantool && <span className="pill pill-ok">vetores (Tarantool) aqui</span>}
-        {!ff.presente && <span className="pill pill-warn">{t("FindFace não roda neste servidor")}</span>}
+        {!ff.presente && <span className="pill pill-warn">{t("Face Detect não roda neste servidor")}</span>}
       </div>
     </div>
   );

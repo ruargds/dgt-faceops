@@ -18,7 +18,7 @@ por que a leitura de eventos falha.
 - A varredura reportava `0 eventos varridos` e `1 requisição à API` — só a
   página de câmeras. Toda chamada de evento falhou.
 - Os caminhos usados (`/events/faces/`, `/bodies/`, `/cars/`) conferem com
-  o log real do FindFace (`POST /events/faces/add/ 200`, registrado em
+  o log real do Face Detect (`POST /events/faces/add/ 200`, registrado em
   `docs/10_ERROS_CONHECIDOS.md`).
 - Suspeita principal: a versão da API recusa o parâmetro `ordering`. O
   painel agora tenta de novo sem ele, então parte dos casos pode já estar
@@ -30,7 +30,7 @@ por que a leitura de eventos falha.
 depois da atualização e ler a mensagem de erro por tipo, que agora aparece
 na tela. Ela diz se é parâmetro, permissão do token ou caminho.
 
-**Alternativa se a API não servir:** ler direto do banco do FindFace, como
+**Alternativa se a API não servir:** ler direto do banco do Face Detect, como
 `dispositivos_service` já faz para câmeras. Atenção: lá as consultas de
 evento usam `created_date` e `camera_id` fixos, com `2>/dev/null` — se a
 coluna tiver outro nome nesta versão, o resultado é silêncio, não erro.

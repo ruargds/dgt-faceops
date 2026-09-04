@@ -63,14 +63,14 @@ Pergunta certa, e a resposta honesta era: **sim, plausivelmente.**
 | Coleta de métricas (`/proc/*`, `df`, `docker stats`) | a cada 60 s | desprezível |
 | Leitura de log de container com incidente aberto | máx. 3/ciclo, 1×/5min por serviço | baixo |
 | Apuração no fechamento do incidente (`journalctl` com `-n`) | máx. 2/ciclo | baixo |
-| `du` da árvore do FindFace (Recursos, Manutenção) | **sob demanda** | alto |
+| `du` da árvore do Face Detect (Recursos, Manutenção) | **sob demanda** | alto |
 | **Backup** (`pg_dump` + `mongodump` + 32 snapshots + `tar`) | **agendado** | **muito alto** |
 
 O monitoramento periódico está descartado. O `du` é pesado, mas é
 disparado por clique e tem `timeout`.
 
 **O backup é o suspeito real** — e ele rodava em **prioridade normal de
-E/S**, disputando disco de igual para igual com o FindFace em produção.
+E/S**, disputando disco de igual para igual com o Face Detect em produção.
 Num disco com teto de IOPS, o backup era candidato legítimo a derrubar o
 servidor que existe para proteger.
 
@@ -109,7 +109,7 @@ contar com sorte.
 
 ## O que ainda depende de decisão sua
 
-O `ionice` reduz o risco; **não aumenta o teto do disco.** Se o FindFace
+O `ionice` reduz o risco; **não aumenta o teto do disco.** Se o Face Detect
 sozinho já encosta nos 5.000 IOPS em horário de pico, a saída é
 infraestrutura:
 
@@ -118,7 +118,7 @@ infraestrutura:
 | Disco com teto maior | P30 → P40/P50, ou **Premium SSD v2**, onde IOPS é configurável sem trocar o tamanho |
 | Cache de host `ReadOnly` no disco de dados | ajuda leitura; o Azure não recomenda `ReadWrite` para banco |
 | Separar os dados em discos diferentes | Tarantool, Mongo e Postgres competindo no mesmo disco somam no mesmo teto |
-| Reduzir a escrita | retenção de eventos do FindFace (ver [18_LIMPEZA_DE_EVENTOS](18_LIMPEZA_DE_EVENTOS.md)) e do log (ver [14_MANUTENCAO](14_MANUTENCAO.md)) |
+| Reduzir a escrita | retenção de eventos do Face Detect (ver [18_LIMPEZA_DE_EVENTOS](18_LIMPEZA_DE_EVENTOS.md)) e do log (ver [14_MANUTENCAO](14_MANUTENCAO.md)) |
 
 Com a medição no ar, dá para responder isso com número em vez de
 palpite: veja em **Recursos** o IOPS ao longo do dia e compare com o teto

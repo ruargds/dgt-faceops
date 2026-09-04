@@ -2,7 +2,7 @@
 # ============================================================================
 # FaceOps — descoberta de topologia
 #
-# Roda em CADA servidor do FindFace e responde: o que está instalado aqui?
+# Roda em CADA servidor do Face Detect e responde: o que está instalado aqui?
 # A saída determina qual perfil de backup faz sentido em qual servidor.
 #
 # Numa instalação distribuída (app / banco / extração / arquivos), rodar o
@@ -54,8 +54,8 @@ else
     echo "sem nvidia-smi"
 fi
 
-# ── FindFace instalado? ────────────────────────────────────────────────
-titulo "FindFace Multi"
+# ── Face Detect instalado? ────────────────────────────────────────────────
+titulo "Face Detect"
 if [ ! -d "$FF_DIR" ]; then
     echo "$FF_DIR NAO existe."
     echo
@@ -64,7 +64,7 @@ if [ ! -d "$FF_DIR" ]; then
         [ -d "$alt" ] && echo "  encontrado: $alt"
     done
     echo
-    echo ">>> CONCLUSAO: este servidor NAO parece hospedar o FindFace Multi."
+    echo ">>> CONCLUSAO: este servidor NAO parece hospedar o Face Detect."
     echo "    Cadastre-o no painel de todo jeito (metricas e terminal funcionam),"
     echo "    mas nao agende backup aqui."
     exit 0
@@ -175,7 +175,7 @@ sudo du -sh "$FF_DIR/data"/* 2>/dev/null | sort -rh | head -12 \
 titulo "Veredito para este servidor"
 
 if [ "$achou_algum" = "1" ]; then
-    echo "Este servidor hospeda componentes do FindFace Multi."
+    echo "Este servidor hospeda componentes do Face Detect."
     echo
     echo "Perfis de backup que fazem sentido aqui:"
     echo "  - config     : sempre (configs/ + compose + licenca)"
@@ -190,7 +190,7 @@ if [ "$achou_algum" = "1" ]; then
       && echo "  - completo   : e o UNICO que salva as fotos de evento (em janela)" \
       || echo "  - completo   : as fotos de evento nao estao neste servidor"
 else
-    echo "Nenhum componente de dados do FindFace encontrado ativo aqui."
+    echo "Nenhum componente de dados do Face Detect encontrado ativo aqui."
     echo "Pode ser servidor de apoio (FTP, arquivos) ou o stack esta parado."
     echo "Cadastre no painel para metricas e terminal; backup so o perfil config."
 fi

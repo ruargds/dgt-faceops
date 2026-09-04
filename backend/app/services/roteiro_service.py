@@ -23,7 +23,7 @@ Três coisas que ele não faz, de propósito:
   entra nesses servidores. Onde o painel for outra máquina, o único
   placeholder é o IP dele.
 * **Não esconde a incompatibilidade de versão.** A base do Tarantool não é
-  compatível entre versões maiores do FindFace, e o roteiro põe isso na
+  compatível entre versões maiores do Face Detect, e o roteiro põe isso na
   frente, com as versões que estavam rodando quando o backup foi feito.
 """
 import logging
@@ -90,7 +90,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     Monta o roteiro. `host` e `run` vêm do banco; o resto, do manifesto.
     """
     perfil = _campo(manifesto, "Perfil") or (run.profile if run else "config")
-    ff_dir = _campo(manifesto, "Diretório FindFace") or host.ffmulti_dir or "/opt/findface-multi"
+    ff_dir = _campo(manifesto, "Diretório Face Detect") or host.ffmulti_dir or "/opt/findface-multi"
     projeto = _campo(manifesto, "Projeto compose") or "findface-multi"
     servidor_backup = _campo(manifesto, "Servidor")
     data = _campo(manifesto, "Data")
@@ -152,7 +152,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
 
     # ── 2. Conferir a versão antes de qualquer escrita ─────────────────
     passo(
-        "Conferir a versão do FindFace instalada agora",
+        "Conferir a versão do Face Detect instalada agora",
         f"cd {ff_dir} && docker compose images | head -20",
         f"O backup foi feito em {data or 'data não registrada'}, no servidor "
         f"{servidor_backup or host.name}. Compare com as versões listadas no "
@@ -260,7 +260,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     if tem["data"]:
         passo(
             "Procedimento oficial do perfil completo",
-            f"# 1. instalar o FindFace Multi da MESMA versão pelo .run\n"
+            f"# 1. instalar o Face Detect da MESMA versão pelo .run\n"
             f"cd {ff_dir} && docker compose stop\n"
             f"rm -r {ff_dir}/configs/* && tar -xzf "
             f"{trabalho}/config/configs.tar.gz -C {ff_dir}/\n"
@@ -269,7 +269,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
             f"cd {ff_dir} && docker compose up -d",
             "É o procedimento da NtechLab para o perfil completo: instalação "
             "limpa da mesma versão, depois configs e data por cima.",
-            "PARA o FindFace inteiro e apaga `configs/` e `data/` atuais. Só "
+            "PARA o Face Detect inteiro e apaga `configs/` e `data/` atuais. Só "
             "em janela de manutenção, e só com a mesma versão instalada.",
         )
 
@@ -282,7 +282,7 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
     passo(
         "Conferir",
         f"cd {ff_dir} && docker compose ps\n"
-        f"# e no painel: Serviços, Rastreio e a tela do FindFace",
+        f"# e no painel: Serviços, Rastreio e a tela do Face Detect",
         "Container rodando não é o mesmo que serviço atendendo — o Rastreio "
         "do painel pergunta a cada componente na porta dele.",
     )
@@ -303,6 +303,6 @@ def montar(manifesto: str, host, run, caminho_no_painel: str) -> dict:
         "passos": passos,
         "aviso_versao": (
             "A base do Tarantool não é compatível entre versões maiores do "
-            "FindFace. Confira as versões no manifesto antes de restaurar."
+            "Face Detect. Confira as versões no manifesto antes de restaurar."
         ),
     }

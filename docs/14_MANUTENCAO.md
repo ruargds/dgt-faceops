@@ -1,10 +1,10 @@
 # Manutenção de disco e log
 
 O problema mais comum num servidor de reconhecimento facial não é o
-FindFace: é o disco raiz enchendo de log.
+Face Detect: é o disco raiz enchendo de log.
 
 Num servidor real encontramos **99 GB de `/var/log` num disco de 123 GB**,
-gerados pelo log de acesso HTTP do próprio FindFace, em operação
+gerados pelo log de acesso HTTP do próprio Face Detect, em operação
 **normal** — cerca de 8 GB por dia. Todas as respostas eram `200`. Não
 era erro; era telemetria sem limite.
 
@@ -34,7 +34,7 @@ contenção: é a prova.
 ## 2. Conter o crescimento
 
 O filtro age **na chegada ao rsyslog**, não na aplicação. Consequência
-importante: **nada do FindFace reinicia.** O FindFace continua logando em
+importante: **nada do Face Detect reinicia.** O Face Detect continua logando em
 INFO; o painel só evita gravar o ruído no disco raiz.
 
 Três arquivos são escritos:
@@ -130,7 +130,7 @@ Ela impede o disco de encher. **Não** reduz o volume dentro de
 `docker logs` nem no journald — só evita a gravação no `/var/log/syslog`.
 
 Se você quiser reduzir na origem, é preciso editar o `configs/` do
-FindFace e reiniciar o container afetado. Como o filtro resolve o
+Face Detect e reiniciar o container afetado. Como o filtro resolve o
 problema de disco sem reiniciar nada e sem perder erro nenhum, isso só
 vale se houver outra razão.
 
@@ -178,14 +178,14 @@ depois de um furo real:
    a linha vivia 365 dias apontando para um `.cast` removido em 90, a tela
    oferecia o download e o clique voltava 404 sem dizer por quê.
 
-## Rotatividade do FindFace
+## Rotatividade do Face Detect
 
 O que enche o disco num servidor de reconhecimento facial não é o log — são
 as fotos de evento. Num servidor real, 242 GB de 268 GB. E a limpeza de
 eventos, por mais necessária que seja, ataca o sintoma: apaga o passado e
 não impede o disco de encher de novo na semana seguinte.
 
-A causa se ajusta em **Manutenção → Rotatividade do FindFace**, que lê e
+A causa se ajusta em **Manutenção → Rotatividade do Face Detect**, que lê e
 grava a política da própria plataforma (`GET`/`PATCH /settings` da API da
 NtechLab):
 
@@ -209,7 +209,7 @@ Três coisas que valem saber antes de mexer:
    apagar cinco anos achando que apagou cinco dias — a mesma regra da
    limpeza de eventos.
 2. **Zero significa guardar para sempre.**
-3. **Nada é apagado no clique.** O FindFace passa a remover o que ficar
+3. **Nada é apagado no clique.** O Face Detect passa a remover o que ficar
    mais velho que o novo prazo, no ritmo dele. Ainda assim exige digitar o
    nome do servidor e gera auditoria crítica: reduzir um prazo joga fora
    dado de produção que nenhum backup essencial recupera.
@@ -218,7 +218,7 @@ Rotatividade e limpeza convivem: a política evita o disco encher de novo, a
 limpeza resolve o passado que já está lá. É por isso que as duas ficam
 nesta tela, nessa ordem.
 
-## Configuração em arquivo do FindFace
+## Configuração em arquivo do Face Detect
 
 Parte do que decide o volume gravado não está na interface nem na API: está
 no arquivo do serviço legacy, e o procedimento do manual é editar com `vi` e
@@ -229,7 +229,7 @@ sudo vi /opt/findface-multi/configs/findface-multi-legacy/findface-multi-legacy.
 cd /opt/findface-multi/ && sudo docker compose restart
 ```
 
-O painel faz isso em **Manutenção → Configuração em arquivo do FindFace**,
+O painel faz isso em **Manutenção → Configuração em arquivo do Face Detect**,
 com lista fechada de chaves:
 
 | Chave | O que é |
@@ -247,7 +247,7 @@ As cercas, na ordem em que agem:
 3. **Cópia antes de escrever**, com carimbo de data, ao lado do original.
 4. **Compila depois de escrever.** O arquivo é Python; se
    `python3 -m py_compile` recusar, a cópia volta ao lugar e nada é
-   reiniciado — um arquivo quebrado ali derruba o FindFace na próxima subida.
+   reiniciado — um arquivo quebrado ali derruba o Face Detect na próxima subida.
 5. **O reinício é decisão sua.** O painel não reinicia junto: o manual manda
    reiniciar todos os containers, e isso para o reconhecimento.
 
@@ -255,7 +255,7 @@ A tela mostra a linha exata antes e depois, e exige digitar o nome do
 servidor.
 
 > O manual avisa que **a configuração pela interface/API sobrescreve o
-> arquivo**. Então o que dá para ajustar em *Rotatividade do FindFace* deve
+> arquivo**. Então o que dá para ajustar em *Rotatividade do Face Detect* deve
 > ser ajustado lá; aqui ficam só as chaves que a API não expõe.
 
 ## Limpeza pontual do painel

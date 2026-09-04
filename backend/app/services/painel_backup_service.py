@@ -167,7 +167,7 @@ class PainelBackupService:
                 base = Path(tmp)
 
                 # -Fc: comprimido, restaurável por objeto — mesmo formato
-                # usado no backup do FindFace, por consistência.
+                # usado no backup do Face Detect, por consistência.
                 if tem_pg_dump:
                     dump = base / "faceops.dump"
                     ambiente = {

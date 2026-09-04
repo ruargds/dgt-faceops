@@ -101,7 +101,7 @@ export function PainelDeAutoria({ onFechar }) {
           {AUTORIA.produto}
         </h2>
         <p style={{ margin: "0 0 16px", fontSize: "12.5px", color: "var(--text-3)" }}>
-          Operação do FindFace Multi
+          Operação do Face Detect
         </p>
 
         <Linha rotulo="Desenvolvido por">{AUTORIA.desenvolvedora}</Linha>

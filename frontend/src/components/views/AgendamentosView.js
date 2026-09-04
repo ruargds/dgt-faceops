@@ -346,7 +346,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
                 Usar a política configurada na plataforma
                 <div className="small muted">
                   Roda <span className="mono">cleanup --as-configured</span>: as
-                  idades saem de Manutenção → Rotatividade do FindFace. É o modo
+                  idades saem de Manutenção → Rotatividade do Face Detect. É o modo
                   recomendado — mexer no prazo num lugar só vale para os dois.
                 </div>
               </span>
@@ -467,7 +467,7 @@ function ModalAgendamento({ inicial, hosts, destinosDisponiveis, onFechar, onPro
                 />
                 <span style={{ color: "var(--red-fg)" }}>
                   Autorizo janela de manutenção recorrente: este agendamento{" "}
-                  <strong>{t("PARA o FindFace Multi")}</strong> em{" "}
+                  <strong>{t("PARA o Face Detect")}</strong> em{" "}
                   <strong>{host ? host.name : "este servidor"}</strong> toda vez que rodar.
                   Sem este aceite o agendamento é bloqueado na hora de executar.
                 </span>

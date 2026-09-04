@@ -12,7 +12,7 @@ def _now() -> datetime:
 
 class Host(Base):
     """
-    Um servidor alvo (as VMs do Azure rodando FindFace Multi).
+    Um servidor alvo (as VMs do Azure rodando Face Detect).
 
     Os segredos ficam em colunas *_enc, cifrados com Fernet pelo core.vault.
     Nenhum schema de saída expõe essas colunas — só o fingerprint.
@@ -54,7 +54,7 @@ class Host(Base):
     # no cofre sem nunca exibi-la.
     key_fingerprint: Mapped[str] = mapped_column(String(32), default="")
 
-    # Caminhos do FindFace Multi neste host (default vem do .env)
+    # Caminhos do Face Detect neste host (default vem do .env)
     ffmulti_dir: Mapped[str] = mapped_column(String(255), default="")
     compose_file: Mapped[str] = mapped_column(String(255), default="")
 
@@ -75,11 +75,11 @@ class Host(Base):
     # servidor e querer acompanha-lo sao a mesma coisa na pratica.
     monitorar: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    # API HTTP do FindFace (opcional). Quando preenchida, a consulta de
+    # API HTTP do Face Detect (opcional). Quando preenchida, a consulta de
     # cameras usa a API oficial em vez de ler o Postgres via SSH — mais
     # limpo e sem depender de acesso ao banco. O token vai cifrado.
     ff_api_url: Mapped[str] = mapped_column(String(255), default="")
-    # A instalação real do FindFace entra com USUÁRIO E SENHA; o token é o
+    # A instalação real do Face Detect entra com USUÁRIO E SENHA; o token é o
     # caminho alternativo, para quem gerou um. Os dois ficam no cofre.
     ff_api_user: Mapped[str] = mapped_column(String(120), default="")
     ff_api_pass_enc: Mapped[str] = mapped_column(Text, default="")

@@ -119,11 +119,11 @@ O que o painel faz agora, nesta ordem:
    corrige o cadastro e segue. A correção fica registrada no log da
    execução.
 2. **Se não achar**, a mensagem diz o que encontrou: ou o caminho real
-   (`encontrei a instalação em X`), ou que **nenhum container do FindFace
+   (`encontrei a instalação em X`), ou que **nenhum container do Face Detect
    roda ali** — caso em que a aplicação está em outra máquina, e a
    Topologia mostra qual.
 
-Se ainda assim aparecer, o servidor provavelmente não hospeda o FindFace:
+Se ainda assim aparecer, o servidor provavelmente não hospeda o Face Detect:
 confira em Topologia e dispare o backup no servidor certo.
 
 ### `nenhum destino aceitou o artefato` logo após copiar
@@ -138,7 +138,7 @@ atualize o painel.
 
 ### `nem 'docker compose' nem 'docker-compose' encontrados`
 
-O usuário SSH não tem acesso ao Docker, ou o FindFace não está nesse
+O usuário SSH não tem acesso ao Docker, ou o Face Detect não está nesse
 servidor.
 
 ```bash
@@ -148,16 +148,16 @@ groups                       # o usuário está no grupo 'docker'?
 sudo usermod -aG docker $USER   # e RELOGAR
 ```
 
-### `container 'X' pertence ao projeto 'Y', não ao projeto do FindFace`
+### `container 'X' pertence ao projeto 'Y', não ao projeto do Face Detect`
 
 A cerca de segurança funcionando. O painel só age em containers do projeto
-compose do FindFace naquele host.
+compose do Face Detect naquele host.
 
 Se o projeto foi renomeado de propósito, o painel descobre sozinho pelo
 rótulo — mas confira se o `compose_file` cadastrado aponta para o arquivo
 certo.
 
-### Serviços não aparecem, mesmo com o FindFace rodando
+### Serviços não aparecem, mesmo com o Face Detect rodando
 
 O `compose_file` cadastrado não corresponde ao que subiu os containers. O
 painel identifica o projeto pelo rótulo
@@ -198,7 +198,7 @@ Opções:
 
 1. Montar disco maior e apontar `REMOTE_STAGING_DIR` para ele
 2. Usar o perfil `essencial` (não precisa de espaço para `data/`)
-3. Limpar eventos antigos no FindFace antes (a plataforma tem essa opção)
+3. Limpar eventos antigos no Face Detect antes (a plataforma tem essa opção)
 
 ### `AVISO: container do PostgreSQL não encontrado`
 
@@ -417,7 +417,7 @@ documento, porque aconteceu de verdade.
 
 ### `/var/log` com 99 GB num disco de 123 GB
 
-**Sintoma:** disco raiz a 100%, 1,1 GB livres, FindFace ainda de pé.
+**Sintoma:** disco raiz a 100%, 1,1 GB livres, Face Detect ainda de pé.
 
 **Investigação:**
 
@@ -428,7 +428,7 @@ syslog       64G   ← ativo
 syslog.1     33G   ← rotacionado, sem compressão
 ```
 
-**Causa:** o log de acesso HTTP do próprio FindFace indo para o syslog.
+**Causa:** o log de acesso HTTP do próprio Face Detect indo para o syslog.
 Cada face detectada gera 2+ linhas (`POST /events/faces/add/ 200`), mais o
 polling da UI (`GET /users/me/ 200`). Deu **~8 GB/dia** em operação normal.
 
@@ -464,7 +464,7 @@ sudo docker inspect $(sudo docker ps -q | head -1) --format '{{index .Config.Lab
 ### Tela de Serviços vazia, sem erro
 
 **Causa:** o usuário SSH não está no grupo `docker` — que é o padrão da
-instalação do FindFace. `docker ps` falha com permissão negada e a leitura
+instalação do Face Detect. `docker ps` falha com permissão negada e a leitura
 volta vazia.
 
 **Correção:** o painel detecta e usa sudo por host

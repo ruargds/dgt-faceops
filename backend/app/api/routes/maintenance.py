@@ -2,7 +2,7 @@
 Manutenção de disco e log — pela web, sem linha de comando.
 
 Toda ação que escreve tem modo simulação, e a UI mostra o conteúdo exato
-dos arquivos antes de aplicar. Nada aqui reinicia o FindFace.
+dos arquivos antes de aplicar. Nada aqui reinicia o Face Detect.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -121,7 +121,7 @@ async def contencao(
                 status_code=400,
                 detail=f"confirmação necessária: digite exatamente '{host.name}'. "
                        "Esta ação escreve configuração de sistema e reinicia o "
-                       "rsyslog e o journald (o FindFace não é afetado).",
+                       "rsyslog e o journald (o Face Detect não é afetado).",
             )
 
     try:

@@ -40,7 +40,7 @@ TIPOS: list[dict] = [
     {
         "chave": "servico_parado",
         "rotulo": "Serviço parado",
-        "ajuda": "Container do FindFace fora do ar, unhealthy, morto por falta "
+        "ajuda": "Container do Face Detect fora do ar, unhealthy, morto por falta "
                  "de memória ou reiniciando em laço.",
         "icone": "🔴",
     },
@@ -48,7 +48,7 @@ TIPOS: list[dict] = [
         "chave": "host_sem_contato",
         "rotulo": "Servidor sem comunicação",
         "ajuda": "A máquina não respondeu ao coletor. Costuma ser rede ou VM "
-                 "desligada — não o FindFace.",
+                 "desligada — não o Face Detect.",
         "icone": "⛔",
     },
     {

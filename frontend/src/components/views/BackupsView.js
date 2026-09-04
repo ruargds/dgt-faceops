@@ -35,7 +35,7 @@ export const PERFIS = [
     nome: "Completo",
     resumo: "procedimento oficial NtechLab — data/ inteiro",
     detalhe:
-      "Horas, centenas de GB, PARA o FindFace Multi durante a cópia. Leva tudo, inclusive as fotos de evento. Use em janela de manutenção.",
+      "Horas, centenas de GB, PARA o Face Detect durante a cópia. Leva tudo, inclusive as fotos de evento. Use em janela de manutenção.",
   },
 ];
 
@@ -213,7 +213,7 @@ export default function BackupsView() {
                       "Disparar backup em TODOS os servidores habilitados?\n\n" +
                         "Cada um recebe o perfil mais completo que suporta " +
                         "(config ou essencial). O perfil completo, que para o " +
-                        "FindFace, nunca entra no lote."
+                        "Face Detect, nunca entra no lote."
                     )
                   )
                     return;
@@ -493,7 +493,7 @@ function Roteiro({ dados }) {
       </div>
 
       <div className="grid-stats" style={{ marginBottom: 12 }}>
-        <div className="card card-tight stat" title="Onde o FindFace está instalado NESTE servidor">
+        <div className="card card-tight stat" title="Onde o Face Detect está instalado NESTE servidor">
           <span className="stat-label">Instalação</span>
           <div className="mono small">{dados.ff_dir}</div>
         </div>
@@ -693,7 +693,7 @@ function ModalRecuperacao({ onFechar }) {
  * O manifesto do artefato.
  *
  * Vive dentro do .tar.gz e traz três coisas que decidem uma restauração: o
- * que o backup contém, **a versão das imagens do FindFace** e o roteiro
+ * que o backup contém, **a versão das imagens do Face Detect** e o roteiro
  * oficial do fabricante. A versão importa mais do que parece — a base do
  * Tarantool não é compatível entre versões maiores, e restaurar num sistema
  * de outra versão devolve os cadastros e não devolve o reconhecimento.
@@ -1071,15 +1071,15 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
               >
                 <div className="small">
                   <strong>Cada servidor recebe o que a função dele permite</strong>,
-                  decidido na hora: quem tem banco do FindFace leva{" "}
+                  decidido na hora: quem tem banco do Face Detect leva{" "}
                   <strong>essencial</strong>; quem só tem a instalação leva{" "}
-                  <strong>config</strong>; quem não hospeda o FindFace é{" "}
+                  <strong>config</strong>; quem não hospeda o Face Detect é{" "}
                   <strong>pulado com o motivo</strong>, em vez de falhar em 0s.
                 </div>
                 <div className="small muted" style={{ marginTop: 6 }}>
                   Cada artefato vai para a pasta do próprio servidor no destino —
                   o lote não mistura nada. O perfil <strong>completo</strong> não
-                  entra aqui: ele PARA o FindFace, e parar todos os servidores de
+                  entra aqui: ele PARA o Face Detect, e parar todos os servidores de
                   uma vez tem de ser decisão sua, servidor a servidor, com o
                   aceite da janela.
                 </div>
@@ -1197,7 +1197,7 @@ function ModalNovoBackup({ hosts, onFechar, onPronto }) {
                   checked={aceito}
                   onChange={(e) => setAceito(e.target.checked)}
                 />
-                <span style={{ color: "var(--red-fg)" }}>{t("Entendo que o perfil Completo")} <strong>{t("PARA o FindFace Multi")}</strong> em{" "}
+                <span style={{ color: "var(--red-fg)" }}>{t("Entendo que o perfil Completo")} <strong>{t("PARA o Face Detect")}</strong> em{" "}
                   <strong>{host ? host.name : "este servidor"}</strong> durante a cópia
                   (pode levar horas) e que o reconhecimento facial fica fora do ar nesse
                   período.

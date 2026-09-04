@@ -2,11 +2,11 @@
 
 Os manuais consultados e **o que cada página entregou** ao projeto. Serve
 para dois casos: conferir de onde saiu uma decisão, e saber onde voltar
-quando a versão do FindFace mudar.
+quando a versão do Face Detect mudar.
 
 ---
 
-## Manual do FindFace Multi 2.4.1
+## Manual do FindFace Multi 2.4.1 (motor do Face Detect)
 
 Base: `https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/`
 
@@ -50,7 +50,7 @@ explícita: é preciso usar o procedimento de backup/restore do próprio
 fabricante para migrar, não uma restauração de arquivo.
 
 **Consequência para este projeto:** o artefato de backup é **preso à
-versão**. Restaurar num FindFace de outra versão devolve os cadastros do
+versão**. Restaurar num Face Detect de outra versão devolve os cadastros do
 PostgreSQL mas **não** o reconhecimento.
 
 Por isso o `MANIFESTO.txt` de cada artefato registra a versão das imagens
@@ -107,7 +107,7 @@ tempo de execução. O que compartilha é padrão de criação.
 
 ## Como atualizar este documento
 
-Quando a versão do FindFace mudar:
+Quando a versão do Face Detect mudar:
 
 1. Trocar `2.4.1` nas URLs acima e reconferir cada página
 2. Conferir se `manage.py cleanup` mudou de parâmetros — o painel lê o

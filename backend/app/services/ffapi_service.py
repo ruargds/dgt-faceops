@@ -1,5 +1,5 @@
 """
-Cliente da API HTTP do FindFace Multi.
+Cliente da API HTTP do Face Detect.
 
 Descoberto observando a aplicação real: API REST estilo Django REST
 Framework, autenticação `Authorization: Token <hash>`, contagens em
@@ -24,12 +24,12 @@ from app.core.vault import decrypt_secret
 
 log = logging.getLogger("faceops.ffapi")
 
-# Tipos de evento que o FindFace expõe com /count/
+# Tipos de evento que o Face Detect expõe com /count/
 TIPOS_EVENTO = ("faces", "bodies", "cars")
 
 # Quanto uma sessão autenticada é reaproveitada antes de refazer o login.
 # 20 minutos é curto o bastante para uma senha trocada valer rápido e longo
-# o bastante para não encher o log de autenticação do FindFace.
+# o bastante para não encher o log de autenticação do Face Detect.
 SESSAO_TTL = 20 * 60
 
 
@@ -54,9 +54,9 @@ def _sem_verificar_tls():
     """
     Handler de HTTPS que não valida o certificado.
 
-    O FindFace da instalação atende em HTTPS com certificado autoassinado —
+    O Face Detect da instalação atende em HTTPS com certificado autoassinado —
     é rede interna, e exigir cadeia válida aqui só impediria o painel de
-    ler a própria plataforma que ele opera. Vale para a API do FindFace, e
+    ler a própria plataforma que ele opera. Vale para a API do Face Detect, e
     para mais nada.
     """
     import ssl
@@ -81,7 +81,7 @@ PERIODOS = {
 # tenta-se em ordem e o primeiro que responder ganha. O que foi tentado
 # volta na resposta: quando nenhum responde, a tela diz exatamente onde
 # procurou em vez de dizer só "não encontrei".
-# O primeiro é o que a interface do FindFace realmente usa — está escrito
+# O primeiro é o que a interface do Face Detect realmente usa — está escrito
 # no bundle dela (`Paths.License`). Os demais ficam como rede de segurança
 # para instalação de outra versão. Todos saem da RAIZ do site: o NTLS é um
 # serviço à parte, não fica sob o prefixo da API do ffsecurity.
@@ -99,12 +99,12 @@ CAMINHO_USO = "/ntls/v1/usage-report.json"
 # Nomes de campo que carregam limite e uso. Não existe contrato público
 # para o corpo da licença, então em vez de fixar um formato o serviço
 # percorre o JSON e reconhece estes nomes onde eles estiverem.
-# `value` entra porque a tela de licenças do FindFace mostra duas colunas,
+# `value` entra porque a tela de licenças do Face Detect mostra duas colunas,
 # "Used" e "Limits", e o limite chega ora como `limit`, ora como `value`.
 CHAVES_LIMITE = ("limit", "limits", "max", "maximum", "allowed", "quota", "total", "value")
 CHAVES_USADO = ("used", "current", "in_use", "usage", "actual", "count")
 
-# Nome de cada recurso, como a interface do FindFace escreve. Sem isto a
+# Nome de cada recurso, como a interface do Face Detect escreve. Sem isto a
 # tela mostra `objects_tntapi` — que não diz nada a quem opera — ou, pior,
 # o caminho inteiro dentro do JSON.
 NOMES_RECURSO = {
@@ -202,7 +202,7 @@ def _cabecalho_licenca(dados) -> dict:
         valido = valido > 0
 
     # `expire_date` vem em epoch (segundos) no NTLS — a interface do
-    # FindFace faz `expire_date * 1000`. Data legível aqui, para a tela não
+    # Face Detect faz `expire_date * 1000`. Data legível aqui, para a tela não
     # mostrar 1779667201 como validade.
     validade = primeiro(
         "expiry_date", "expiryDate", "valid_until", "expire_date", "expires"
@@ -215,7 +215,7 @@ def _cabecalho_licenca(dados) -> dict:
     except (ValueError, OSError, OverflowError):
         pass
 
-    # Dias que faltam. A propria interface do FindFace avisa com 60 dias de
+    # Dias que faltam. A propria interface do Face Detect avisa com 60 dias de
     # antecedencia (1440 horas no codigo dela); manter o mesmo limiar evita
     # duas verdades sobre a mesma licenca.
     dias = None
@@ -233,7 +233,7 @@ def _cabecalho_licenca(dados) -> dict:
         "dias_para_expirar": dias,
         "expira_em_breve": dias is not None and dias <= 60,
         # No NTLS o campo do ARQUIVO chama `source` -- a interface do
-        # FindFace rotula `source` como "File" e `type` como "Type of
+        # Face Detect rotula `source` como "File" e `type` como "Type of
         # license". Trocar os dois faria a tela mostrar o caminho do .lic
         # onde deveria estar "online".
         "tipo": primeiro("type", "type_of_license", "license_type"),
@@ -388,7 +388,7 @@ def _funcionalidades(dados) -> list[dict]:
     """
     Módulos licenciados: o que está habilitado e o que não está.
 
-    A interface do FindFace lê isso de `products.<produto>.features[x].value`
+    A interface do Face Detect lê isso de `products.<produto>.features[x].value`
     para decidir se mostra reconhecimento de placa, contagem de linha,
     análise de comportamento. Saber que um módulo existe mas está desligado
     na licença evita a conversa de "o sistema não faz isso" quando ele faz,
@@ -429,7 +429,7 @@ def _funcionalidades(dados) -> list[dict]:
     return sorted(juntas.values(), key=lambda f: (not f["ligado"], f["nome"].lower()))
 
 
-# Campos de retenção do FindFace (GET/PATCH /settings), agrupados como a
+# Campos de retenção do Face Detect (GET/PATCH /settings), agrupados como a
 # operação pensa: por tipo de objeto, e dentro dele o que ocupa mais disco
 # primeiro. `fullframe` é o quadro inteiro da cena — é ele que pesa, não o
 # recorte do rosto; num servidor real as fotos de evento ocupavam 242 GB de
@@ -504,7 +504,7 @@ class FFApiError(Exception):
 # ficam como rede de segurança para instalação mais antiga.
 CAMINHOS_LOGIN = ("/auth/login/", "/login/", "/v1/login/")
 
-# Identificador deste painel como "dispositivo" no FindFace. Estável por
+# Identificador deste painel como "dispositivo" no Face Detect. Estável por
 # host: assim a sessão aberta pelo painel é reconhecível na tela de
 # sessões da plataforma, em vez de virar um dispositivo novo por login.
 UUID_PAINEL = "dgt-faceops"
@@ -514,7 +514,7 @@ def configurado(host) -> bool:
     """
     Tem como falar com a API deste servidor?
 
-    Usuário e senha é o caminho normal — é assim que se entra no FindFace.
+    Usuário e senha é o caminho normal — é assim que se entra no Face Detect.
     Token continua valendo para quem gerou um: dispensa o login e não
     expira junto com a sessão.
     """
@@ -536,7 +536,7 @@ class FFApiService:
             self._httpx = None
 
         # Sessão por host: o login é uma requisição a mais, e repeti-lo a
-        # cada leitura encheria o log de autenticação do FindFace de linhas
+        # cada leitura encheria o log de autenticação do Face Detect de linhas
         # do painel. Guardado só em memória — reiniciou, loga de novo.
         # host_id -> {"token": str, "cookie": str, "em": monotonic}
         self._sessoes: dict[int, dict] = {}
@@ -577,7 +577,7 @@ class FFApiService:
         senha = decrypt_secret(getattr(host, "ff_api_pass_enc", "") or "")
         if not usuario or not senha:
             raise FFApiError(
-                "sem credencial da API: informe usuário e senha do FindFace "
+                "sem credencial da API: informe usuário e senha do Face Detect "
                 "no cadastro do servidor"
             )
 
@@ -664,7 +664,7 @@ class FFApiService:
                     tentativas.append(f"{alvo} [{rotulo}] → sem token nem cookie")
 
         raise FFApiError(
-            f"login na API do FindFace falhou para o usuário '{usuario}'. "
+            f"login na API do Face Detect falhou para o usuário '{usuario}'. "
             "Tentativas: " + "; ".join(tentativas[:6])
         )
 
@@ -739,7 +739,7 @@ class FFApiService:
 
         if self._httpx is not None:
             try:
-                # O FindFace da instalação atende em HTTPS com certificado
+                # O Face Detect da instalação atende em HTTPS com certificado
                 # autoassinado, em rede interna. Exigir cadeia válida aqui
                 # só impediria o painel de ler a plataforma que ele opera.
                 async with self._httpx.AsyncClient(
@@ -747,7 +747,7 @@ class FFApiService:
                 ) as cli:
                     r = await cli.get(url, headers=headers, params=params)
                     if r.status_code == 401:
-                        raise FFApiError("token da API do FindFace inválido ou expirado")
+                        raise FFApiError("token da API do Face Detect inválido ou expirado")
                     if r.status_code >= 400:
                         raise FFApiError(f"API respondeu {r.status_code}: {r.text[:200]}")
                     return r.json()
@@ -773,7 +773,7 @@ class FFApiService:
                     return json.loads(resp.read().decode("utf-8"))
             except urllib.error.HTTPError as exc:
                 if exc.code == 401:
-                    raise FFApiError("token da API do FindFace inválido ou expirado")
+                    raise FFApiError("token da API do Face Detect inválido ou expirado")
                 raise FFApiError(f"API respondeu {exc.code}") from exc
             except Exception as exc:
                 raise FFApiError(f"falha ao falar com a API: {exc}") from exc
@@ -792,7 +792,7 @@ class FFApiService:
         if not configurado(host):
             raise FFApiError(
                 "credencial da API não cadastrada neste servidor: informe "
-                "usuário e senha do FindFace"
+                "usuário e senha do Face Detect"
             )
         auth = await self._credenciais(host)
         base = await self._base(host)
@@ -849,7 +849,7 @@ class FFApiService:
 
     async def retencao(self, host) -> dict:
         """
-        Política de rotatividade do próprio FindFace.
+        Política de rotatividade do próprio Face Detect.
 
         Só leitura. Devolve os valores em DIAS, já convertidos, junto do
         catálogo de campos — a tela não precisa saber o nome interno de
@@ -914,10 +914,10 @@ class FFApiService:
 
     async def salvar_retencao(self, host, dias_por_campo: dict, chaves: dict) -> dict:
         """
-        Grava a política. **Muda o comportamento do FindFace em produção.**
+        Grava a política. **Muda o comportamento do Face Detect em produção.**
 
         Recebe DIAS e converte para segundos, que é o que a API espera.
-        Diminuir uma idade não apaga nada na hora — o FindFace passa a
+        Diminuir uma idade não apaga nada na hora — o Face Detect passa a
         remover o que ficar mais velho que o novo prazo, no ritmo dele.
         Ainda assim é ação destrutiva no tempo, e por isso a rota exige
         confirmação e registra auditoria crítica.
@@ -1021,7 +1021,7 @@ class FFApiService:
         """
         if not configurado(host):
             raise FFApiError(
-                "URL ou token da API do FindFace não cadastrados neste servidor"
+                "URL ou token da API do Face Detect não cadastrados neste servidor"
             )
 
         auth = await self._credenciais(host)
@@ -1219,7 +1219,7 @@ class FFApiService:
     # ── Última interação por câmera ────────────────────────────────────
 
     # Campos de data que aparecem com nomes diferentes conforme a versão
-    # do FindFace. Procuro nesta ordem e digo qual usei — assim a coluna
+    # do Face Detect. Procuro nesta ordem e digo qual usei — assim a coluna
     # não fica vazia só porque um nome de campo mudou.
     CAMPOS_DATA_CAMERA = (
         "last_seen", "last_frame_time", "last_active", "last_event_date",

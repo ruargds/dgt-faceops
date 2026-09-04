@@ -1,5 +1,5 @@
 """
-Camada SSH agentless — nada é instalado nos servidores do FindFace.
+Camada SSH agentless — nada é instalado nos servidores do Face Detect.
 
 Decisões que valem explicação:
 
@@ -82,7 +82,7 @@ class SSHService:
         """
         Descobre se o docker deste host exige sudo.
 
-        Instalação padrão do FindFace deixa o usuário de deploy FORA do
+        Instalação padrão do Face Detect deixa o usuário de deploy FORA do
         grupo `docker` — aí `docker ps` falha com permissão negada e a
         leitura viria vazia, sem erro visível. Testar uma vez e guardar
         é mais barato que prefixar sudo em tudo (o que quebraria onde o

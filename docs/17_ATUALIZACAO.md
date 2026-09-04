@@ -27,7 +27,7 @@ bash atualizar.sh
 
 ## As três garantias
 
-### 1. O FindFace não é tocado
+### 1. O Face Detect não é tocado
 
 O painel vive no seu próprio projeto compose. O `docker compose up -d` do
 `atualizar.sh` age **apenas** nos containers `faceops_*`. Os containers do
@@ -235,11 +235,11 @@ backup e imagem do Docker, e os dois têm prazo.
 **Trava:** `servidor nao acumula sobra`.
 
 
-## Nos servidores do FindFace
+## Nos servidores do Face Detect
 
 **Nada muda neles.** O painel é agentless: o script de backup vai pela
 entrada padrão do `bash` remoto a cada execução, então a versão nova já
 vale na próxima rodada, sem sincronizar arquivo nenhum.
 
-Nenhum servidor do FindFace tem repositório git, credencial do GitHub ou
+Nenhum servidor do Face Detect tem repositório git, credencial do GitHub ou
 arquivo do painel. É proposital.

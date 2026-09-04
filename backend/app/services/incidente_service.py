@@ -21,7 +21,7 @@ from sqlalchemy import delete, select
 from app.models.incidente import Incidente
 # O que cada serviço faz e o que para sem ele: catálogo único, o mesmo
 # que a sonda de componentes usa. Dois catálogos de nome amigável
-# divergiriam na primeira versão nova do FindFace.
+# divergiriam na primeira versão nova do Face Detect.
 from app.services.internos_service import descrever
 
 log = logging.getLogger("faceops.incidentes")
@@ -42,7 +42,7 @@ def _causa_provavel(d: dict) -> str:
     Hipótese heurística a partir do que o Docker já contou — nenhum
     modelo, nenhuma chamada externa: só os sinais que `stack_service` já
     coleta em toda passada, lidos com o vocabulário de quem opera o
-    FindFace.
+    Face Detect.
     """
     if d.get("motivo") == "loop":
         return (
@@ -84,7 +84,7 @@ def _causa_do_erro(erro: str) -> str:
 def _texto_doente(nome: str, d: dict) -> str:
     """
     O que aconteceu, em palavras que significam algo para quem não opera
-    o FindFace todo dia.
+    o Face Detect todo dia.
 
     "com problema" era verdadeiro e inútil: dava a mesma frase para
     container morto e para container de pé respondendo errado — dois
@@ -111,7 +111,7 @@ def _acao_sugerida(tipo: str) -> str:
     """
     if tipo == "host":
         return ("Confira se a VM está ligada e a rede de pé antes de "
-                "investigar o FindFace.")
+                "investigar o Face Detect.")
     return ("Em Serviços, abra o log deste container. 'Reiniciar' resolve "
             "a maioria dos casos sem afetar o resto.")
 
@@ -221,7 +221,7 @@ class IncidenteService:
                 "causa": _causa_do_erro(erro),
                 "significa": (
                     "Nada pode ser verificado nesta máquina agora — "
-                    "inclusive o FindFace, que pode estar rodando normal. "
+                    "inclusive o Face Detect, que pode estar rodando normal. "
                     "Falha de rede dá este mesmo aviso."
                 ),
             }

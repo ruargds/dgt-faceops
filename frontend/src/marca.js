@@ -9,7 +9,7 @@ import { api } from "./api";
 
 const PADRAO = {
   nome: "FaceOps",
-  subtitulo: "Operação do FindFace Multi",
+  subtitulo: "Operação do Face Detect",
   cliente: "",
   cor_escura: "#0D1F35",
   cor_primaria: "#1A6FC4",

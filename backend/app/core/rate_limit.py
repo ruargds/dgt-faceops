@@ -4,7 +4,7 @@ Freio de força bruta no login.
 Sem isto, um painel exposto na rede interna aceita tentativa ilimitada de
 senha. Com a senha de fábrica documentada (`admin123`), qualquer script
 acha em segundos — e quem entra no painel tem, por consequência, as
-chaves SSH dos servidores do FindFace.
+chaves SSH dos servidores do Face Detect.
 
 Contagem em memória, sem dependência nova. Some no restart, o que é
 aceitável: o objetivo é frear o ataque automatizado, não manter registro

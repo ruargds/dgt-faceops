@@ -17,7 +17,7 @@ import { IconAlerta, IconAtualizar, IconLogs, IconOk } from "../Icons";
  * Manutenção de disco e log.
  *
  * Existe porque o problema mais comum num servidor de reconhecimento
- * facial não é o FindFace — é o disco raiz enchendo de log. E resolver
+ * facial não é o Face Detect — é o disco raiz enchendo de log. E resolver
  * isso não deveria exigir linha de comando em quatro máquinas diferentes.
  */
 /**
@@ -614,11 +614,11 @@ function LimpezaPontual() {
 }
 
 /**
- * Rotatividade do próprio FindFace.
+ * Rotatividade do próprio Face Detect.
  *
  * O que enche o disco num servidor de reconhecimento facial não é o log:
  * são as fotos de evento — num servidor real, 242 GB de 268 GB. E o
- * FindFace sabe se limpar sozinho: tem política de retenção própria, com
+ * Face Detect sabe se limpar sozinho: tem política de retenção própria, com
  * idade máxima por tipo de evento, por quadro completo e por cluster.
  *
  * Até aqui o painel só oferecia a limpeza destrutiva, que apaga o passado
@@ -661,7 +661,7 @@ function Retencao({ hostId, hostNome }) {
     carregar();
   }, [carregar]);
 
-  if (carregando && !dados) return <Carregando texto="Lendo a política do FindFace…" />;
+  if (carregando && !dados) return <Carregando texto="Lendo a política do Face Detect…" />;
 
   if (erro) {
     // O erro sai no componente de erro, com tarja e botão de tentar de
@@ -672,7 +672,7 @@ function Retencao({ hostId, hostNome }) {
     return (
       <div className="card card-tight">
         <div className="section-title" style={{ marginBottom: 10 }}>
-          Rotatividade do FindFace
+          Rotatividade do Face Detect
         </div>
         <Erro mensagem={erro} onTentar={carregar} />
       </div>
@@ -690,16 +690,16 @@ function Retencao({ hostId, hostNome }) {
     <div className="card">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
         <div className="section-title" style={{ marginBottom: 0 }}>
-          Rotatividade do FindFace
+          Rotatividade do Face Detect
         </div>
         <button className="btn btn-ghost btn-sm" onClick={carregar} disabled={carregando}>
           <IconAtualizar size={14} /> {carregando ? "Lendo…" : "Recarregar"}
         </button>
       </div>
       <div className="small muted" style={{ marginBottom: 14 }}>
-        Por quanto tempo o FindFace guarda cada coisa. É a configuração da
+        Por quanto tempo o Face Detect guarda cada coisa. É a configuração da
         própria plataforma — mexer aqui é mexer lá. Reduzir um prazo não apaga
-        nada no clique: o FindFace passa a remover o que ficar mais velho que o
+        nada no clique: o Face Detect passa a remover o que ficar mais velho que o
         novo prazo, no ritmo dele. <strong>Zero</strong> significa guardar para
         sempre.
       </div>
@@ -839,12 +839,12 @@ function Retencao({ hostId, hostNome }) {
 
       {confirmando && (
         <ConfirmarDigitando
-          titulo="Mudar a rotatividade do FindFace"
+          titulo="Mudar a rotatividade do Face Detect"
           palavra={hostNome}
           rotuloBotao="Salvar"
           aviso={
             `Isto altera a configuração da plataforma da NtechLab em ${hostNome}. ` +
-            "Nada é apagado no clique, mas o FindFace passa a remover o que ficar " +
+            "Nada é apagado no clique, mas o Face Detect passa a remover o que ficar " +
             "mais velho que os novos prazos — e nenhum backup essencial recupera " +
             "foto de evento. Confira os números antes."
           }
@@ -869,7 +869,7 @@ function Retencao({ hostId, hostNome }) {
 }
 
 /**
- * Chaves do FindFace que só existem em arquivo.
+ * Chaves do Face Detect que só existem em arquivo.
  *
  * Parte do que decide o volume gravado não está na interface nem na API da
  * NtechLab: está no arquivo de configuração do serviço legacy, e o
@@ -878,7 +878,7 @@ function Retencao({ hostId, hostNome }) {
  * mudar a hora da limpeza automática.
  *
  * O manual também avisa que **a configuração pela interface/API sobrescreve
- * o arquivo** — por isso o que dá para ajustar em Rotatividade do FindFace
+ * o arquivo** — por isso o que dá para ajustar em Rotatividade do Face Detect
  * deve ser ajustado lá, e aqui ficam só as chaves que a API não expõe.
  *
  * A tela mostra a linha exata antes e depois. O painel copia o arquivo
@@ -927,7 +927,7 @@ function ConfigFindFace({ hostId, hostNome }) {
     return (
       <div className="card card-tight">
         <div className="section-title" style={{ marginBottom: 10 }}>
-          Configuração em arquivo do FindFace
+          Configuração em arquivo do Face Detect
         </div>
         <Erro mensagem={erro} onTentar={carregar} />
       </div>
@@ -959,7 +959,7 @@ function ConfigFindFace({ hostId, hostNome }) {
     <div className="card">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 4 }}>
         <div className="section-title" style={{ marginBottom: 0 }}>
-          Configuração em arquivo do FindFace
+          Configuração em arquivo do Face Detect
         </div>
         <button className="btn btn-ghost btn-sm" onClick={carregar} disabled={carregando}>
           <IconAtualizar size={14} /> Recarregar
@@ -1076,13 +1076,13 @@ function ConfigFindFace({ hostId, hostNome }) {
 
       {confirmando && (
         <ConfirmarDigitando
-          titulo="Escrever na configuração do FindFace"
+          titulo="Escrever na configuração do Face Detect"
           palavra={hostNome}
           rotuloBotao="Aplicar"
           aviso={
             `Isto altera ${confirmando.arquivo} em ${hostNome}. O painel copia o ` +
             "arquivo antes e restaura sozinho se ele não compilar. Depois de " +
-            "gravar, o FindFace só passa a valer a mudança quando os containers " +
+            "gravar, o Face Detect só passa a valer a mudança quando os containers " +
             "forem reiniciados — o que PARA o reconhecimento por alguns minutos, " +
             "e fica por sua conta escolher a hora."
           }
@@ -1330,7 +1330,7 @@ export default function ManutencaoView({ alvo }) {
                 O filtro descarta apenas requisição HTTP bem-sucedida (2xx/3xx);
                 erro e aviso continuam sendo gravados.
                 <div style={{ marginTop: 6, color: "var(--green)" }}>
-                  <IconOk size={13} /> Nada do FindFace reinicia — só o rsyslog e o
+                  <IconOk size={13} /> Nada do Face Detect reinicia — só o rsyslog e o
                   journald, que são instantâneos.
                 </div>
               </div>
@@ -1483,7 +1483,7 @@ export default function ManutencaoView({ alvo }) {
           rotuloBotao={confirmando === "contencao" ? "Aplicar" : "Arquivar"}
           aviso={
             confirmando === "contencao"
-              ? `Escreve três arquivos de configuração em ${host.name} e reinicia o rsyslog e o journald. O FindFace NÃO é afetado — nenhum container reinicia. A configuração do rsyslog é validada antes; se falhar, o filtro é removido e nada reinicia.`
+              ? `Escreve três arquivos de configuração em ${host.name} e reinicia o rsyslog e o journald. O Face Detect NÃO é afetado — nenhum container reinicia. A configuração do rsyslog é validada antes; se falhar, o filtro é removido e nada reinicia.`
               : `Move ${formatBytes(diag.rotacionados_bytes)} de log rotacionado em ${host.name} para ${destino}. Nada é apagado.${incluirAtivo ? " O syslog ativo será copiado e depois zerado." : ""}`
           }
           onConfirmar={async (confirmacao) => {

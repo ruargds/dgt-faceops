@@ -1,4 +1,4 @@
-"""Câmeras do FindFace: quantas, quando falaram, quanto geram."""
+"""Câmeras do Face Detect: quantas, quando falaram, quanto geram."""
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -23,11 +23,11 @@ async def licenca(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Licenciamento do FindFace daquele servidor: liberado, em uso, restante.
+    Licenciamento do Face Detect daquele servidor: liberado, em uso, restante.
 
     Consulta barata e só leitura — vai pela API HTTP da NtechLab, sem SSH.
     Exige URL e token cadastrados no servidor (aba Servidores → API do
-    FindFace); sem isso responde 400 dizendo o que falta, porque o limite
+    Face Detect); sem isso responde 400 dizendo o que falta, porque o limite
     de licença não está no banco lido por SSH.
     """
     from app.services.ffapi_service import FFApiError, configurado
@@ -79,9 +79,9 @@ async def licenca(
         raise HTTPException(
             status_code=502,
             detail=(
-                f"{erro_ssh} E a API do FindFace não está cadastrada neste "
+                f"{erro_ssh} E a API do Face Detect não está cadastrada neste "
                 "servidor: informe usuário e senha em Servidores → editar → "
-                "API do FindFace para tentar por lá."
+                "API do Face Detect para tentar por lá."
             ),
         )
 
@@ -129,8 +129,8 @@ async def ultima_interacao(
         raise HTTPException(
             status_code=400,
             detail=(
-                f"'{host.name}' não tem URL e token da API do FindFace "
-                "cadastrados (Servidores → API do FindFace)."
+                f"'{host.name}' não tem URL e token da API do Face Detect "
+                "cadastrados (Servidores → API do Face Detect)."
             ),
         )
 
@@ -167,7 +167,7 @@ async def listar(
     """
     Câmeras cadastradas, última comunicação e volume de eventos.
 
-    Consulta pesada — lê o banco do FindFace e agrega. Fica **sob
+    Consulta pesada — lê o banco do Face Detect e agrega. Fica **sob
     demanda**, nunca no coletor contínuo: contar evento a cada minuto
     seria justamente o tipo de peso que o painel promete não criar.
     """
@@ -190,7 +190,7 @@ async def listar(
         dados["lido_de"] = host.name
         dados["aviso"] = ""
     except (SSHError, DispositivosError) as exc:
-        # O FindFace desta instalacao e distribuido: o servidor escolhido na
+        # O Face Detect desta instalacao e distribuido: o servidor escolhido na
         # tela pode nao ser o que roda o PostgreSQL. O painel tem SSH em
         # todos, entao procura nos outros em vez de mandar o operador achar
         # o host certo na Topologia e voltar aqui.
@@ -209,7 +209,7 @@ async def listar(
                 continue
             dados["lido_de"] = alternativo.name
             dados["aviso"] = (
-                f"'{host.name}' nao tem o banco do FindFace; estes numeros "
+                f"'{host.name}' nao tem o banco do Face Detect; estes numeros "
                 f"vieram de '{alternativo.name}'."
             )
             break
@@ -240,7 +240,7 @@ async def redescobrir(
     """
     Refaz a descoberta do esquema do banco.
 
-    Necessário depois de atualizar o FindFace: nomes de tabela mudam
+    Necessário depois de atualizar o Face Detect: nomes de tabela mudam
     entre versões, e o esquema fica guardado em memória.
     """
     host = await db.get(Host, host_id)
@@ -256,7 +256,7 @@ async def redescobrir(
 
 class RetencaoIn(BaseModel):
     """
-    Nova politica de rotatividade do FindFace.
+    Nova politica de rotatividade do Face Detect.
 
     `dias` chega por campo, em DIAS -- a API do fabricante fala em segundos
     e a conversao fica no painel: pedir segundos a quem opera e convite a
@@ -303,7 +303,7 @@ async def retencao(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Politica de rotatividade do proprio FindFace. So leitura.
+    Politica de rotatividade do proprio Face Detect. So leitura.
 
     E a resposta para "o disco enche toda semana": em vez de apagar o
     passado, ajustar por quanto tempo cada coisa fica. Quadro completo de
@@ -318,9 +318,9 @@ async def retencao(
         raise HTTPException(
             status_code=400,
             detail=(
-                f"'{host.name}' nao tem a API do FindFace cadastrada. A politica "
+                f"'{host.name}' nao tem a API do Face Detect cadastrada. A politica "
                 "de retencao so existe por essa via -- informe usuario e senha "
-                "em Servidores -> editar -> API do FindFace."
+                "em Servidores -> editar -> API do Face Detect."
             ),
         )
 
@@ -341,7 +341,7 @@ async def salvar_retencao(
     """
     Grava a politica de rotatividade. **Destrutiva no tempo.**
 
-    Nada e apagado no instante do clique: o FindFace passa a remover o que
+    Nada e apagado no instante do clique: o Face Detect passa a remover o que
     ficar mais velho que o novo prazo, no ritmo dele. Ainda assim exige
     digitar o nome do servidor -- diminuir um prazo joga fora dado de
     producao que nenhum backup essencial recupera.
@@ -357,7 +357,7 @@ async def salvar_retencao(
             status_code=400,
             detail=(
                 f"confirmacao necessaria: digite exatamente '{host.name}'. "
-                "Reduzir um prazo faz o FindFace apagar o que passar dele."
+                "Reduzir um prazo faz o Face Detect apagar o que passar dele."
             ),
         )
 
@@ -392,7 +392,7 @@ async def salvar_retencao(
 
 class ConfigFFIn(BaseModel):
     """
-    Uma chave do arquivo de configuracao do FindFace.
+    Uma chave do arquivo de configuracao do Face Detect.
 
     Lista fechada no servico -- nao existe edicao livre de arquivo.
     """
@@ -411,10 +411,10 @@ async def configff(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Chaves do FindFace que so existem em arquivo. So leitura.
+    Chaves do Face Detect que so existem em arquivo. So leitura.
 
     O que a plataforma expoe pela API deve ser ajustado em Rotatividade do
-    FindFace -- o manual avisa que a configuracao pela interface/API
+    Face Detect -- o manual avisa que a configuracao pela interface/API
     sobrescreve o arquivo. Aqui ficam as que a API nao expoe.
     """
     from app.services.configff_service import ConfigFFError
@@ -442,7 +442,7 @@ async def salvar_configff(
     mudaria, sem tocar em nada.
 
     Aplicar exige `maintenance.apply` e o nome do servidor digitado: o
-    arquivo e do fabricante, e um erro ali derruba o FindFace na proxima
+    arquivo e do fabricante, e um erro ali derruba o Face Detect na proxima
     subida. O servico faz copia antes, compila depois e restaura sozinho
     se nao compilar -- e nao reinicia nada, porque reiniciar para o
     reconhecimento e a hora e escolha de quem opera.
@@ -486,7 +486,7 @@ async def salvar_configff(
             ip=client_ip(request),
             level="critical",
             detail={
-                "acao": "configuracao do FindFace",
+                "acao": "configuracao do Face Detect",
                 "chave": dados.chave,
                 "antes": resultado.get("antes"),
                 "depois": resultado.get("depois"),

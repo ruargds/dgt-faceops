@@ -61,7 +61,7 @@ nomes de metadados das nuvens — inclusive quando o nome **resolve** para
 um desses endereços.
 
 Rede privada continua liberada de propósito: é onde os servidores do
-FindFace vivem.
+Face Detect vivem.
 
 **Limite honesto:** o cliente HTTP segue redirecionamento, e um servidor
 legítimo poderia redirecionar para o IMDS. Fechar isso exigiria mudar a
@@ -100,7 +100,7 @@ Registrado para a próxima revisão não refazer o caminho:
 | TLS | apenas 1.2 e 1.3; nenhuma porta HTTP exposta |
 | WebSocket do terminal | ticket de uso único, não `?token=<jwt>` — JWT em query string vai para o log de acesso do nginx |
 | Injeção de comando | nome de container validado por regex e passado por `shlex.quote`; caminhos do compose idem |
-| Cerca do Docker | `_garantir_do_projeto` recusa agir em container fora do projeto do FindFace — inclusive o próprio painel |
+| Cerca do Docker | `_garantir_do_projeto` recusa agir em container fora do projeto do Face Detect — inclusive o próprio painel |
 | Travessia de diretório | `caminho_artefato` e o download de gravação resolvem e conferem o prefixo |
 | Upload de logo | tipo detectado pelos bytes iniciais, não pelo `content-type` do navegador; teto de 2 MB |
 | Segredo em resposta | colunas `*_enc` nunca em schema de saída; só impressão digital |

@@ -1,5 +1,5 @@
 """
-FaceOps — painel de operação do FindFace Multi.
+FaceOps — painel de operação do Face Detect.
 
 Backup com recorrência programada, status e reinício de serviços, leitura
 de RAM/GPU/disco e terminal SSH pelo navegador (InTerminal), para os
@@ -310,7 +310,7 @@ async def _varredor_de_ociosas(app: FastAPI) -> None:
 app = FastAPI(
     title="FaceOps",
     description=(
-        "Painel de operação do FindFace Multi 2.4.1 — backup com recorrência, "
+        "Painel de operação do Face Detect 2.4.1 — backup com recorrência, "
         "serviços, recursos e terminal SSH."
     ),
     version="0.1.0",
@@ -372,10 +372,10 @@ async def iniciar() -> None:
     # o painel ja tem SSH em todos os hosts, e o NTLS atende localhost sem
     # pedir login -- uma credencial a menos para alguem errar.
     app.state.licenca = LicencaService(ssh)
-    # Chaves do FindFace que so existem em arquivo (CLEANUP_SCHEDULE,
+    # Chaves do Face Detect que so existem em arquivo (CLEANUP_SCHEDULE,
     # vms_cleanup). Lista fechada, copia antes, compila depois.
     app.state.configff = ConfigFFService(ssh)
-    # Estado dos componentes internos do FindFace, pelas portas que o
+    # Estado dos componentes internos do Face Detect, pelas portas que o
     # manual documenta -- de dentro do servidor, sem agente instalado.
     app.state.internos = InternosService(ssh)
     # Quanto vai ocupar, antes de disparar: mede no servidor e cruza
@@ -425,7 +425,7 @@ async def iniciar() -> None:
         faxina=app.state.faxina,
         config=config,
         # Limpeza agendada: o agendador precisa do serviço de limpeza e do
-        # de stack (para achar o container legacy do FindFace).
+        # de stack (para achar o container legacy do Face Detect).
         limpeza=app.state.limpeza,
         stack=app.state.stack,
     )

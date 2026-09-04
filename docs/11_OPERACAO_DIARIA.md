@@ -101,7 +101,7 @@ A coluna mais informativa da tela de Serviços.
 | acima de 3 e subindo | **há causa não resolvida** |
 
 `oom_killed` marcado significa que o container foi morto por falta de
-memória — não é bug do FindFace, é dimensionamento.
+memória — não é bug do Face Detect, é dimensionamento.
 
 `findface-video-worker` reiniciando é quase sempre câmera problemática ou
 VRAM esgotada. O log dele diz qual câmera.
@@ -246,7 +246,7 @@ gigabytes por dia.
 
 **O que fazer, em ordem de preferência:**
 
-1. **Limpeza de eventos antigos na plataforma do FindFace** — a NtechLab tem
+1. **Limpeza de eventos antigos na plataforma do Face Detect** — a NtechLab tem
    configuração de retenção. É a solução certa.
 2. **Aumentar o disco da VM no Azure** — resolve, custa.
 3. **Tiered storage** — mover eventos antigos para disco mais lento. A doc
@@ -259,7 +259,7 @@ referências; apagar arquivo por baixo deles gera inconsistência silenciosa.
 
 ## Bom hábito
 
-**Antes de mudança planejada** (atualizar FindFace, mexer em configuração,
+**Antes de mudança planejada** (atualizar Face Detect, mexer em configuração,
 mudar rede): rode um backup `essencial` sob demanda. Leva minutos e dá um
 ponto de retorno preciso.
 
@@ -276,7 +276,7 @@ Os dois se complementam:
 |---|---|
 | histórico e tendência | leitura instantânea na investigação |
 | alerta ativo | ação (reiniciar, backup, terminal) |
-| visão de infraestrutura | visão do FindFace especificamente |
+| visão de infraestrutura | visão do Face Detect especificamente |
 
 Vale monitorar o próprio painel pelo Zabbix:
 

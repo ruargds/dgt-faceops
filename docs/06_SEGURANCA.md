@@ -26,7 +26,7 @@ O que **não** protege contra, e é importante dizer:
 SHA-256 da `SECRET_KEY`.
 
 Guarda: chave PEM, senha da chave, senha SSH, senha de sudo, senha/token
-da API do FindFace e o **token do bot do Telegram**. Colunas `*_enc`.
+da API do Face Detect e o **token do bot do Telegram**. Colunas `*_enc`.
 
 O token do bot merece nota: quem o tem manda mensagem como o bot. Além de
 cifrado, ele é removido de log e de mensagem de erro — a URL do Telegram
@@ -167,7 +167,7 @@ do navegador e em qualquer proxy no caminho.
 ### Container de fora do projeto
 
 Antes de reiniciar, `_garantir_do_projeto()` confere o rótulo
-`com.docker.compose.project` do container alvo contra o projeto do FindFace
+`com.docker.compose.project` do container alvo contra o projeto do Face Detect
 daquele host. Diferente → recusa com mensagem explicando.
 
 Sem essa cerca, `POST /services/{id}/restart` com nome arbitrário derrubaria
@@ -202,8 +202,8 @@ O painel é agentless e conversa para fora em três direções, e só nestas:
 
 | Destino | Porta | Quando | Por quê |
 |---|---|---|---|
-| Servidores do FindFace | 22 | coleta, backup, terminal | SSH — é a única via de leitura e ação |
-| API do FindFace (opcional) | 443/80 | licença, câmeras, retenção | quando URL e credencial estão cadastradas |
+| Servidores do Face Detect | 22 | coleta, backup, terminal | SSH — é a única via de leitura e ação |
+| API do Face Detect (opcional) | 443/80 | licença, câmeras, retenção | quando URL e credencial estão cadastradas |
 | `api.telegram.org` | 443 | só quando há evento a avisar | envio de aviso ([28](28_AVISOS_TELEGRAM.md)) |
 | Destinos de backup | conforme o destino | fim de cada execução | Azure Blob / rclone, quando configurados |
 
@@ -219,10 +219,10 @@ algo cai — não existe processo aguardando comando de fora.
 | WebSocket do terminal | sessão de shell | ticket de uso único; permissão; gravação |
 | `.env` na máquina do painel | cofre inteiro | permissão de arquivo; disco cifrado; cópia externa |
 | Volume do banco | cadastro e histórico (segredos cifrados) | acesso à máquina |
-| `data/backups` | dados do FindFace em claro | permissão; considere cifrar o disco |
+| `data/backups` | dados do Face Detect em claro | permissão; considere cifrar o disco |
 | Chave SSH no cofre | root nos 4 servidores | Fernet; nunca sai pela API |
 
-**Os artefatos de backup contêm dados do FindFace sem cifra adicional** —
+**Os artefatos de backup contêm dados do Face Detect sem cifra adicional** —
 dossiês, vetores faciais, cadastros. Trate o disco de backup com o mesmo
 cuidado que o servidor de origem. Considere disco cifrado, e no Azure use
 container privado com política de acesso restrita.

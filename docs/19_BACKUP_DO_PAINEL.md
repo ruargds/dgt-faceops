@@ -116,6 +116,6 @@ estado salvo do painel reflete a configuração com que a noite vai rodar.
 inutiliza tudo: o backup sem a `SECRET_KEY` não devolve acesso aos
 servidores.
 
-**Não substitui backup do FindFace.** São coisas diferentes: este salva o
+**Não substitui backup do Face Detect.** São coisas diferentes: este salva o
 painel, aquele salva o reconhecimento facial. Perder um não afeta o
 outro.

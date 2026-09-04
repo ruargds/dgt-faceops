@@ -18,10 +18,10 @@
        ┌────────────────┼────────────────┬──────────────┐
        ▼                ▼                ▼              ▼
   vm-appserver     vm-dbserver     vm-extraction   vm-ftpserver
-  FindFace Multi 2.4.1 — /opt/findface-multi (docker compose)
+  Face Detect 2.4.1 — /opt/findface-multi (docker compose)
 ```
 
-Três containers no painel. Nada instalado nos servidores do FindFace.
+Três containers no painel. Nada instalado nos servidores do Face Detect.
 
 ## Decisões que valem explicação
 
@@ -35,7 +35,7 @@ servidor.
 A pergunta voltou em campo — *"não seria mais preciso com um agente leve em
 cada máquina?"* — e a resposta continua não, por três razões concretas:
 
-1. **Os componentes do FindFace já falam HTTP.** O manual do fabricante
+1. **Os componentes do Face Detect já falam HTTP.** O manual do fabricante
    documenta a porta de cada um: `findface-extraction-api` 18666,
    `findface-sf-api` 18411, `findface-video-manager` 18810/18811,
    `findface-video-worker` 18999, `findface-ntls` 3133/3185,
@@ -50,7 +50,7 @@ cada máquina?"* — e a resposta continua não, por três razões concretas:
 3. **Agente é dívida.** Mais um binário para versionar, atualizar em quatro
    VMs e explicar numa auditoria de um ambiente de reconhecimento facial.
 
-É isso que a seção **Componentes internos do FindFace**, na aba Descoberta,
+É isso que a seção **Componentes internos do Face Detect**, na aba Descoberta,
 faz: abre uma sessão SSH e, de dentro dela, pergunta a cada componente na
 porta que o fabricante documentou. Precisão de agente, sem agente. Só
 leitura — nenhuma consulta ali muda estado.
@@ -102,7 +102,7 @@ uso não dá nada.
 ### Por que as ações são cercadas ao projeto compose
 
 Antes de reiniciar qualquer container, o painel confere o rótulo
-`com.docker.compose.project` e recusa se não for o projeto do FindFace
+`com.docker.compose.project` e recusa se não for o projeto do Face Detect
 daquele host. Sem essa cerca, `POST /services/{id}/restart` com um nome
 arbitrário derruba qualquer container do servidor — inclusive o agente
 Zabbix, inclusive o próprio painel se ele estivesse lá.
@@ -151,7 +151,7 @@ fica `sucesso` com ressalva registrada em `error`.
 | Tabela | Guarda |
 |---|---|
 | `users` | login, hash de senha, perfil, flag de senha de fábrica |
-| `hosts` | endereço, usuário SSH, segredos cifrados, chave de host fixada, caminhos do FindFace |
+| `hosts` | endereço, usuário SSH, segredos cifrados, chave de host fixada, caminhos do Face Detect |
 | `backup_runs` | uma execução: perfil, situação, etapa, progresso, tamanho, checksum, destinos, log |
 | `schedules` | recorrência: cron, perfil, destinos, retenção, aceite de janela |
 | `audit_logs` | toda ação que muda estado, com detalhe higienizado |

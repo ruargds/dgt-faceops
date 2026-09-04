@@ -393,7 +393,7 @@ function LinhaMedidor({ rotulo, valor, pct }) {
 }
 
 /**
- * Onde o disco do FindFace está sendo gasto.
+ * Onde o disco do Face Detect está sendo gasto.
  *
  * Fica atrás de um botão próprio porque `du` numa árvore com milhões de
  * fotos de evento leva minutos — não pode entrar na coleta rápida.
@@ -424,7 +424,7 @@ function AnaliseArmazenamento({ hostId }) {
     <div className="card">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 12 }}>
         <div>
-          <div className="section-title" style={{ marginBottom: 2 }}>{t("Onde o disco do FindFace está sendo gasto")}</div>
+          <div className="section-title" style={{ marginBottom: 2 }}>{t("Onde o disco do Face Detect está sendo gasto")}</div>
           <div className="small muted">{t("Varre")} <span className="mono">/opt/findface-multi/data</span>. Leva alguns
             minutos em servidor com muitos eventos.
           </div>

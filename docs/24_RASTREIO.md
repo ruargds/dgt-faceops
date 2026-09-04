@@ -27,7 +27,7 @@ problema era licença vencida.
 | Backup | sem destino ativo | zero destinos habilitados |
 | Backup | última execução falhou | por servidor |
 | Segurança | senha de fábrica | usuário do painel com a senha inicial |
-| API | não cadastrada | sem usuário e senha da API do FindFace |
+| API | não cadastrada | sem usuário e senha da API do Face Detect |
 
 **O achado que justifica a tela** é o *serviço travado*. `docker ps` diz
 `Up`, o healthcheck não reclama, e o serviço não atende — é a falha que

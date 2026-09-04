@@ -29,7 +29,7 @@ class AmostraContainer(Base):
 
     ## O que custa: linhas no banco
 
-    Uma instalação do FindFace Multi tem ~30 containers. Gravar todos a
+    Uma instalação do Face Detect tem ~30 containers. Gravar todos a
     cada 60 s, em quatro servidores, daria 172 mil linhas por dia — muito
     para o valor que entrega, porque memória de container não muda de
     forma interessante a cada minuto.

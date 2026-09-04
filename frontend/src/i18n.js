@@ -104,8 +104,8 @@ const DICIONARIO = {
   // ── Títulos e subtítulos das telas ──────────────────────────────────
   "tela.painel": { pt: "Painel", en: "Dashboard" },
   "tela.painel.sub": {
-    pt: "Situação dos servidores FindFace Multi e do último backup de cada um",
-    en: "State of the FindFace Multi servers and of each one's latest backup",
+    pt: "Situação dos servidores Face Detect e do último backup de cada um",
+    en: "State of the Face Detect servers and of each one's latest backup",
   },
   "tela.monitor": { pt: "Monitor", en: "Monitor" },
   "tela.monitor.sub": {
@@ -124,8 +124,8 @@ const DICIONARIO = {
   },
   "tela.servicos": { pt: "Serviços", en: "Services" },
   "tela.servicos.sub": {
-    pt: "Containers do FindFace Multi — estado, saúde e reinícios",
-    en: "FindFace Multi containers — state, health and restarts",
+    pt: "Containers do Face Detect — estado, saúde e reinícios",
+    en: "Face Detect containers — state, health and restarts",
   },
   "tela.cameras": { pt: "Licenciamento e dispositivos", en: "Licensing and devices" },
   "tela.cameras.sub": {
@@ -139,8 +139,8 @@ const DICIONARIO = {
   },
   "tela.topologia": { pt: "Topologia", en: "Topology" },
   "tela.topologia.sub": {
-    pt: "Como o FindFace se distribui entre os servidores — fluxo e dependências",
-    en: "How FindFace spreads across the servers — flow and dependencies",
+    pt: "Como o Face Detect se distribui entre os servidores — fluxo e dependências",
+    en: "How Face Detect spreads across the servers — flow and dependencies",
   },
   "tela.logs": { pt: "Logs ao vivo", en: "Live logs" },
   "tela.logs.sub": {
@@ -174,8 +174,8 @@ const DICIONARIO = {
   },
   "tela.servidores": { pt: "Servidores", en: "Servers" },
   "tela.servidores.sub": {
-    pt: "VMs do FindFace Multi — credenciais no cofre, identidade fixada por chave",
-    en: "FindFace Multi VMs — credentials in the vault, identity pinned by host key",
+    pt: "VMs do Face Detect — credenciais no cofre, identidade fixada por chave",
+    en: "Face Detect VMs — credentials in the vault, identity pinned by host key",
   },
   "tela.usuarios": { pt: "Usuários", en: "Users" },
   "tela.usuarios.sub": {

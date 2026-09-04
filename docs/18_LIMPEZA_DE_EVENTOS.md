@@ -5,11 +5,11 @@
 > configurada na plataforma"*, que roda `cleanup --as-configured` — o
 > manual descreve a opção como *"Apply config age options for events,
 > counter records and clusters"*. Assim a idade mora num lugar só
-> (Manutenção → Rotatividade do FindFace) e o agendamento não carrega uma
+> (Manutenção → Rotatividade do Face Detect) e o agendamento não carrega uma
 > segunda verdade.
 >
 > A limpeza agendada **se adia sozinha** se houver backup em andamento
-> naquele servidor. O manual é explícito: *"Do not restart any FindFace
+> naquele servidor. O manual é explícito: *"Do not restart any Face Detect
 > Multi service containers or the Docker daemon while manually purging old
 > data from the database as this will cause system errors!"* — e backup de
 > perfil completo para o stack. Adiar custa nada; corromper o banco custa o
@@ -93,7 +93,7 @@ ambiente.
 
 **Trava contra reinício.** O manual da NtechLab é explícito:
 
-> "Do not restart any FindFace Multi service containers or the Docker
+> "Do not restart any Face Detect service containers or the Docker
 > daemon while manually purging old data from the database as this will
 > cause system errors!"
 
@@ -143,7 +143,7 @@ depende da sessão SSH ficar aberta — o painel usa limite de 6 horas.
 Durante a limpeza o sistema continua funcionando: novos eventos são
 gravados normalmente. O que não pode é reiniciar container.
 
-## Alternativa: retenção automática do FindFace
+## Alternativa: retenção automática do Face Detect
 
 A plataforma da NtechLab tem configuração de limpeza automática de
 eventos na própria interface (Configurações → Geral). **Se ela atender,

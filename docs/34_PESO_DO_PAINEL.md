@@ -14,7 +14,7 @@ quebrados.
 > e por que o painel desacelera sozinho — está em
 > [35_CONCEITO_E_LICOES](35_CONCEITO_E_LICOES.md).
 
-## Nos servidores do FindFace
+## Nos servidores do Face Detect
 
 ### O ciclo de coleta — uma ida a cada 60 s
 
@@ -58,7 +58,7 @@ o ciclo passar a pular trabalho por causa do modo.
 
 | Operação | Quando roda |
 |---|---|
-| `du` da árvore do FindFace | só por clique, com `timeout` e `ionice` |
+| `du` da árvore do Face Detect | só por clique, com `timeout` e `ionice` |
 | `find /var/log` | só no diagnóstico de manutenção |
 | `docker logs` | só de serviço com **incidente aberto**: máx. 3 serviços por ciclo, 1× a cada 5 min por serviço |
 | `journalctl` da apuração | só quando um incidente **fecha**: máx. 2 por ciclo, com `-n` e teto de 30 s |

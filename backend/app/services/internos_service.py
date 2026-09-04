@@ -1,5 +1,5 @@
 """
-Estado dos componentes internos do FindFace, sem instalar nada.
+Estado dos componentes internos do Face Detect, sem instalar nada.
 
 **Por que não existe agente aqui.** A pergunta é legítima: para saber o que
 acontece dentro dos containers, o caminho óbvio pareceria ser um agente em
@@ -37,7 +37,7 @@ log = logging.getLogger("faceops.internos")
 
 SEP = "###FACEOPS:"
 
-# Mapa oficial do manual (arquitetura do FindFace Multi 2.4.1). A porta é
+# Mapa oficial do manual (arquitetura do Face Detect 2.4.1). A porta é
 # do fabricante; o caminho de status é descoberto em execução, porque o
 # manual não fixa um para cada serviço — daí a lista de tentativas.
 COMPONENTES = [
@@ -133,7 +133,7 @@ COMPONENTES = [
         "papel": "Entrega vídeo para visualização e download",
         "impacto":
             "Ninguém consegue assistir nem baixar vídeo pela tela do "
-            "FindFace.",
+            "Face Detect.",
         "camada": "gravação",
     },
     {
@@ -154,13 +154,13 @@ COMPONENTES = [
 # dizer o que para de funcionar quando um deles cai.
 INFRAESTRUTURA = {
     "findface-multi-legacy": (
-        "Interface web e API do FindFace",
-        "Ninguém consegue abrir o FindFace nem consultar eventos. As "
+        "Interface web e API do Face Detect",
+        "Ninguém consegue abrir o Face Detect nem consultar eventos. As "
         "câmeras continuam sendo processadas normalmente.",
     ),
     "postgresql": (
         "Banco de dados principal",
-        "O FindFace para por inteiro: sem banco não há login, consulta "
+        "O Face Detect para por inteiro: sem banco não há login, consulta "
         "nem gravação de evento.",
     ),
     "mongodb": (
@@ -170,7 +170,7 @@ INFRAESTRUTURA = {
     ),
     "pgbouncer": (
         "Intermediário das conexões com o banco",
-        "O FindFace perde o acesso ao banco mesmo com o Postgres de pé.",
+        "O Face Detect perde o acesso ao banco mesmo com o Postgres de pé.",
     ),
     "etcd": (
         "Coordena a configuração do vídeo entre os servidores",
@@ -199,7 +199,7 @@ def descrever(servico: str) -> tuple[str, str]:
     Existe porque `findface-video-worker` não significa nada para quem
     recebe o aviso às 3h. A fonte é o catálogo do manual que já estava
     aqui — um segundo catálogo de nomes amigáveis em outro módulo
-    divergiria do primeiro na primeira versão nova do FindFace.
+    divergiria do primeiro na primeira versão nova do Face Detect.
 
     O nome do container não é igual ao do serviço no compose
     (`findface-multi-postgresql-1` contra `postgresql`), então a busca
@@ -265,7 +265,7 @@ class InternosService:
         )
 
         # A sondagem vai pela rede do Docker, não pelo localhost do host.
-        # Os componentes do FindFace conversam entre containers e não
+        # Os componentes do Face Detect conversam entre containers e não
         # publicam porta na máquina — sondar 127.0.0.1 daria "não
         # respondeu" num servidor perfeitamente saudável.
         script = f"""

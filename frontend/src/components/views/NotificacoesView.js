@@ -569,11 +569,11 @@ export default function NotificacoesView() {
 
 ⚠️ - Problema: o servidor não respondeu ao monitoramento
 
-💬 - Significa: Nada pode ser verificado nesta máquina agora — inclusive o FindFace, que pode estar rodando normal. Falha de rede dá este mesmo aviso.
+💬 - Significa: Nada pode ser verificado nesta máquina agora — inclusive o Face Detect, que pode estar rodando normal. Falha de rede dá este mesmo aviso.
 
 🔎 - Provável: rede fora, VM desligada ou parada
 
-🛠 - Fazer: Confira se a VM está ligada e a rede de pé antes de investigar o FindFace.
+🛠 - Fazer: Confira se a VM está ligada e a rede de pé antes de investigar o Face Detect.
 
 ⏳ - Iniciado em: 02/09 03:10:44 (há 12m 8s)
 

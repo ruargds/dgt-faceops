@@ -71,7 +71,7 @@ New-NetFirewallRule -DisplayName "FaceOps" -Direction Inbound `
     -Protocol TCP -LocalPort 8080 -Action Allow
 ```
 
-### Nos servidores do FindFace
+### Nos servidores do Face Detect
 
 Nada é instalado neles — o painel é agentless. Mas é preciso:
 
@@ -87,7 +87,7 @@ Para `NOPASSWD` restrito ao necessário, em cada servidor:
 
 ```bash
 sudo tee /etc/sudoers.d/faceops > /dev/null <<'EOF'
-# FaceOps — operação do FindFace Multi
+# FaceOps — operação do Face Detect
 azureuser ALL=(root) NOPASSWD: /usr/bin/docker, /usr/bin/docker-compose, /usr/bin/tar, /bin/bash
 EOF
 sudo chmod 0440 /etc/sudoers.d/faceops
@@ -193,9 +193,9 @@ Guarde uma cópia do `.env` fora da máquina, em lugar controlado.
 - [ ] Login com admin/admin123 funciona, e a faixa de aviso de senha aparece
 - [ ] Senha trocada, faixa desapareceu
 - [ ] Um servidor cadastrado, com "Ler chave do servidor" retornando fingerprint
-- [ ] **Testar conexão** verde, com `sudo: sim`, `docker: sim`, `FindFace: sim`
+- [ ] **Testar conexão** verde, com `sudo: sim`, `docker: sim`, `Face Detect: sim`
 - [ ] Tela **Recursos** → Atualizar traz RAM, disco e (se houver) GPU
-- [ ] Tela **Serviços** lista os containers do FindFace
+- [ ] Tela **Serviços** lista os containers do Face Detect
 - [ ] Backup `config` executado com sucesso
 - [ ] Backup `essencial` executado, com os bancos listados no log
 - [ ] **Recursos → Analisar** mediu o tamanho de `data/`

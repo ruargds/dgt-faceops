@@ -83,7 +83,7 @@ export default function PainelView() {
           )}
 
           {dados.servidores.length === 0 ? (
-            <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as VMs do FindFace Multi em")} <strong>{t("Servidores")}</strong> {t("para começar a operar por aqui.")}</Vazio>
+            <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as VMs do Face Detect em")} <strong>{t("Servidores")}</strong> {t("para começar a operar por aqui.")}</Vazio>
           ) : (
             <div className="grid-cards">
               {dados.servidores.map((s) => (

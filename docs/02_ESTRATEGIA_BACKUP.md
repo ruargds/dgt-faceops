@@ -1,4 +1,4 @@
-# Estratégia de backup do FindFace Multi
+# Estratégia de backup do Face Detect
 
 > Documento central do projeto. Se você só for ler um, leia este.
 
@@ -69,12 +69,12 @@ Daí os três perfis:
 ## Perfil `config`
 
 **O que leva:** `configs/` tarado, o `docker-compose.yaml` em uso, o `.env`
-do FindFace e qualquer arquivo de licença encontrado nos três primeiros
+do Face Detect e qualquer arquivo de licença encontrado nos três primeiros
 níveis do diretório de instalação.
 
 **O que recupera:** a configuração do sistema. Limiares de reconhecimento,
 serviços habilitados, parâmetros de rede, licença. Depois de reinstalar o
-FindFace, aplicar este backup devolve o sistema ao ajuste que estava.
+Face Detect, aplicar este backup devolve o sistema ao ajuste que estava.
 
 **O que não recupera:** nada de dado. Zero cadastro, zero evento.
 
@@ -91,7 +91,7 @@ ninguém lembra o que era antes.
    `pg_dump` por banco **não** leva isso, e sem os papéis o restore falha
    com erro de permissão que parece corrupção.
 3. `pg_dump -Fc` de **cada** banco existente. Os nomes são enumerados via
-   `pg_database`, não chutados: o FindFace cria `ffsecurity`,
+   `pg_database`, não chutados: o Face Detect cria `ffsecurity`,
    `ffsecurity_identity_provider`, `multi_audit` e outros conforme os
    módulos habilitados, e a lista muda entre instalações.
 4. `box.snapshot()` em cada container Tarantool, seguido do arquivamento de
@@ -195,7 +195,7 @@ Um artefato marcado `sucesso` no histórico passou pelas duas conferências.
 ## Onde os arquivos ficam
 
 ```
-No servidor do FindFace (temporário)
+No servidor do Face Detect (temporário)
   /var/backups/faceops/faceops_<perfil>_<data>.tar.gz
   -> apagado assim que o painel confirma a transferência
 

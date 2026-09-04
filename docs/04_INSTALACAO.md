@@ -8,15 +8,15 @@ VM Linux e os pré-requisitos comuns aos dois caminhos.
 
 | Opção | Vantagem | Desvantagem |
 |---|---|---|
-| **VM Linux dedicada** (Hyper-V no Windows Server) | isolamento total; sobrevive à queda de qualquer servidor FindFace; roda desatendida com systemd | uma VM para manter |
+| **VM Linux dedicada** (Hyper-V no Windows Server) | isolamento total; sobrevive à queda de qualquer servidor Face Detect; roda desatendida com systemd | uma VM para manter |
 | Docker Desktop no Windows | instalação em minutos; sem VM para gerenciar | depende de logon para iniciar; licença Docker em Server |
-| Dentro do `vm-appserver` | sem infra nova | morre junto com o servidor que deveria diagnosticar; disputa RAM com o FindFace |
+| Dentro do `vm-appserver` | sem infra nova | morre junto com o servidor que deveria diagnosticar; disputa RAM com o Face Detect |
 
 A VM Linux dedicada é a recomendação. As três funcionam.
 
 ## 2. Rede — resolva isto primeiro
 
-A máquina do painel precisa alcançar cada servidor FindFace na porta 22.
+A máquina do painel precisa alcançar cada servidor Face Detect na porta 22.
 
 ```bash
 for ip in 10.0.1.10 10.0.1.11 10.0.1.12 10.0.1.13; do
@@ -37,14 +37,14 @@ Se falhar:
 > reconhecimento facial com SSH aberto para a internet entra em botnet de
 > força bruta em horas.
 
-## 3. Preparar os servidores do FindFace
+## 3. Preparar os servidores do Face Detect
 
 Nada é instalado. É preciso apenas:
 
 ### Usuário SSH com docker e sudo
 
 ```bash
-# No servidor FindFace
+# No servidor Face Detect
 sudo usermod -aG docker azureuser
 # relogar para o grupo valer
 ```
@@ -54,7 +54,7 @@ Conferir:
 ```bash
 docker ps                # sem sudo — precisa funcionar
 sudo -v                  # sudo precisa funcionar
-ls /opt/findface-multi   # o FindFace está aqui?
+ls /opt/findface-multi   # o Face Detect está aqui?
 ```
 
 ### sudo
@@ -69,7 +69,7 @@ aparece no `ps` do servidor.
 
 ```bash
 sudo tee /etc/sudoers.d/faceops > /dev/null <<'EOF'
-# FaceOps — operação do FindFace Multi
+# FaceOps — operação do Face Detect
 azureuser ALL=(root) NOPASSWD: /usr/bin/docker, /usr/bin/docker-compose, /usr/bin/tar, /bin/bash
 EOF
 sudo chmod 0440 /etc/sudoers.d/faceops
@@ -184,7 +184,7 @@ cada vez — desmarque "Disco do painel" nos destinos.
    - Cole a chave PEM (ou a senha)
    - Senha de sudo, se não houver `NOPASSWD`
 3. **Testar conexão** — precisa vir verde com `sudo: sim`, `docker: sim`,
-   `FindFace: sim`
+   `Face Detect: sim`
 4. Repita para os outros servidores
 
 ## 8. Validar antes de confiar
@@ -194,7 +194,7 @@ Em ordem, e sem pular:
 ```
 [ ] Testar conexão verde nos quatro servidores
 [ ] Recursos → Atualizar traz RAM, disco e GPU onde há
-[ ] Serviços lista os containers do FindFace, com o projeto compose certo
+[ ] Serviços lista os containers do Face Detect, com o projeto compose certo
 [ ] Backup config executado com sucesso
 [ ] Backup essencial executado; log lista os bancos; tarantool_metodo = tarantoolctl
 [ ] Recursos → Analisar mediu data/ em cada servidor

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     ADMIN_USER: str = "admin"
     ADMIN_PASSWORD: str = "admin123"
 
-    # Padrões do FindFace Multi nos hosts alvo
+    # Padrões do Face Detect nos hosts alvo
     FFMULTI_DIR: str = "/opt/findface-multi"
     FFMULTI_COMPOSE: str = "/opt/findface-multi/docker-compose.yaml"
 

@@ -25,7 +25,7 @@ Regras que valem para tudo aqui:
 3. **Sob demanda.** Duas execuções SSH por servidor (componentes e
    licença). Não entra em laço de fundo — o painel promete não pesar.
 4. **Severidade do fabricante quando ele define.** Licença a vencer usa os
-   60 dias da própria interface do FindFace; ocupação de recurso usa 90% e
+   60 dias da própria interface do Face Detect; ocupação de recurso usa 90% e
    80%, que é o que a interface dele considera erro e aviso.
 """
 import asyncio
@@ -160,7 +160,7 @@ class RastreioService:
                     "Conta com senha de fábrica",
                     f"{senhas} usuário(s) do painel ainda com a senha inicial",
                     "Quem alcança a rede entra no painel — e o painel tem SSH "
-                    "com sudo nos servidores do FindFace.",
+                    "com sudo nos servidores do Face Detect.",
                     "Troque em Usuários, ou pelo aviso no topo da tela.",
                 )
             )
@@ -306,7 +306,7 @@ class RastreioService:
                 return []
 
             texto = str(dados)
-            if "nenhum container do FindFace" in texto or "não encontrei" in texto:
+            if "nenhum container do Face Detect" in texto or "não encontrei" in texto:
                 return []
             return [
                 _achado(
@@ -334,7 +334,7 @@ class RastreioService:
                     "licença",
                     "Licença inválida",
                     f"licença {cab.get('id', '?')} marcada como inválida pelo NTLS",
-                    "O FindFace deixa de processar. É parada de operação, não "
+                    "O Face Detect deixa de processar. É parada de operação, não "
                     "aviso.",
                     "Verifique o arquivo .lic e a comunicação com o servidor de "
                     "licenças da NtechLab.",
@@ -366,7 +366,7 @@ class RastreioService:
                         "licença",
                         f"Limite estourado: {item.get('recurso')}",
                         f"{usado:,} em uso de {limite:,} liberados".replace(",", "."),
-                        "Recurso acima do contratado — o FindFace pode recusar "
+                        "Recurso acima do contratado — o Face Detect pode recusar "
                         "novo processamento sem avisar em tela.",
                         "Reduza o consumo (rotatividade e limpeza) ou amplie o "
                         "contrato.",
@@ -425,7 +425,7 @@ class RastreioService:
             # responde. `docker ps` diz "Up" e a operação está parada.
             #
             # `sondavel` é o que separa isso de um falso alarme. Os
-            # componentes do FindFace conversam DENTRO da rede do Docker e
+            # componentes do Face Detect conversam DENTRO da rede do Docker e
             # não publicam porta na máquina; onde a sonda não alcança, o
             # painel não sabe se está vivo — e não saber é diferente de
             # estar parado. Antes desta condição, a tela acusava
@@ -489,7 +489,7 @@ class RastreioService:
                     _achado(
                         CRITICO,
                         "componente",
-                        "Nenhum componente do FindFace respondeu",
+                        "Nenhum componente do Face Detect respondeu",
                         f"{dados['sondaveis']} componente(s) sondáveis, zero respondendo",
                         "Reconhecimento parado neste servidor.",
                         "Serviços → estado do stack; e Logs ao vivo para achar a causa.",
@@ -515,7 +515,7 @@ class RastreioService:
                         INFO,
                         "componente",
                         "Componentes não sondáveis a partir do host",
-                        f"{dados['presentes']} container(es) do FindFace rodando, "
+                        f"{dados['presentes']} container(es) do Face Detect rodando, "
                         "nenhum respondendo na rede alcançável",
                         "Não é sinal de parada: os componentes conversam dentro "
                         "da rede do Docker e podem não publicar porta. O que o "
@@ -605,14 +605,14 @@ class RastreioService:
                     "componente",
                     "Containers com problema na última coleta",
                     f"{ultima.containers_problema} de {ultima.containers_total}",
-                    "Parte do FindFace fora do ar.",
+                    "Parte do Face Detect fora do ar.",
                     "Serviços → ver quais e o log de cada um.",
                     servidor=host.name,
                 )
             )
         return achados
 
-    # ── API do FindFace ────────────────────────────────────────────────
+    # ── API do Face Detect ────────────────────────────────────────────────
 
     def _checar_api(self, host) -> list[dict]:
         from app.services.ffapi_service import configurado
@@ -623,11 +623,11 @@ class RastreioService:
             _achado(
                 INFO,
                 "api",
-                "API do FindFace não cadastrada",
+                "API do Face Detect não cadastrada",
                 f"'{host.name}' sem usuário e senha da API",
                 "Contagem de dispositivos, detector externo e retenção da "
                 "plataforma ficam indisponíveis; a licença ainda vem por SSH.",
-                "Servidores → editar → API do FindFace.",
+                "Servidores → editar → API do Face Detect.",
                 servidor=host.name,
             )
         ]

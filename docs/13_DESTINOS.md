@@ -137,7 +137,7 @@ A retenção do agendamento sobrepõe a do destino, quando informada.
 
 ## Sugestão de arranjo
 
-Para as VMs do FindFace, um ponto de partida:
+Para as VMs do Face Detect, um ponto de partida:
 
 | Destino | Tipo | Retenção | Para quê |
 |---|---|---|---|

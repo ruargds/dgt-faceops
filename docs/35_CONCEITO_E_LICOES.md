@@ -177,7 +177,7 @@ Nada do que está versionado carrega marca de ferramenta de desenvolvimento
 
 Não é preferência estética. Este painel é entregue a um cliente público e
 auditado por terceiros: o que está no repositório tem de falar do FaceOps
-e do FindFace. Quem escreveu é decisão de quem assina o projeto, não
+e do Face Detect. Quem escreveu é decisão de quem assina o projeto, não
 pegada deixada por acidente.
 
 O conhecimento que vivia em arquivos de ferramenta foi consolidado em
@@ -209,7 +209,7 @@ Seis perguntas, nesta ordem:
 
 | Não é | Por quê |
 |---|---|
-| Substituto do Zabbix | o Zabbix vigia infraestrutura; este painel opera o FindFace. Convivem no mesmo grupo do Telegram, e por isso o aviso assina a origem |
+| Substituto do Zabbix | o Zabbix vigia infraestrutura; este painel opera o Face Detect. Convivem no mesmo grupo do Telegram, e por isso o aviso assina a origem |
 | Shell remoto disfarçado | comando livre existe no InTerminal, que **grava** a sessão. Ação rápida é catálogo fixo |
 | Ferramenta com perfis editáveis por tela | quem edita perfil se concede acesso root sem passar por ninguém |
 | Painel de parede 24×7 | é consultado; daí o modo econômico e a sessão que expira parada em 20 min |

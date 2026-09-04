@@ -54,12 +54,12 @@ Completo em [17_ATUALIZACAO](17_ATUALIZACAO.md).
 ## Cercas de ação destrutiva
 
 * **Toda ação em container passa por `StackService._garantir_do_projeto()`**
-  — recusa agir em container fora do projeto compose do FindFace. Sem essa
+  — recusa agir em container fora do projeto compose do Face Detect. Sem essa
   cerca, "reiniciar container" vira controle remoto irrestrito do Docker:
   daria para derrubar o próprio painel ou o agente do Zabbix. Nome de
   container também passa por allowlist antes de chegar perto do shell.
 * **Nunca durante a limpeza de eventos.** O manual da NtechLab é
-  explícito: não reiniciar container do FindFace nem o Docker durante a
+  explícito: não reiniciar container do Face Detect nem o Docker durante a
   purga — causa erro no banco. O painel recusa, e a limpeza agendada não
   começa se houver backup em curso no mesmo host.
 * **Matar PID solto: não.** A tela de Processos reinicia o *container dono
@@ -99,7 +99,7 @@ Completo em [17_ATUALIZACAO](17_ATUALIZACAO.md).
 * **Abrir usa a janela inteira; fechar usa o fim dela.** Se as duas
   decisões olhassem as mesmas 6h, uma vigilância resolvida às 14h ficaria
   acusando até as 20h.
-* **`du` sem `timeout` é armadilha.** Na árvore de dados do FindFace ele
+* **`du` sem `timeout` é armadilha.** Na árvore de dados do Face Detect ele
   não termina — e "não medido" é resposta; zero não é.
 * **Reta perfeita não ganha "dobra a cada X".** Tempo de dobra é
   vocabulário de exponencial; usá-lo em série linear é inventar precisão.

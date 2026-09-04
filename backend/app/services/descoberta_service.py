@@ -1,7 +1,7 @@
 """
 Descoberta — inventário do que existe em cada servidor.
 
-O painel nasceu de campo: a topologia dos servidores do FindFace foi
+O painel nasceu de campo: a topologia dos servidores do Face Detect foi
 levantada sondando, não lendo documentação. Esta tela transforma aquela
 sondagem manual em botão. Numa varredura por SSH ela responde as
 perguntas que todo o resto do painel precisa saber e que ninguém quer
@@ -12,9 +12,9 @@ descobrir na mão:
 * quais containers existem, com imagem, estado e portas;
 * que portas o servidor está de fato escutando na rede;
 * se tem **GPU**, quanto de **memória e disco**, qual **SO**;
-* onde o **FindFace Multi** está instalado.
+* onde o **Face Detect** está instalado.
 
-Funciona igual nos dois mundos: FindFace espalhado por vários servidores
+Funciona igual nos dois mundos: Face Detect espalhado por vários servidores
 ou **tudo num servidor só**. Não assume distribuição — apenas relata o
 que achou naquele host. Se o banco estiver na mesma máquina, aparece ali;
 se estiver em outra, aparece na descoberta da outra.
@@ -50,9 +50,9 @@ ASSINATURAS = [
 ]
 
 
-# ── Modelo de camadas do FindFace distribuído ─────────────────────────
+# ── Modelo de camadas do Face Detect distribuído ─────────────────────────
 #
-# O FindFace Multi reparte o trabalho entre componentes, e o fornecedor
+# O Face Detect reparte o trabalho entre componentes, e o fornecedor
 # espalha esses componentes por várias máquinas para balancear carga
 # (GPU numa, banco noutra, app noutra). O painel precisa entender essa
 # dinâmica como uma cadeia de dependências: câmera → vídeo → extração →
@@ -83,7 +83,7 @@ CAMADA_ARESTAS = [
     ("app", "midia"),
 ]
 
-# Como classificar um componente do FindFace numa camada, pelo nome do
+# Como classificar um componente do Face Detect numa camada, pelo nome do
 # serviço/container/imagem. A ordem importa: o específico vem antes do
 # genérico (senão 'findface-multi' engoliria tudo em 'app').
 CLASSIFICADOR = [
@@ -98,7 +98,7 @@ CLASSIFICADOR = [
 
 
 def _camadas_do_host(containers: list) -> list:
-    """Que camadas do FindFace este servidor executa, pelos containers."""
+    """Que camadas do Face Detect este servidor executa, pelos containers."""
     achadas: dict = {}
     for c in containers:
         alvo = f"{c.get('servico','')} {c.get('nome','')} {c.get('imagem','')}"
@@ -222,7 +222,7 @@ echo "{SEP}END"
 
     async def topologia(self, hosts: list) -> dict:
         """
-        Mapa de dependências do FindFace distribuído entre os servidores.
+        Mapa de dependências do Face Detect distribuído entre os servidores.
 
         Varre cada servidor (em paralelo) e classifica os componentes em
         camadas. O resultado diz QUAL camada roda em QUAL máquina — que é

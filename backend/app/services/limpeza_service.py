@@ -1,5 +1,5 @@
 """
-Limpeza de dados antigos do FindFace — procedimento oficial da NtechLab.
+Limpeza de dados antigos do Face Detect — procedimento oficial da NtechLab.
 
 É o que ataca a causa raiz do disco cheio. Num servidor real, as fotos de
 evento ocupavam 242 GB de 268 GB do diretório de dados. Backup não
@@ -16,7 +16,7 @@ cinco dias.
 
 O manual traz um aviso que virou trava aqui:
 
-> "Do not restart any FindFace Multi service containers or the Docker
+> "Do not restart any Face Detect service containers or the Docker
 > daemon while manually purging old data from the database as this will
 > cause system errors!"
 
@@ -73,7 +73,7 @@ DESCRICOES = {
     "car-cluster-events-max-age":
         "Eventos de agrupamento de veículos",
     "audit-logs-max-age":
-        "Log de auditoria do próprio FindFace",
+        "Log de auditoria do próprio Face Detect",
     "external-vms-events-max-age":
         "Eventos vindos de VMS externo",
 }
@@ -183,9 +183,9 @@ class LimpezaService:
         raise LimpezaError(
             f"não achei o container do findface-multi-legacy em '{host.name}'. "
             + (
-                f"Containers do FindFace aqui: {presentes}. "
+                f"Containers do Face Detect aqui: {presentes}. "
                 if presentes
-                else "Nenhum container do FindFace roda aqui. "
+                else "Nenhum container do Face Detect roda aqui. "
             )
             + "A limpeza precisa rodar no servidor onde a aplicação está — "
             "veja em Topologia qual é."

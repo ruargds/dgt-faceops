@@ -53,7 +53,7 @@ serviço "voltando" no exato instante em que a máquina caiu.
 Nenhum modelo, nenhuma chamada externa. `incidente_service._causa_provavel`
 lê os mesmos sinais que o Docker já entrega em toda passada (ver
 `StackService.list_services`) e traduz para o vocabulário de quem opera o
-FindFace:
+Face Detect:
 
 | Sinal do Docker | Causa provável |
 |---|---|
@@ -84,8 +84,8 @@ serviço, como os demais.
 Isso responde ao pedido de "usar IA para rastrear logs e erros" sem
 instalar nada: é regra sobre dado que o painel já lê, roda em
 milissegundos e não consome CPU/RAM extra na VM do painel nem nos
-servidores do FindFace. Um modelo local de verdade (tipo Ollama) para
-análise de log foi deliberadamente **adiado** — os servidores do FindFace
+servidores do Face Detect. Um modelo local de verdade (tipo Ollama) para
+análise de log foi deliberadamente **adiado** — os servidores do Face Detect
 são sensíveis a carga, e essa decisão (onde rodaria, qual modelo, que
 orçamento de CPU/RAM) merece uma conversa própria antes de entrar em
 produção.

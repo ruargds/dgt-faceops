@@ -5,7 +5,7 @@ import { Carregando, Erro, Vazio } from "../Comuns";
 import { IconAtualizar, IconGPU } from "../Icons";
 
 /**
- * Topologia — o FindFace distribuído visto como cadeia de dependências.
+ * Topologia — o Face Detect distribuído visto como cadeia de dependências.
  *
  * O fornecedor reparte os componentes entre máquinas para balancear
  * carga: GPU numa, Tarantool noutra, Postgres noutra, app noutra. Esta
@@ -255,7 +255,7 @@ function Legenda({ dados, corDe }) {
                       sem comunicação: {s.erro}
                     </span>
                   ) : s.camadas.length === 0 ? (
-                    <span className="small muted">{t("nenhuma do FindFace")}</span>
+                    <span className="small muted">{t("nenhuma do Face Detect")}</span>
                   ) : (
                     <span className="stack-h" style={{ flexWrap: "wrap", gap: 5 }}>
                       {s.camadas.map((c) => (
@@ -282,7 +282,7 @@ function Legenda({ dados, corDe }) {
         </table>
       </div>
       <div className="small muted" style={{ marginTop: 8 }}>
-        O fluxo acima é a cadeia de dependências do FindFace: a câmera alimenta
+        O fluxo acima é a cadeia de dependências do Face Detect: a câmera alimenta
         o Vídeo, que alimenta a Extração, que gera vetores comparados na Busca
         contra o Tarantool (Vetores), com os dados no PostgreSQL. A Aplicação
         consome Busca, Dados e Mídia para montar a tela.

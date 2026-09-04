@@ -176,7 +176,7 @@ export default function ServidoresView({ alvo }) {
 
       {lista.length === 0 ? (
         <Vazio titulo={t("Nenhum servidor cadastrado")}>
-          Cadastre as VMs do FindFace Multi. O painel lê a chave pública do servidor
+          Cadastre as VMs do Face Detect. O painel lê a chave pública do servidor
           antes de guardar qualquer credencial.
         </Vazio>
       ) : (
@@ -255,7 +255,7 @@ export default function ServidoresView({ alvo }) {
                         </div>
                         <div style={{ marginTop: 4 }}>
                           sudo: {teste.sudo ? "sim" : "NÃO"} · docker:{" "}
-                          {teste.docker_presente ? "sim" : "NÃO"} · FindFace:{" "}
+                          {teste.docker_presente ? "sim" : "NÃO"} · Face Detect:{" "}
                           {teste.findface_presente ? "sim" : "NÃO"} · GPU:{" "}
                           {teste.gpu_presente ? "sim" : "não"}
                         </div>
@@ -264,7 +264,7 @@ export default function ServidoresView({ alvo }) {
                         )}
                         {teste.caminho_corrigido && (
                           <div style={{ marginTop: 4 }}>
-                            Caminho do FindFace corrigido por detecção:{" "}
+                            Caminho do Face Detect corrigido por detecção:{" "}
                             <span className="mono">{teste.ffmulti_dir}</span>
                           </div>
                         )}
@@ -610,7 +610,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
             </div>
           </div>
 
-          <div className="section-title" style={{ marginTop: 18 }}>{t("FindFace Multi")}</div>
+          <div className="section-title" style={{ marginTop: 18 }}>{t("Face Detect")}</div>
           <div className="row row-2">
             <div className="field">
               <label className="label">{t("Diretório de instalação")}</label>
@@ -622,11 +622,11 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
             </div>
           </div>
 
-          <div className="section-title" style={{ marginTop: 18 }}>{t("API do FindFace")} <span className="small muted">— coleta de câmeras por IP (recomendado)</span>
+          <div className="section-title" style={{ marginTop: 18 }}>{t("API do Face Detect")} <span className="small muted">— coleta de câmeras por IP (recomendado)</span>
           </div>
           <div className="field-help" style={{ marginBottom: 8 }}>
             Caminho preferido para contar câmeras, eventos e licenças: o painel
-            usa a API do FindFace em vez de vasculhar o banco por SSH. Entre com
+            usa a API do Face Detect em vez de vasculhar o banco por SSH. Entre com
             o mesmo usuário e senha que você usa na plataforma da NtechLab. Se
             ficar em branco, o painel cai no SSH+PostgreSQL — e o licenciamento,
             que só existe pela API, fica indisponível.
@@ -646,7 +646,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               value={f.ff_api_user}
               onChange={set("ff_api_user")}
               autoComplete="off"
-              placeholder={t("o mesmo usuário que entra no FindFace")}
+              placeholder={t("o mesmo usuário que entra no Face Detect")}
             />
           </div>
           <div className="field">
@@ -659,7 +659,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               placeholder={
                 editando && inicial.tem_api
                   ? "Deixe em branco para manter"
-                  : "senha desse usuário no FindFace"
+                  : "senha desse usuário no Face Detect"
               }
             />
             <div className="field-help">
@@ -676,7 +676,7 @@ function ModalServidor({ inicial, onFechar, onPronto }) {
               value={segredos.ff_api_token}
               onChange={setSeg("ff_api_token")}
               autoComplete="new-password"
-              placeholder={editando && inicial.tem_api ? "Deixe em branco para manter" : "cole o token de API do FindFace"}
+              placeholder={editando && inicial.tem_api ? "Deixe em branco para manter" : "cole o token de API do Face Detect"}
             />
             <div className="field-help">
               Só para instalação que gere token de API. Preenchido, ele substitui

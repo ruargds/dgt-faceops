@@ -6,7 +6,7 @@ executor de comando: é um PTY de verdade, com cores, `htop`, editor,
 
 ## Por que existe
 
-Investigar um problema no FindFace normalmente termina no shell. Alternar
+Investigar um problema no Face Detect normalmente termina no shell. Alternar
 entre o painel e um cliente SSH separado significa: outra ferramenta, outra
 credencial, e — o que mais importa — **nenhum rastro**. Pelo InTerminal, a
 sessão é gravada e associada a um usuário nominal.

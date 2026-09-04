@@ -175,7 +175,7 @@ CATALOGO: list[ItemConfig] = [
                "FaceOps",
                "Aparece no título da aba e no topo das telas."),
     ItemConfig("projeto.subtitulo", "projeto", "Subtítulo", "texto",
-               "Operação do FindFace Multi",
+               "Operação do Face Detect",
                "Linha de apoio abaixo do nome, na tela de login."),
     ItemConfig("projeto.cliente", "projeto", "Cliente ou ambiente", "texto",
                "",
@@ -587,7 +587,7 @@ CATALOGO: list[ItemConfig] = [
                "O ciclo já lê `docker stats` a cada passada para desenhar os "
                "cartões, e descartava o resultado. Guardando, o painel passa a "
                "responder QUEM está com a memória — sem comando novo no "
-               "servidor. O custo é linha no banco, não carga no FindFace."),
+               "servidor. O custo é linha no banco, não carga no Face Detect."),
     ItemConfig("containers.intervalo_min", "monitor",
                "Gravar memória por container a cada (minutos)", "numero",
                5,

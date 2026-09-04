@@ -43,7 +43,7 @@
   operar. Com os valores reais do ambiente levantado.
 
 - **[04_INSTALACAO](04_INSTALACAO.md)** — do zero: VM, rede, NSG do Azure,
-  sudoers nos servidores do FindFace, cadastro do primeiro host, validação.
+  sudoers nos servidores do Face Detect, cadastro do primeiro host, validação.
 
 - **[12_INSTALACAO_WINDOWS](12_INSTALACAO_WINDOWS.md)** — instalação
   empacotada em máquina Windows (Docker Desktop + WSL2): requisitos de
@@ -64,7 +64,7 @@
 
 - **[14_MANUTENCAO](14_MANUTENCAO.md)** — disco e log pela web. Por que o
   disco raiz enche num servidor de reconhecimento facial, como medir o
-  crescimento, e como conter sem reiniciar nada do FindFace.
+  crescimento, e como conter sem reiniciar nada do Face Detect.
 
 - **[16_CONFIGURACOES](16_CONFIGURACOES.md)** — a aba Configurações: as
   três camadas (banco > `.env` > padrão), como o catálogo faz a tela se
@@ -88,7 +88,7 @@
 
 - **[23_MONITOR_E_CAMERAS](23_MONITOR_E_CAMERAS.md)** — monitor contínuo
   sem onerar servidor, alertas com ação, câmeras e licenciamento do
-  FindFace, e as exportações em CSV.
+  Face Detect, e as exportações em CSV.
 
 - **[24_RASTREIO](24_RASTREIO.md)** — a tela que responde "tem algo
   quebrado agora?": o que é checado, com que critério, e por que cada
@@ -210,7 +210,7 @@ Três camadas com papéis diferentes, que não se repetem:
 
 ## Referência externa
 
-- [FindFace Multi 2.4.1 — documentação oficial](https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/index.html)
+- [Face Detect 2.4.1 — documentação oficial](https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/index.html)
 - [Backup e restore oficial](https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/backup-restore.html)
 - [Arquitetura e componentes](https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/architecture.html)
 - [Verificação de status de componente](https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/status.html)

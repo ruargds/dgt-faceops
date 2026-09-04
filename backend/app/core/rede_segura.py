@@ -2,7 +2,7 @@
 Cerca de destino para as saídas HTTP do painel.
 
 O painel faz requisição para uma URL **cadastrada por gente**: a API do
-FindFace de cada servidor. Isso é, por definição, um pedido para o
+Face Detect de cada servidor. Isso é, por definição, um pedido para o
 servidor buscar um endereço escolhido por quem usa — o formato clássico
 de SSRF.
 
@@ -63,7 +63,7 @@ def validar_url(url: str, *, permitir_privado: bool = True) -> str:
     """
     Devolve a URL normalizada, ou levanta `DestinoRecusado`.
 
-    `permitir_privado` fica ligado de propósito: os servidores do FindFace
+    `permitir_privado` fica ligado de propósito: os servidores do Face Detect
     estão numa rede privada, e é exatamente para lá que o painel precisa
     falar. Recusar RFC1918 aqui quebraria o uso legítimo — o que se
     bloqueia é link-local, loopback e reservado.

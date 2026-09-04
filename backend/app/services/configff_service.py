@@ -1,5 +1,5 @@
 """
-Configuração do FindFace que só existe em arquivo, editada pelo painel.
+Configuração do Face Detect que só existe em arquivo, editada pelo painel.
 
 Parte do que decide o volume de dado gravado não está na interface nem na
 API: está no arquivo de configuração do serviço legacy, e o procedimento
@@ -15,7 +15,7 @@ E o aviso que manda no desenho desta tela:
 
     "Settings via interface/API sobrescrevem o arquivo de configuração."
 
-Ou seja: o que dá para ajustar em **Rotatividade do FindFace** (que fala
+Ou seja: o que dá para ajustar em **Rotatividade do Face Detect** (que fala
 com a API) deve ser ajustado lá, não aqui. Aqui ficam as chaves que a API
 não expõe — hoje, a **programação da limpeza automática**
 (`CLEANUP_SCHEDULE`, em RRULE) e o interruptor da limpeza do arquivo de
@@ -29,7 +29,7 @@ Cercas, na ordem em que agem:
    do arquivo original.
 3. **Validação de sintaxe depois de escrever.** O arquivo é Python; se
    `python3 -m py_compile` recusar, a cópia volta ao lugar e nada é
-   reiniciado. Um arquivo quebrado aqui derruba o FindFace inteiro na
+   reiniciado. Um arquivo quebrado aqui derruba o Face Detect inteiro na
    próxima subida.
 4. **O reinício é uma decisão separada.** O painel não reinicia junto: o
    manual manda reiniciar todos os containers, e isso para o
@@ -58,10 +58,10 @@ CHAVES = {
         "rotulo": "Programação da limpeza automática",
         "tipo": "rrule",
         "ajuda": (
-            "Quando o FindFace roda a própria limpeza, em formato RRULE. "
+            "Quando o Face Detect roda a própria limpeza, em formato RRULE. "
             "O padrão de fábrica é RRULE:FREQ=DAILY;BYHOUR=1;BYMINUTE=17 — "
             "todo dia à 1h17. É a rotatividade nativa da plataforma: ela "
-            "aplica as idades configuradas em Rotatividade do FindFace."
+            "aplica as idades configuradas em Rotatividade do Face Detect."
         ),
         "exemplo": "RRULE:FREQ=DAILY;BYHOUR=1;BYMINUTE=17",
     },
@@ -80,7 +80,7 @@ CHAVES = {
 
 # RRULE aceito: o suficiente para o caso do manual, sem virar um parser de
 # calendário. Recusar o que não se entende é melhor que gravar algo que o
-# FindFace vai ler errado às 3h da manhã.
+# Face Detect vai ler errado às 3h da manhã.
 RRULE_VALIDA = re.compile(
     r"^RRULE:FREQ=(DAILY|WEEKLY|HOURLY)"
     r"(;INTERVAL=\d{1,3})?"
@@ -112,7 +112,7 @@ def _secoes(saida: str) -> dict[str, str]:
 
 
 class ConfigFFService:
-    """Leitura e escrita cercada do arquivo de configuração do FindFace."""
+    """Leitura e escrita cercada do arquivo de configuração do Face Detect."""
 
     def __init__(self, ssh: SSHService) -> None:
         self.ssh = ssh
@@ -325,7 +325,7 @@ echo "{SEP}FIM"
             "antes": linha_antiga,
             "depois": (s.get("DEPOIS") or "").strip(),
             "aviso_reinicio": (
-                "O FindFace só passa a valer isto depois de reiniciar os "
+                "O Face Detect só passa a valer isto depois de reiniciar os "
                 "containers — o manual manda `docker compose restart` no "
                 "diretório da instalação. Isso PARA o reconhecimento por "
                 "alguns minutos; escolha a hora."

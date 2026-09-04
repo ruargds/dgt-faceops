@@ -25,7 +25,7 @@
 > distribuído e cada servidor guarda um pedaço diferente. O manifesto
 > dentro do artefato traz o roteiro do fabricante e a versão das imagens —
 > e a base do Tarantool não é compatível entre versões maiores do
-> FindFace.
+> Face Detect.
 
 
 > **Se você está no meio de um incidente**, vá direto para a seção do perfil
@@ -36,7 +36,7 @@
 1. **Não apague nada ainda.** Mesmo um `data/` suspeito de corrupção pode
    ter partes aproveitáveis. Renomeie em vez de remover.
 2. **Anote a versão.** O restore só é confiável para a **mesma versão**
-   do FindFace Multi (2.4.1). Confira no `docker-compose.yaml` salvo.
+   do Face Detect (2.4.1). Confira no `docker-compose.yaml` salvo.
 3. **Tire um backup do estado atual**, mesmo quebrado. Se o restore der
    errado, você quer poder voltar para o "quebrado conhecido".
 
@@ -204,7 +204,7 @@ sudo docker compose logs --tail 50 findface-tarantool-server
 sudo docker compose logs --tail 50 findface-multi-legacy
 ```
 
-Na interface do FindFace Multi:
+Na interface do Face Detect:
 
 - [ ] Login funciona com os usuários de antes
 - [ ] Dossiês e listas de vigilância estão lá, com as fotos das faces
@@ -236,7 +236,7 @@ Procedimento oficial da NtechLab. Recupera tudo, inclusive as fotos.
 ```bash
 FF=/opt/findface-multi
 
-# 1. Se for máquina nova, instale o FindFace Multi 2.4.1 pelo .run
+# 1. Se for máquina nova, instale o Face Detect 2.4.1 pelo .run
 #    da MESMA versão antes de continuar.
 
 # 2. Parar
@@ -282,12 +282,12 @@ Funciona, com atenção a três pontos:
 
 O único jeito de saber se o backup serve:
 
-1. Suba uma VM de teste com FindFace Multi 2.4.1
+1. Suba uma VM de teste com Face Detect 2.4.1
 2. Cadastre o servidor de teste no painel
 3. Restaure nele o último `essencial` de produção
 4. Confirme que um rosto cadastrado é reconhecido
 5. Anote quanto tempo levou — esse é o seu RTO real
 
-Faça isso uma vez agora, e depois a cada mudança de versão do FindFace.
+Faça isso uma vez agora, e depois a cada mudança de versão do Face Detect.
 
 > Backup nunca restaurado não é backup. É esperança com nome técnico.

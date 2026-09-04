@@ -472,7 +472,7 @@ class MonitorService:
         amostra.containers_total = len(containers)
         amostra.coleta_ms = int(dados.get("coleta_ms", 0) or 0)
 
-        # Estado dos serviços vem junto quando o host é do FindFace. Se
+        # Estado dos serviços vem junto quando o host é do Face Detect. Se
         # falhar, a amostra continua válida — métrica de máquina e estado
         # de container são coisas independentes.
         try:
@@ -787,7 +787,7 @@ class MonitorService:
                 add("conexao", "critico",
                     "não respondeu ao monitoramento", 0, 0,
                     significa="Nada pode ser verificado nesta máquina agora "
-                              "— inclusive o FindFace, que pode estar "
+                              "— inclusive o Face Detect, que pode estar "
                               "rodando normal. Falha de rede dá este mesmo "
                               "aviso.",
                     acao="Confira se a máquina está ligada e se a rede está "

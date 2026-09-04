@@ -184,7 +184,7 @@ async def listar_containers(ssh, host) -> list[dict]:
 
     Sem cerca de projeto compose aqui, de propósito: ler log é leitura, e
     o valor da tela está justamente em acompanhar a aplicação de
-    integração, que não pertence ao projeto do FindFace.
+    integração, que não pertence ao projeto do Face Detect.
     """
     precisa_sudo = await ssh.docker_needs_sudo(host)
     r = await ssh.run(

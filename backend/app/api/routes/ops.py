@@ -1,4 +1,4 @@
-"""Métricas e controle dos serviços do FindFace Multi."""
+"""Métricas e controle dos serviços do Face Detect."""
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -99,7 +99,7 @@ async def armazenamento(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Onde o disco do FindFace está sendo gasto. Ação separada porque `du`
+    Onde o disco do Face Detect está sendo gasto. Ação separada porque `du`
     numa árvore com milhões de fotos leva minutos.
     """
     host = await _host_ou_404(db, host_id)
@@ -185,7 +185,7 @@ async def parar_ou_subir_container(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Para ou sobe UM container do FindFace.
+    Para ou sobe UM container do Face Detect.
 
     Separada do `restart` por permissão, e não por capricho: reiniciar
     volta sozinho, parar FICA parado. Um `findface-video-worker` parado
@@ -242,7 +242,7 @@ async def acao_stack(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Para/sobe o stack inteiro do FindFace. Derruba o reconhecimento.
+    Para/sobe o stack inteiro do Face Detect. Derruba o reconhecimento.
 
     Exige dupla confirmação: o operador digita o nome do servidor. Vale
     para `stop` e `restart` — `up` só religa o que já estava parado.

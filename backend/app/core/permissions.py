@@ -13,15 +13,15 @@ PERMISSION_CATALOG: dict[str, str] = {
     "hosts.reboot": "Reiniciar o servidor inteiro",
     # Métricas
     "metrics.view": "Ver RAM, GPU, disco e carga",
-    # Serviços do FindFace
-    "services.view": "Ver status dos containers do FindFace Multi",
+    # Serviços do Face Detect
+    "services.view": "Ver status dos containers do Face Detect",
     "services.restart": "Reiniciar um container individual",
     "services.power": "Parar ou subir um container individual",
-    "services.stack": "Parar/subir o stack inteiro do FindFace Multi",
+    "services.stack": "Parar/subir o stack inteiro do Face Detect",
     # Manutenção de disco e log
     "maintenance.view": "Ver diagnóstico de disco e crescimento de log",
     "maintenance.apply": "Aplicar contenção de log e arquivar log antigo",
-    "cleanup.run": "Apagar eventos antigos do FindFace (libera disco, irreversível)",
+    "cleanup.run": "Apagar eventos antigos do Face Detect (libera disco, irreversível)",
     # Backups
     "backups.view": "Ver histórico e artefatos de backup",
     "backups.run": "Disparar backup sob demanda",
@@ -54,7 +54,7 @@ DESTRUCTIVE_PERMISSIONS: frozenset[str] = frozenset({
     # percebe, porque não há erro, só ausência.
     "services.power",
     # Escreve configuração de sistema em servidor de produção e reinicia
-    # rsyslog/journald. Não derruba o FindFace, mas merece rastro forte.
+    # rsyslog/journald. Não derruba o Face Detect, mas merece rastro forte.
     "maintenance.apply",
     "backups.restore",
     "backups.delete",
@@ -129,7 +129,7 @@ AREAS: list[tuple[str, str, str]] = [
      "Quais servidores existem e quem mexe neles."),
     ("monitoramento", "Monitoramento",
      "Estado, métricas e incidentes. Só leitura."),
-    ("servicos", "Serviços do FindFace",
+    ("servicos", "Serviços do Face Detect",
      "Reiniciar, parar e subir containers."),
     ("manutencao", "Manutenção e limpeza",
      "Conter log e liberar disco no servidor."),
@@ -152,7 +152,7 @@ PERMISSION_INFO: dict[str, tuple[str, str]] = {
     "metrics.view": ("monitoramento",
                      "Ver CPU, memória, disco, GPU e incidentes."),
     "services.view": ("monitoramento",
-                      "Ver os containers do FindFace e o log deles."),
+                      "Ver os containers do Face Detect e o log deles."),
     "services.restart": ("servicos",
                          "Reiniciar um container. Ele volta sozinho."),
     "services.power": ("servicos",
@@ -162,13 +162,13 @@ PERMISSION_INFO: dict[str, tuple[str, str]] = {
     "maintenance.view": ("manutencao",
                          "Ver o que ocupa disco e como o log cresce."),
     "maintenance.apply": ("manutencao",
-                          "Ajustar a rotação de log e arquivar log antigo. Não afeta o FindFace."),
+                          "Ajustar a rotação de log e arquivar log antigo. Não afeta o Face Detect."),
     "cleanup.run": ("manutencao",
-                    "Apagar eventos antigos do FindFace para liberar disco. Irreversível."),
+                    "Apagar eventos antigos do Face Detect para liberar disco. Irreversível."),
     "backups.view": ("backup", "Ver o histórico de execuções e os artefatos."),
     "backups.run": ("backup", "Disparar backup agora, fora do agendamento."),
     "backups.download": ("backup",
-                         "Baixar o artefato. Ele contém dado do FindFace."),
+                         "Baixar o artefato. Ele contém dado do Face Detect."),
     "backups.restore": ("backup",
                         "Restaurar sobre o servidor. Sobrescreve o banco atual."),
     "backups.delete": ("backup",

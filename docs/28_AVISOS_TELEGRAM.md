@@ -74,7 +74,7 @@ o dele. Cada uma manda para o seu destino.
 | Tipo | Quando |
 |---|---|
 | 🔴 **Serviço parado** | container fora do ar, unhealthy, morto por OOM ou reiniciando em laço |
-| ⛔ **Servidor sem comunicação** | a máquina não respondeu ao coletor — costuma ser rede, não FindFace |
+| ⛔ **Servidor sem comunicação** | a máquina não respondeu ao coletor — costuma ser rede, não Face Detect |
 
 A chave interna do tipo continua `host_sem_contato`: é ela que está
 gravada nas regras já criadas, e renomeá-la faria toda regra existente
@@ -185,7 +185,7 @@ componente ganhou um campo `impacto`, e `descrever()` resolve o nome:
 | `findface-multi-mongodb-1` | guarda as imagens; passagens continuam sendo detectadas, sem foto |
 
 **Um catálogo só, não dois.** Uma segunda lista de nomes amigáveis noutro
-módulo divergiria da primeira na próxima versão do FindFace. O nome do
+módulo divergiria da primeira na próxima versão do Face Detect. O nome do
 container também não é o nome do serviço no compose
 (`findface-multi-postgresql-1` contra `postgresql`), então a busca aceita
 as duas formas, do mais específico para o mais genérico. Serviço

@@ -2,7 +2,7 @@
 
 # FaceOps
 
-**Painel de operação para FindFace Multi (NtechLab)**
+**Painel de operação para Face Detect (NtechLab)**
 
 Backup com recorrência · Serviços · Recursos · Terminal SSH web
 
@@ -10,7 +10,7 @@ Backup com recorrência · Serviços · Recursos · Terminal SSH web
 [![Stack](https://img.shields.io/badge/React_18-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev)
 [![Stack](https://img.shields.io/badge/PostgreSQL_16-4169E1?style=flat&logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Stack](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://docker.com)
-[![FindFace](https://img.shields.io/badge/FindFace_Multi-2.4.1-0D1F35?style=flat)](https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/)
+[![Face Detect](https://img.shields.io/badge/Face_Detect-2.4.1-0D1F35?style=flat)](https://docs.ntechlab.com/projects/ffmulti/en/2.4.1/)
 
 </div>
 
@@ -18,7 +18,7 @@ Backup com recorrência · Serviços · Recursos · Terminal SSH web
 
 ## Por que existe
 
-A plataforma web do FindFace Multi 2.4.1 não tem tela de backup. O
+A plataforma web do Face Detect 2.4.1 não tem tela de backup. O
 procedimento oficial da NtechLab é manual, por linha de comando, e **frio**:
 
 ```bash
@@ -66,7 +66,7 @@ cliente não exige tocar em código.
 **Atualização que não atrapalha** — `atualizar.sh` consulta o painel
 antes de mexer: recusa se houver backup rodando, terminal aberto ou carga
 alta na máquina. Reverte sozinho se a versão nova não subir. Nunca toca
-nos containers do FindFace.
+nos containers do Face Detect.
 
 **Limpeza de eventos** — executa o procedimento oficial da NtechLab para
 apagar evento antigo, que é o que realmente libera disco: num servidor
@@ -79,14 +79,14 @@ cadastro dos servidores, credenciais cifradas, agendamentos, histórico e
 auditoria. A `SECRET_KEY` fica deliberadamente **fora** do artefato.
 
 **Manutenção de disco e log** — o problema mais comum num servidor de
-reconhecimento facial não é o FindFace: é o disco raiz enchendo de log
+reconhecimento facial não é o Face Detect: é o disco raiz enchendo de log
 (encontramos 99 GB de `/var/log` em operação normal, ~8 GB/dia). A tela
 diagnostica, mede o crescimento e aplica a contenção — filtrando o ruído
-na chegada ao rsyslog, **sem reiniciar nada do FindFace**.
+na chegada ao rsyslog, **sem reiniciar nada do Face Detect**.
 
-**Serviços do FindFace** — estado, saúde, contagem de reinícios e OOM kill
+**Serviços do Face Detect** — estado, saúde, contagem de reinícios e OOM kill
 de cada container, com log e reinício individual. Ações cercadas ao projeto
-compose do FindFace: o painel recusa agir em container de fora.
+compose do Face Detect: o painel recusa agir em container de fora.
 
 **Recursos sob demanda** — RAM (descontando cache, como deve ser), carga por
 núcleo, GPU via `nvidia-smi` (utilização, VRAM, temperatura, watts, processos)
@@ -126,7 +126,7 @@ um impostor na rede.
 ## Onde roda
 
 **Fora do ambiente facial** — isolamento intencional: se um servidor
-FindFace travar, o painel continua de pé para diagnosticar e restaurar.
+Face Detect travar, o painel continua de pé para diagnosticar e restaurar.
 
 Duas formas, ambas suportadas:
 
@@ -135,7 +135,7 @@ Duas formas, ambas suportadas:
 - **VM Linux** no Hyper-V do Windows Server — mais robusta para operação
   desatendida (não depende de logon para iniciar)
 
-**Requisito de rede em qualquer uma:** alcançar as VMs do FindFace na porta
+**Requisito de rede em qualquer uma:** alcançar as VMs do Face Detect na porta
 22 — NSG do Azure liberando o IP de saída, VPN ou Azure Bastion.
 
 ## Instalação
@@ -201,7 +201,7 @@ Docker Desktop instalado → botão direito em `windows\instalar.bat` →
 | [`instalar.sh`](instalar.sh) | **Instalação completa em Ubuntu**, um comando, idempotente |
 | [`atualizar.sh`](atualizar.sh) | **Atualização segura** — recusa se houver backup rodando ou carga alta; reverte sozinho se não subir |
 | [`inventario.sh`](scripts/inventario.sh) | Levanta tudo de um servidor — **somente leitura**, não altera nada |
-| [`descobrir_topologia.sh`](scripts/descobrir_topologia.sh) | Onde cada componente do FindFace está, e qual perfil de backup cabe ali |
+| [`descobrir_topologia.sh`](scripts/descobrir_topologia.sh) | Onde cada componente do Face Detect está, e qual perfil de backup cabe ali |
 | [`ffmulti-backup.sh`](scripts/ffmulti-backup.sh) | O backup em si, enviado pelo painel via stdin — não fica no servidor |
 | [`endurecer_servidor_ff.sh`](scripts/endurecer_servidor_ff.sh) | Contém o crescimento de log que enche o disco. **Simula por padrão**; só altera com `--aplicar` |
 | [`provision_painel.sh`](scripts/provision_painel.sh) | Prepara a VM do painel do zero |

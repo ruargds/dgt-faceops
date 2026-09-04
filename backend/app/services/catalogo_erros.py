@@ -23,7 +23,7 @@ Cada entrada declara a `fonte`:
 * **manual** — documentado pela NtechLab, com a página citada;
 * **campo+manual** — visto aqui e confirmado pelo fabricante.
 
-Páginas do manual usadas (FindFace Multi 2.4.1):
+Páginas do manual usadas (Face Detect 2.4.1):
 `logs.html`, `status.html`, `ntls_status.html`, `licensing.html`,
 `event-cleaner.html`.
 """
@@ -65,7 +65,7 @@ CATALOGO: list[dict] = [
         "titulo": "Disco cheio",
         "causa": "Sem espaço, o banco para de gravar e o reconhecimento para junto. "
                  "Neste ambiente a origem clássica é o /var/log — o log de acesso HTTP "
-                 "do FindFace chegou a 8 GB/dia num servidor real.",
+                 "do Face Detect chegou a 8 GB/dia num servidor real.",
         "acao": "Em Manutenção, use Diagnosticar para ver o que ocupa e Arquivar log antigo. "
                 "Nunca apague o arquivo de log ativo com `rm`: o rsyslog o mantém aberto "
                 "e o espaço não volta. A própria NtechLab recomenda desligar o rsyslog "
@@ -114,7 +114,7 @@ CATALOGO: list[dict] = [
         "regex": re.compile(r"permission denied.*docker\.sock|got permission denied while trying to connect", re.I),
         "titulo": "Usuário sem acesso ao Docker",
         "causa": "O usuário SSH não está no grupo `docker` — padrão da instalação do "
-                 "FindFace. A leitura de serviços volta vazia, sem erro claro.",
+                 "Face Detect. A leitura de serviços volta vazia, sem erro claro.",
         "acao": "O painel contorna usando sudo por host. Para resolver na origem: "
                 "`sudo usermod -aG docker <usuario>` e relogar.",
         "onde": "servidores",
@@ -156,7 +156,7 @@ CATALOGO: list[dict] = [
         "chave": "licenca_ff",
         "regex": re.compile(r"license (?:expired|invalid|limit|not found)|ntls|"
                             r"licen[cç]a|license server", re.I),
-        "titulo": "Licença do FindFace / findface-ntls",
+        "titulo": "Licença do Face Detect / findface-ntls",
         "causa": "Licença vencida, sem comunicação com o NTLS, ou limite de câmeras/faces "
                  "atingido — o reconhecimento para sem o container cair, que é o que "
                  "torna esse caso difícil de perceber.",
@@ -178,7 +178,7 @@ CATALOGO: list[dict] = [
         "causa": "É o procedimento que libera disco de verdade (as fotos de evento "
                  "chegaram a 242 GB de 268 GB num servidor real), e também o mais "
                  "destrutivo.",
-        "acao": "O manual da NtechLab é explícito: NÃO reinicie container do FindFace "
+        "acao": "O manual da NtechLab é explícito: NÃO reinicie container do Face Detect "
                 "nem o Docker enquanto a purga roda — causa erro no banco. O painel já "
                 "recusa reiniciar durante a limpeza; espere terminar.",
         "onde": "manutencao",

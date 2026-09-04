@@ -96,8 +96,8 @@ else
     echo "  ufw não instalado — pulando."
 fi
 
-# ── 8. Verificação de alcance aos servidores do FindFace ───────────────
-echo "[8/8] Alcance aos servidores do FindFace..."
+# ── 8. Verificação de alcance aos servidores do Face Detect ───────────────
+echo "[8/8] Alcance aos servidores do Face Detect..."
 echo ""
 echo "  Informe os IPs das VMs do Azure (separados por espaço), ou Enter"
 echo "  para pular. Sem alcance na porta 22, o painel não faz nada."

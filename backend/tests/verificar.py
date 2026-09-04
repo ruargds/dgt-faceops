@@ -1051,7 +1051,7 @@ async def cenario_projeto_sem_marca_de_ferramenta():
 
     Não é preferência estética: este painel é entregue a um cliente
     público e auditado por terceiros. O que está versionado tem de falar
-    do FaceOps e do FindFace, e de mais nada. Quem escreveu é decisão de
+    do FaceOps e do Face Detect, e de mais nada. Quem escreveu é decisão de
     quem assina o repositório, não pegada deixada por acidente.
 
     A varredura roda sobre o que é VERSIONADO — dependência de terceiro
@@ -1211,7 +1211,7 @@ async def cenario_coletor_desacelera_sem_ninguem_olhando():
 async def cenario_painel_nao_pesa_no_que_monitora():
     """
     O painel não pode ser motivo de lentidão em nada — nem nos servidores
-    do FindFace, nem na VM onde ele mesmo roda.
+    do Face Detect, nem na VM onde ele mesmo roda.
 
     Esta trava guarda os quatro compromissos que sustentam isso, cada um
     com um jeito conhecido de ser quebrado sem ninguém notar.
@@ -1365,7 +1365,7 @@ async def cenario_backup_do_painel_nao_disputa_disco():
     no servidor que ele monitora.
 
     Até aqui isso rodava em prioridade normal de E/S, de igual para igual
-    com o FindFace em produção. Num disco com teto de IOPS, o backup era
+    com o Face Detect em produção. Num disco com teto de IOPS, o backup era
     candidato legítimo a derrubar o servidor que ele existe para
     proteger.
     """
@@ -1837,7 +1837,7 @@ async def cenario_jwt_nao_aceita_algoritmo_trocado():
 
 async def cenario_url_da_api_nao_alcanca_o_metadados():
     """
-    A URL da API do FindFace é endereço escolhido por quem cadastra — o
+    A URL da API do Face Detect é endereço escolhido por quem cadastra — o
     formato clássico de SSRF.
 
     Aqui o risco tem endereço: as VMs são do Azure, e todo Azure responde
@@ -1874,7 +1874,7 @@ async def cenario_url_da_api_nao_alcanca_o_metadados():
     recusa("http://")
 
     # E o que É legítimo continua passando: rede privada é justamente
-    # onde os servidores do FindFace vivem. Recusar RFC1918 aqui
+    # onde os servidores do Face Detect vivem. Recusar RFC1918 aqui
     # quebraria o uso real.
     for boa in ("https://10.0.0.5", "http://192.168.1.10:8000/api",
                 "https://ff.interno.local/"):
@@ -3728,7 +3728,7 @@ async def cenario_rastreio_de_crescimento_so_le():
 
     Mesma trava da apuração (INV-24), mais a de custo: todo comando caro
     tem `timeout` e prioridade baixa de E/S, porque num disco com teto de
-    IOPS o diagnóstico compete com o FindFace.
+    IOPS o diagnóstico compete com o Face Detect.
     """
     from app.services import crescimento_service as cs
 

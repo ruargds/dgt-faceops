@@ -85,7 +85,7 @@ const MENSAGEM_POR_STATUS = {
  * conferir NADA. Quando a Cloudflare devolveu um 502, os 4 KB de HTML da
  * página de erro dela viraram a "mensagem" — e as telas, que exibem a
  * mensagem onde vai o conteúdo, mostraram uma página de erro inteira
- * dentro do cartão "Rotatividade do FindFace", como se fosse a leitura
+ * dentro do cartão "Rotatividade do Face Detect", como se fosse a leitura
  * do servidor.
  *
  * É a mesma família de "serviço travado" e "câmera sem evento": o painel
@@ -217,25 +217,25 @@ export const api = {
   salvarConfig: (valores) => patch("/config", { valores }),
   restaurarConfig: (chave) => del(`/config/${chave}`),
 
-  // Licenciamento do FindFace — liberado, em uso, restante. Vai pela API
+  // Licenciamento do Face Detect — liberado, em uso, restante. Vai pela API
   // HTTP da NtechLab; o limite de licença não existe no banco lido por SSH.
   licencaFindFace: (id) => get(`/dispositivos/${id}/licenca`),
 
-  // Rotatividade do proprio FindFace: por quanto tempo cada coisa fica.
+  // Rotatividade do proprio Face Detect: por quanto tempo cada coisa fica.
   // E a resposta de causa para o disco que enche toda semana -- a limpeza
   // de eventos ataca o sintoma.
   // Ritmo de consumo da licenca: e a resposta de "quando acaba", que a
   // leitura do instante nao da. Amostra por dia, gravada a cada leitura.
   licencaHistorico: (id, dias = 90) =>
     get(`/dispositivos/${id}/licenca/historico?dias=${dias}`),
-  // Componentes internos do FindFace, pelas portas do manual do fabricante.
+  // Componentes internos do Face Detect, pelas portas do manual do fabricante.
   internos: (id) => get(`/descoberta/internos/${id}`),
   // Rastreio: achados com evidencia, impacto e acao. Sob demanda.
   rastreio: (hostId) =>
     get(`/descoberta/rastreio${hostId ? `?host_id=${hostId}` : ""}`),
 
   retencao: (id) => get(`/dispositivos/${id}/retencao`),
-  // Chaves que so existem no arquivo de configuracao do FindFace.
+  // Chaves que so existem no arquivo de configuracao do Face Detect.
   configFF: (id) => get(`/dispositivos/${id}/configff`),
   salvarConfigFF: (id, d) => post(`/dispositivos/${id}/configff`, d),
   salvarRetencao: (id, d) => patch(`/dispositivos/${id}/retencao`, d),
@@ -302,7 +302,7 @@ export const api = {
   },
   armazenamentoPainel: () => get("/backups-armazenamento"),
   // Que perfis fazem sentido naquele servidor. Oferecer os tres em
-  // qualquer maquina produz falha garantida onde nao ha FindFace.
+  // qualquer maquina produz falha garantida onde nao ha Face Detect.
   perfisDoHost: (id) => get(`/backups/perfis/${id}`),
   // Quanto vai ocupar e se cabe -- medido no servidor e cruzado com o
   // tamanho real das execucoes anteriores.
@@ -417,7 +417,7 @@ export const api = {
 
   // Dispositivos (câmeras)
   // Última interação por câmera. Chamada SÓ por clique: a varredura lê o
-  // fluxo de eventos do FindFace e não tem por que rodar sozinha.
+  // fluxo de eventos do Face Detect e não tem por que rodar sozinha.
   ultimaInteracao: (id, maxEventos) =>
     get(
       `/dispositivos/${id}/ultima-interacao` +

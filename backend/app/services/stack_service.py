@@ -1,10 +1,10 @@
 """
-Status e controle dos serviços do FindFace Multi.
+Status e controle dos serviços do Face Detect.
 
 Duas decisões de segurança que valem registro:
 
 1. **Cerca no projeto compose.** Toda ação valida que o container alvo
-   pertence ao projeto do FindFace naquele host. Sem essa cerca, um
+   pertence ao projeto do Face Detect naquele host. Sem essa cerca, um
    endpoint de "reiniciar container" vira controle remoto irrestrito do
    Docker — dá para derrubar o próprio painel, o agente Zabbix, qualquer
    coisa.
@@ -12,7 +12,7 @@ Duas decisões de segurança que valem registro:
    `shlex.quote` já resolveria, mas a allowlist rejeita antes de chegar
    perto do shell.
 
-Sobre o binário: o FindFace Multi 2.4.1 é instalado com `docker-compose`
+Sobre o binário: o Face Detect 2.4.1 é instalado com `docker-compose`
 v1 (a doc oficial usa `sudo docker-compose stop`). Servidores atualizados
 podem ter só o plugin v2 (`docker compose`). O serviço detecta qual existe.
 """
@@ -27,7 +27,7 @@ SEP = "###FACEOPS:"
 # Nome de container/serviço: o que o Docker aceita, e nada além disso.
 NOME_VALIDO = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
-# Serviços do FindFace Multi que usam GPU — a UI destaca esses.
+# Serviços do Face Detect que usam GPU — a UI destaca esses.
 # O `-lb` é apenas balanceador da extração: não toca na GPU.
 SERVICOS_GPU = frozenset({
     "findface-extraction-api",
@@ -66,7 +66,7 @@ def _e_job(servico: str) -> bool:
 
 
 class StackError(Exception):
-    """Erro de operação no stack do FindFace."""
+    """Erro de operação no stack do Face Detect."""
 
 
 def _validar_nome(nome: str) -> str:
@@ -127,14 +127,14 @@ class StackService:
         else:
             raise StackError(
                 f"nem 'docker compose' nem 'docker-compose' encontrados em "
-                f"'{host.name}'. O FindFace Multi está instalado aqui?"
+                f"'{host.name}'. O Face Detect está instalado aqui?"
             )
         self._bin_cache[host.id] = binario
         return binario
 
     async def detectar_instalacao(self, host) -> dict:
         """
-        Descobre onde o FindFace REALMENTE está, perguntando ao Docker.
+        Descobre onde o Face Detect REALMENTE está, perguntando ao Docker.
 
         Assumir `/opt/findface-multi` é errado: em instalação distribuída o
         caminho muda, e num servidor encontrado em campo o diretório sequer
@@ -147,9 +147,9 @@ class StackService:
         primeiro container da máquina, qualquer que fosse ele. Num servidor
         com mais de um projeto no Docker isso devolve um container sem o
         rótulo, e a detecção desistia — dizendo que não achou numa máquina
-        onde o FindFace estava rodando.
+        onde o Face Detect estava rodando.
 
-        Ordem: containers do FindFace primeiro; depois qualquer container
+        Ordem: containers do Face Detect primeiro; depois qualquer container
         com o rótulo; depois o `compose ls` do v2; por último os caminhos
         conhecidos, confirmados com `test -f`.
         """
@@ -159,7 +159,7 @@ class StackService:
 set +e
 formato='{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{.HostConfig.LogConfig.Type}}'
 
-# 1. Containers com cara de FindFace, um a um, ate achar rotulo util.
+# 1. Containers com cara de Face Detect, um a um, ate achar rotulo util.
 for c in $(docker ps --format '{{.Names}}' 2>/dev/null | grep -i -E 'findface|ffmulti' | grep -v -i faceops | head -8); do
   linha="$(docker inspect "$c" --format "$formato" 2>/dev/null)"
   case "$linha" in
@@ -219,7 +219,7 @@ done
                 if not _re.search(r"findface|ffmulti", juntos, _re.I):
                     continue
                 if _re.search(r"faceops", juntos, _re.I):
-                    # O painel nao e o FindFace: onde os dois rodam na mesma
+                    # O painel nao e o Face Detect: onde os dois rodam na mesma
                     # maquina, casar por nome achava /opt/.faceops.
                     continue
                 primeiro = arquivos.split(",")[0].strip()
@@ -278,7 +278,7 @@ done
 
     async def list_services(self, host) -> dict:
         """
-        Lista os containers do FindFace com estado, saúde e reinícios.
+        Lista os containers do Face Detect com estado, saúde e reinícios.
 
         A contagem de reinícios é o sinal mais útil aqui: um
         findface-video-worker com RestartCount subindo indica câmera
@@ -437,7 +437,7 @@ echo "{SEP}END"
 
     async def _garantir_do_projeto(self, host, container: str) -> None:
         """
-        Recusa agir em container que não seja do projeto do FindFace.
+        Recusa agir em container que não seja do projeto do Face Detect.
 
         Sem isto, `POST /services/restart` com nome arbitrário derruba
         qualquer container do servidor — inclusive o próprio painel.
@@ -460,8 +460,8 @@ echo "{SEP}END"
         if dono != projeto:
             raise StackError(
                 f"recusado: '{container}' pertence ao projeto '{dono}', não ao "
-                f"projeto do FindFace ('{projeto}'). O painel só age no stack "
-                "do FindFace Multi."
+                f"projeto do Face Detect ('{projeto}'). O painel só age no stack "
+                "do Face Detect."
             )
 
     # ── Ações ──────────────────────────────────────────────────────────
@@ -487,7 +487,7 @@ echo "{SEP}END"
         self, host, container: str, acao: str = "restart", timeout_s: int = 60
     ) -> dict:
         """
-        Reinicia, para ou sobe UM container do projeto do FindFace.
+        Reinicia, para ou sobe UM container do projeto do Face Detect.
 
         Os três verbos vivem na mesma função de propósito: a cerca
         (`_garantir_do_projeto`), a recusa durante limpeza de eventos e a

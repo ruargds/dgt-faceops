@@ -2,7 +2,7 @@
 Coleta de RAM, GPU, disco e carga — direto da máquina, sem Zabbix.
 
 A coleta é **sob demanda** (botão "Atualizar" na UI). Não há polling em
-segundo plano: o painel roda no vm-appserver, junto com o FindFace, e
+segundo plano: o painel roda no vm-appserver, junto com o Face Detect, e
 ficar batendo SSH de minuto em minuto só rouba CPU de quem importa.
 
 Toda a leitura sai de UMA execução remota. Quatro hosts vezes seis
@@ -439,7 +439,7 @@ class MetricsService:
         `docker`, que o usuário de deploy já tem).
         """
         # Se o docker deste host exige sudo (usuário fora do grupo `docker`,
-        # que é o padrão da instalação do FindFace), a coleta inteira roda
+        # que é o padrão da instalação do Face Detect), a coleta inteira roda
         # como root. Ler /proc, df e nvidia-smi como root não muda nada;
         # sem isso a seção de containers viria vazia, sem erro visível.
         precisa_sudo = await self.ssh.docker_needs_sudo(host)
@@ -539,7 +539,7 @@ class MetricsService:
 
     async def storage_breakdown(self, host, base_dir: str | None = None) -> dict:
         """
-        Onde o disco do FindFace está sendo gasto.
+        Onde o disco do Face Detect está sendo gasto.
 
         `du` numa árvore com milhões de fotos de evento é caro, então isso
         é ação separada (nunca entra na coleta do botão Atualizar) e tem

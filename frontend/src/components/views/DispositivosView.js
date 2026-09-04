@@ -16,14 +16,14 @@ const PERIODOS = [
 ];
 
 /**
- * Câmeras cadastradas no FindFace: quantas, quando falaram, quanto geram.
+ * Câmeras cadastradas no Face Detect: quantas, quando falaram, quanto geram.
  *
- * Consulta pesada e sob demanda — lê o banco do FindFace e agrega. Nunca
+ * Consulta pesada e sob demanda — lê o banco do Face Detect e agrega. Nunca
  * fica atualizando sozinha: contar evento a cada minuto seria o peso que
  * o painel promete não criar.
  */
 /**
- * Licenciamento do FindFace.
+ * Licenciamento do Face Detect.
  *
  * É a mesma tela de licenças da plataforma da NtechLab, trazida para cá:
  * identificação e validade no topo, e a tabela de recursos com o que está
@@ -56,7 +56,7 @@ function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo, hostId }) {
     );
   }
   if (!dados) {
-    return lendo ? <Carregando texto={t("Lendo o licenciamento do FindFace…")} /> : null;
+    return lendo ? <Carregando texto={t("Lendo o licenciamento do Face Detect…")} /> : null;
   }
 
   const cab = dados.cabecalho || {};
@@ -98,7 +98,7 @@ function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo, hostId }) {
       <div className="grid-stats" style={{ marginBottom: 12 }}>
         <div
           className="card card-tight stat"
-          title={`Identificador da licença no FindFace${cab.tipo ? ` · tipo ${cab.tipo}` : ""}`}
+          title={`Identificador da licença no Face Detect${cab.tipo ? ` · tipo ${cab.tipo}` : ""}`}
         >
           <span className="stat-label">{t("Identificação")}</span>
           <div className="mono small" style={{ wordBreak: "break-all" }}>
@@ -130,7 +130,7 @@ function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo, hostId }) {
         </div>
         <div
           className="card card-tight stat"
-          title="Arquivo .lic no servidor do FindFace"
+          title="Arquivo .lic no servidor do Face Detect"
         >
           <span className="stat-label">{t("Arquivo")}</span>
           <div className="mono small" style={{ wordBreak: "break-all" }}>
@@ -140,7 +140,7 @@ function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo, hostId }) {
         <div
           className="card card-tight stat"
           title={
-            "Câmeras cadastradas no FindFace, contadas no momento desta leitura. " +
+            "Câmeras cadastradas no Face Detect, contadas no momento desta leitura. " +
             "Detector externo é sistema de fora empurrando evento pela API: " +
             "aparece na mesma lista e consome licença, mas não é câmera."
           }
@@ -271,7 +271,7 @@ function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo, hostId }) {
           {/* Rotatividade ao lado da projeção. Antes esta informação só
               existia na tela de Manutenção, e sem ela o "acaba em N dias"
               engana: a projeção supõe que nada é apagado, quando é
-              justamente a retenção do FindFace que devolve o espaço. Mesmo
+              justamente a retenção do Face Detect que devolve o espaço. Mesmo
               endpoint da outra tela — nada novo, só visível onde a
               pergunta é feita. */}
           <Rotatividade hostId={hostId} />
@@ -314,7 +314,7 @@ function Licenciamento({ dados, erro, lendo, onAtualizar, ritmo, hostId }) {
           title={
             dados.via === "ssh"
               ? "Lido de dentro do servidor, por SSH — o serviço de licença atende em localhost sem pedir login"
-              : "Lido pela API HTTP do FindFace, com a credencial cadastrada"
+              : "Lido pela API HTTP do Face Detect, com a credencial cadastrada"
           }
         >
           {t("Lido de")} <span className="mono">{dados.caminho}</span>
@@ -354,7 +354,7 @@ function UltimaInteracao({ dados, buscando, filtro }) {
   if (buscando && !dados) {
     return (
       <div className="card">
-        <Carregando texto="Lendo o fluxo de eventos do FindFace…" />
+        <Carregando texto="Lendo o fluxo de eventos do Face Detect…" />
       </div>
     );
   }
@@ -736,12 +736,12 @@ export default function DispositivosView() {
 
       {!dados && !carregando && (
         <Vazio titulo={t("Clique em Consultar")}>
-          Lê o banco do FindFace e conta os eventos por câmera. Pode levar alguns
+          Lê o banco do Face Detect e conta os eventos por câmera. Pode levar alguns
           segundos em base grande — por isso é sob demanda, não automático.
         </Vazio>
       )}
 
-      {carregando && !dados && <Carregando texto={t("Contando eventos no banco do FindFace…")} />}
+      {carregando && !dados && <Carregando texto={t("Contando eventos no banco do Face Detect…")} />}
 
       {dados && (
         <div className="stack-v">
@@ -855,7 +855,7 @@ export default function DispositivosView() {
             Fonte: banco <span className="mono">{dados.esquema.banco}</span>,
             tabelas de evento{" "}
             <span className="mono">{dados.esquema.tabelas_eventos.join(", ")}</span>.
-            O esquema é descoberto automaticamente — se o FindFace for atualizado e
+            O esquema é descoberto automaticamente — se o Face Detect for atualizado e
             a consulta falhar, use o botão de redescoberta.
           </div>
         </div>
@@ -865,10 +865,10 @@ export default function DispositivosView() {
 }
 
 /**
- * Rotatividade do FindFace, ao lado da projeção de consumo.
+ * Rotatividade do Face Detect, ao lado da projeção de consumo.
  *
  * A projeção "no ritmo atual, acaba em N dias" supõe que nada é apagado.
- * Quem desmente essa suposição é a retenção do próprio FindFace — e ela
+ * Quem desmente essa suposição é a retenção do próprio Face Detect — e ela
  * só existia na tela de Manutenção, longe de onde a pergunta é feita.
  *
  * Mesma rota que aquela tela usa (`/dispositivos/{id}/retencao`): nenhum
@@ -921,7 +921,7 @@ function Rotatividade({ hostId }) {
         <div style={{ marginTop: 8 }}>
           <div className="small muted" style={{ marginBottom: 8 }}>
             A projeção acima supõe que <strong>nada</strong> é apagado. Estes são os
-            prazos que o FindFace aplica sozinho — é o que devolve espaço e
+            prazos que o Face Detect aplica sozinho — é o que devolve espaço e
             estica o prazo real.
             {menor && (
               <> O mais curto é <strong>{menor.rotulo}</strong>, com {menor.dias} dia(s).</>

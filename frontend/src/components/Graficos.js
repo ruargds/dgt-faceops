@@ -452,7 +452,7 @@ function useLargura(ref, padrao = 760) {
  * A escala vertical, escolhida pelos VALORES — que é o problema real de
  * um gráfico de containers.
  *
- * Num servidor do FindFace o `findface-multi-legacy` fica em 17 GB e o
+ * Num servidor do Face Detect o `findface-multi-legacy` fica em 17 GB e o
  * `healthcheck` em 6 MB. Numa escala linear compartilhada, uma linha usa
  * o gráfico inteiro e as outras vinte e cinco viram um risco no chão:
  * tecnicamente correto, e inútil para a pergunta que se está fazendo.

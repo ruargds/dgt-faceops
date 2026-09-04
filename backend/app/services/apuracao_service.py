@@ -402,7 +402,7 @@ class ApuracaoService:
 
         Custo zero de servidor: são as amostras que o ciclo do monitor já
         gravou. É a leitura que responde "foi falta de memória?" sem
-        precisar de nada do FindFace — e foi um gráfico de memória subindo
+        precisar de nada do Face Detect — e foi um gráfico de memória subindo
         de 78% para 94% que motivou esta função.
 
         Devolve achados, nunca uma afirmação de causa: memória alta antes

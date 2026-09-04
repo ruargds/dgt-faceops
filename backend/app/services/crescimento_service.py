@@ -549,7 +549,7 @@ def interpretar_memoria(secoes: dict[str, str]) -> dict:
                          "matar outro serviço no lugar dele",
             })
 
-    # Processo fora de container (o FindFace não é tudo que roda na VM).
+    # Processo fora de container (o Face Detect não é tudo que roda na VM).
     for linha in (secoes.get("PS") or "").splitlines()[1:6]:
         partes = linha.split()
         if len(partes) < 4:

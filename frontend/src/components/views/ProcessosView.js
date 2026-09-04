@@ -264,7 +264,7 @@ export default function ProcessosView() {
                 O botão reinicia o <strong>container</strong> dono do processo, não o
                 PID. É de propósito: matar processo solto num servidor de
                 reconhecimento facial pode corromper banco, e a rota de reinício já
-                tem a cerca que só age em container do projeto do FindFace e recusa
+                tem a cerca que só age em container do projeto do Face Detect e recusa
                 agir durante limpeza de eventos.
               </div>
             )}

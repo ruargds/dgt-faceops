@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================================
-# FaceOps — endurecimento de servidor do FindFace Multi
+# FaceOps — endurecimento de servidor do Face Detect
 #
 # Contém o crescimento de log que enche o disco raiz. Escrito depois de
 # encontrar, num servidor real, 99 GB de /var/log num disco de 123 GB —
-# gerado pelo log de acesso HTTP do próprio FindFace, ~8 GB/dia, em
+# gerado pelo log de acesso HTTP do próprio Face Detect, ~8 GB/dia, em
 # operação NORMAL (não era erro).
 #
 #   bash endurecer_servidor_ff.sh              # SIMULA, nao altera nada
@@ -18,8 +18,8 @@
 #
 # O que NAO faz:
 #   - Nao apaga log nenhum
-#   - Nao reinicia o Docker (isso derruba o FindFace; fica para janela)
-#   - Nao mexe em nada do FindFace
+#   - Nao reinicia o Docker (isso derruba o Face Detect; fica para janela)
+#   - Nao mexe em nada do Face Detect
 # ============================================================================
 set -uo pipefail
 
@@ -135,7 +135,7 @@ if [ "${AMOSTRA:-0}" -gt 0 ]; then
   escrever /etc/rsyslog.d/30-faceops-docker.conf <<'EOF'
 # FaceOps — reduz o log de container no /var/log/syslog.
 #
-# NAO reinicia nada do FindFace: o filtro age na chegada ao rsyslog.
+# NAO reinicia nada do Face Detect: o filtro age na chegada ao rsyslog.
 # O log completo continua acessivel por `docker logs` e `journalctl` —
 # aqui so evitamos gravar o ruido no disco raiz.
 #
@@ -191,7 +191,7 @@ fi
 echo
 erro "ATENCAO: esta secao NAO tem efeito ate o dockerd reiniciar."
 erro "         'systemctl restart docker' DERRUBA todos os containers"
-erro "         do FindFace. Isso e janela de manutencao, nao automacao."
+erro "         do Face Detect. Isso e janela de manutencao, nao automacao."
 erro "         O script NAO faz isso, de proposito."
 echo "         Alem disso, o driver so muda para containers RECRIADOS —"
 echo "         os atuais mantem o driver ate um 'compose up' recria-los."

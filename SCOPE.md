@@ -2,7 +2,7 @@
 
 ## O problema
 
-Quatro VMs no Azure rodando FindFace Multi 2.4.1 (NtechLab). A plataforma
+Quatro VMs no Azure rodando Face Detect 2.4.1 (NtechLab). A plataforma
 web nativa não oferece:
 
 1. Backup pela interface — o procedimento oficial é manual, por CLI, e para
@@ -24,11 +24,11 @@ no momento da investigação.
   para o perfil que causa parada
 - Retenção automática por perfil, no disco do painel
 - Verificação de integridade por SHA-256 depois da transferência
-- Status, saúde, reinícios, OOM kill e log dos containers do FindFace
+- Status, saúde, reinícios, OOM kill e log dos containers do Face Detect
 - Reinício de container individual e parada/subida do stack, com dupla
   confirmação por digitação
 - Coleta sob demanda de RAM, carga, GPU (`nvidia-smi`), disco e inodes
-- Análise de ocupação de disco do FindFace (onde as fotos estão indo)
+- Análise de ocupação de disco do Face Detect (onde as fotos estão indo)
 - Vigilância de consumo crescente: projeta quando memória ou disco
   encostam no limite, aponta o container que está empurrando e traz o
   contorno e a recomendação do fabricante
@@ -48,13 +48,13 @@ no momento da investigação.
   segue sem a profundidade de um monitoramento genérico. A leitura sob demanda (Recursos, Rastreio)
   continua existindo ao lado do monitor contínuo, para quando a pergunta é
   "o que está acontecendo agora, sem esperar o próximo ciclo".
-- **Não instala agente** nos servidores do FindFace. Tudo por SSH.
-- **Não configura o FindFace.** Câmeras, dossiês, limiares e módulos
+- **Não instala agente** nos servidores do Face Detect. Tudo por SSH.
+- **Não configura o Face Detect.** Câmeras, dossiês, limiares e módulos
   continuam na plataforma da NtechLab.
 - **Não faz backup incremental das fotos de evento.** O perfil `essencial`
   deliberadamente deixa `findface-upload` de fora. Ver
   [docs/02_ESTRATEGIA_BACKUP.md](docs/02_ESTRATEGIA_BACKUP.md).
-- **Não age em container de fora do projeto compose do FindFace.** Cerca
+- **Não age em container de fora do projeto compose do Face Detect.** Cerca
   intencional — sem ela o painel seria controle remoto irrestrito do Docker.
 - **Não apaga backup do Azure nem do Drive.** A retenção automática mexe só
   no disco local; nuvem fica com política de ciclo de vida própria.
@@ -80,10 +80,10 @@ Itens conscientemente adiados, para não inflar a primeira entrega:
 
 ## Premissas
 
-- FindFace Multi **2.4.1**, instalado em `/opt/findface-multi`, orquestrado
+- Face Detect **2.4.1**, instalado em `/opt/findface-multi`, orquestrado
   por docker-compose (v1 ou plugin v2 — detectado em execução)
 - Usuário SSH com `sudo` (com senha guardada no cofre ou `NOPASSWD`)
-- VM do painel alcança as VMs do FindFace na porta 22
+- VM do painel alcança as VMs do Face Detect na porta 22
 - Rede interna ou VPN. O painel não foi endurecido para exposição direta na
   internet — se for publicar, ponha TLS e autenticação de borda na frente.
 

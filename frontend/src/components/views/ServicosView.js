@@ -773,13 +773,13 @@ export default function ServicosView({ alvo }) {
 
       {acaoStack && host && (
         <ConfirmarDigitando
-          titulo={acaoStack === "stop" ? "Parar o stack do FindFace Multi" : "Subir o stack"}
+          titulo={acaoStack === "stop" ? "Parar o stack do Face Detect" : "Subir o stack"}
           palavra={host.name}
           rotuloBotao={acaoStack === "stop" ? "Parar tudo" : "Subir tudo"}
           aviso={
             acaoStack === "stop"
-              ? `Isto PARA todos os containers do FindFace Multi em ${host.name}. O reconhecimento facial fica fora do ar até o stack subir de novo, e os eventos do período não são gravados.`
-              : `Isto sobe todos os containers do FindFace Multi em ${host.name}. Se o stack já estiver de pé, nada muda.`
+              ? `Isto PARA todos os containers do Face Detect em ${host.name}. O reconhecimento facial fica fora do ar até o stack subir de novo, e os eventos do período não são gravados.`
+              : `Isto sobe todos os containers do Face Detect em ${host.name}. Se o stack já estiver de pé, nada muda.`
           }
           onConfirmar={async (confirmacao) => {
             await api.acaoStack(hostId, acaoStack, confirmacao);

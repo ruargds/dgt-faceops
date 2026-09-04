@@ -1,5 +1,5 @@
 """
-Licenciamento do FindFace lido **de dentro do servidor**, por SSH.
+Licenciamento do Face Detect lido **de dentro do servidor**, por SSH.
 
 A licença não vem da API do ffsecurity — vem do NTLS, um serviço à parte.
 E o NTLS atende em `localhost` sem exigir login: quem já está dentro da
@@ -10,7 +10,7 @@ licença é uma credencial a mais para alguém errar, e foi exatamente o que
 aconteceu no ambiente (senha de API recusada com `Invalid username/
 password`, enquanto o SSH funcionava o tempo todo).
 
-Endereços observados no bundle da interface do FindFace desta instalação:
+Endereços observados no bundle da interface do Face Detect desta instalação:
 
     Paths = {License: "/ntls/v1/licenses.json",
              UsageReport: "/ntls/v1/usage-report.json"}

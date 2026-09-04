@@ -89,7 +89,7 @@ class HostIn(BaseModel):
     enabled: bool = True
     monitorar: bool = True
     ff_api_url: str = ""
-    # A instalação entra na API do FindFace com usuário e senha; o token é
+    # A instalação entra na API do Face Detect com usuário e senha; o token é
     # alternativa para quem gerou um. Senha e token são segredo: só entram.
     ff_api_user: str = ""
     ff_api_pass: str | None = None

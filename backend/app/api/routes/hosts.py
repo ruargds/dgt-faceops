@@ -100,7 +100,7 @@ async def criar(
             detail=f"não consegui alcançar {dados.address}:{dados.ssh_port} — {exc}",
         ) from exc
 
-    # A URL da API do FindFace é endereço escolhido por quem cadastra —
+    # A URL da API do Face Detect é endereço escolhido por quem cadastra —
     # o formato clássico de SSRF. A cerca barra link-local (onde vive o
     # IMDS do Azure, que entrega token de identidade sem autenticação),
     # loopback e esquema que não seja http/https.
@@ -301,7 +301,7 @@ async def testar(
     autor: User = Depends(require_permission("hosts.view")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Testa conexão, sudo e presença do FindFace. Botão 'Testar conexão'."""
+    """Testa conexão, sudo e presença do Face Detect. Botão 'Testar conexão'."""
     host = await db.get(Host, host_id)
     if host is None:
         raise HTTPException(status_code=404, detail="servidor não encontrado")
@@ -330,7 +330,7 @@ async def testar(
             host.has_gpu = True
 
         # Se o caminho cadastrado não existe no servidor, pergunta ao
-        # Docker onde o FindFace realmente está. Instalação distribuída
+        # Docker onde o Face Detect realmente está. Instalação distribuída
         # não usa /opt/findface-multi, e o backup falharia procurando
         # configs/ no lugar errado — com mensagem que não ajuda ninguém.
         instalacao: dict = {}
@@ -354,7 +354,7 @@ async def testar(
                 target=host.name,
                 ip=client_ip(request),
                 detail={
-                    "acao": "caminho do FindFace corrigido por deteccao",
+                    "acao": "caminho do Face Detect corrigido por deteccao",
                     "novo_dir": host.ffmulti_dir,
                     "novo_compose": host.compose_file,
                 },
@@ -425,7 +425,7 @@ async def testar_api(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Testa a API do FindFace deste servidor.
+    Testa a API do Face Detect deste servidor.
 
     Usa a URL/token enviados (ainda não salvos) quando vierem; senão, os
     já guardados. Assim dá para validar antes de salvar.
@@ -463,7 +463,7 @@ async def testar_api(
     if not url or not ((usuario and senha) or token):
         return {
             "ok": False,
-            "erro": "informe a URL e o usuário/senha do FindFace (ou um token)",
+            "erro": "informe a URL e o usuário/senha do Face Detect (ou um token)",
         }
 
     # objeto leve que o FFApiService entende, sem tocar no banco

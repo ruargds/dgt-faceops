@@ -43,7 +43,7 @@ async def internos(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Estado dos componentes internos do FindFace naquele servidor.
+    Estado dos componentes internos do Face Detect naquele servidor.
 
     Le de DENTRO da maquina, pela porta que o manual do fabricante
     documenta para cada componente (extraction-api 18666, sf-api 18411,
@@ -78,7 +78,7 @@ async def inventariar(
     Varredura completa do servidor: containers, bancos, portas, GPU, disco.
 
     Sob demanda — é uma sondagem por SSH, não entra no coletor contínuo.
-    Serve tanto para o FindFace distribuído quanto para tudo num servidor só.
+    Serve tanto para o Face Detect distribuído quanto para tudo num servidor só.
     """
     host = await db.get(Host, host_id)
     if host is None:
@@ -143,7 +143,7 @@ async def topologia(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Mapa de dependências do FindFace distribuído entre os servidores.
+    Mapa de dependências do Face Detect distribuído entre os servidores.
 
     Varre todos os servidores habilitados e mostra qual camada
     (vídeo, extração, busca, vetores, dados, app) roda em qual máquina.

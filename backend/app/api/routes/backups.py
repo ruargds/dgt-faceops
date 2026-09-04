@@ -178,7 +178,7 @@ async def disparar(
         raise HTTPException(
             status_code=400,
             detail=(
-                "O perfil 'completo' PARA o FindFace Multi enquanto copia o "
+                "O perfil 'completo' PARA o Face Detect enquanto copia o "
                 "data/ (pode levar horas). Marque o aceite de janela de "
                 "manutenção para prosseguir."
             ),
@@ -406,7 +406,7 @@ async def plano_de_recuperacao(
             "O restore é manual e por servidor: cada artefato volta na máquina "
             "de onde saiu. O manifesto dentro de cada um traz o roteiro do "
             "fabricante, e a base do Tarantool não é compatível entre versões "
-            "maiores do FindFace."
+            "maiores do Face Detect."
         ),
     }
 
@@ -497,7 +497,7 @@ async def manifesto(
     """
     O manifesto de dentro do artefato, sem precisar baixar e extrair.
 
-    Ele traz o que o backup contem, a versao das imagens do FindFace e o
+    Ele traz o que o backup contem, a versao das imagens do Face Detect e o
     roteiro de restauracao do fabricante -- e e o que se deve ler ANTES de
     restaurar. A versao das imagens importa: a base do Tarantool nao e
     compativel entre versoes maiores, e restaurar num sistema de outra
@@ -953,7 +953,7 @@ async def disparar_todos(
     manual em quatro telas.
 
     O perfil `completo` **não** entra no modo automático em hipótese
-    alguma: ele para o FindFace, e parar quatro servidores porque alguém
+    alguma: ele para o Face Detect, e parar quatro servidores porque alguém
     clicou em "todos" seria o painel decidindo uma janela de manutenção
     sozinho. Quem quer completo dispara servidor a servidor, com o aceite.
 
@@ -968,7 +968,7 @@ async def disparar_todos(
         raise HTTPException(
             status_code=400,
             detail=(
-                "o perfil completo PARA o FindFace e não roda em lote. "
+                "o perfil completo PARA o Face Detect e não roda em lote. "
                 "Dispare servidor a servidor, com o aceite da janela."
             ),
         )
@@ -1004,7 +1004,7 @@ async def disparar_todos(
         if not tem_findface:
             pulados.append({
                 "host": host.name,
-                "motivo": "não hospeda o FindFace — nada a copiar aqui",
+                "motivo": "não hospeda o Face Detect — nada a copiar aqui",
             })
             continue
 
@@ -1015,7 +1015,7 @@ async def disparar_todos(
             if perfil == "essencial" and not tem_banco:
                 pulados.append({
                     "host": host.name,
-                    "motivo": "sem banco do FindFace: o perfil essencial não teria "
+                    "motivo": "sem banco do Face Detect: o perfil essencial não teria "
                     "o que despejar",
                 })
                 continue
@@ -1214,8 +1214,8 @@ async def perfis_do_host(
             "disponivel": tem_findface,
             "motivo": motivo(
                 tem_findface,
-                "há instalação do FindFace neste servidor",
-                "não encontrei instalação do FindFace aqui — nada a copiar",
+                "há instalação do Face Detect neste servidor",
+                "não encontrei instalação do Face Detect aqui — nada a copiar",
             ),
         },
         {
@@ -1223,8 +1223,8 @@ async def perfis_do_host(
             "disponivel": tem_findface and tem_banco,
             "motivo": motivo(
                 tem_findface and tem_banco,
-                "há banco de dados do FindFace neste servidor",
-                "sem banco do FindFace aqui: o perfil essencial não teria o "
+                "há banco de dados do Face Detect neste servidor",
+                "sem banco do Face Detect aqui: o perfil essencial não teria o "
                 "que despejar",
             ),
         },
@@ -1233,8 +1233,8 @@ async def perfis_do_host(
             "disponivel": tem_findface,
             "motivo": motivo(
                 tem_findface,
-                "PARA o FindFace durante a cópia — exige janela",
-                "não encontrei instalação do FindFace aqui",
+                "PARA o Face Detect durante a cópia — exige janela",
+                "não encontrei instalação do Face Detect aqui",
             ),
         },
     ]
@@ -1246,7 +1246,7 @@ async def perfis_do_host(
         "tem_banco": tem_banco,
         "aviso": ""
         if tem_findface
-        else f"'{host.name}' não hospeda o FindFace. Só o backup do painel "
+        else f"'{host.name}' não hospeda o Face Detect. Só o backup do painel "
         "faz sentido aqui — veja em Topologia onde a aplicação está.",
         "perfis": perfis,
     }
@@ -1305,7 +1305,7 @@ async def criar_agendamento(
             status_code=400,
             detail=(
                 "Agendamento com perfil 'completo' precisa do aceite de janela "
-                "de manutenção — ele PARA o FindFace Multi durante a cópia."
+                "de manutenção — ele PARA o Face Detect durante a cópia."
             ),
         )
 

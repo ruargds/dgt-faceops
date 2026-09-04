@@ -84,7 +84,7 @@ Tudo do catálogo, inclusive:
 | `hosts.view` | Ver servidores cadastrados |
 | `hosts.manage` | Cadastrar, editar e remover servidores (inclui credenciais) |
 | `metrics.view` | Ver RAM, GPU, disco e carga |
-| `services.view` | Ver status dos containers do FindFace Multi |
+| `services.view` | Ver status dos containers do Face Detect |
 | `services.power` | parar ou subir **um** container. Separada do restart de propósito: reiniciar volta sozinho, parar FICA parado — e serviço parado por descuido não gera erro, só ausência. Destrutiva (auditoria em nível crítico), exige o nome do container digitado, e **fora do perfil de plantão** |
 | `services.restart` | Reiniciar um container individual |
 | `services.stack` | Parar/subir o stack inteiro |
@@ -129,7 +129,7 @@ repositório para apagá-lo.
 
 ### Aceite de janela para o perfil completo
 
-O perfil `completo` para o FindFace. Duas travas:
+O perfil `completo` para o Face Detect. Duas travas:
 
 - **Sob demanda:** `aceito_downtime: true` no corpo. Sem isso, 400 com a
   explicação.
@@ -145,7 +145,7 @@ autorizado.
 Duas proteções valem para todos, inclusive o super admin:
 
 **Container de fora do projeto.** Antes de reiniciar, o painel confere
-`com.docker.compose.project` e recusa se não for o projeto do FindFace
+`com.docker.compose.project` e recusa se não for o projeto do Face Detect
 daquele host. Sem isso, um nome arbitrário derrubaria o agente Zabbix ou
 qualquer outro container do servidor.
 

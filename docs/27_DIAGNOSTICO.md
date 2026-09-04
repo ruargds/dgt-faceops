@@ -118,7 +118,7 @@ Cada entrada declara a origem:
 
 ### O que o manual da NtechLab acrescentou
 
-Consulta ao manual do FindFace Multi 2.4.1 durante a montagem do
+Consulta ao manual do Face Detect 2.4.1 durante a montagem do
 catálogo, com dois achados que mudaram entradas:
 
 - **Licença/NTLS** (`ntls_status.html`): o diagnóstico é

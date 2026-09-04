@@ -73,7 +73,7 @@ diagnóstico não pode virar a causa do próximo incidente
 | O que ele lê (disco) | Por que |
 |---|---|
 | `df` e `df -i` | ocupação e **inodes** — milhões de fotos pequenas acabam com o inode antes do byte |
-| `du -sb` de uma lista curta e fixa | `/var/log`, `/var/lib/docker/containers`, `data/` do FindFace e o staging do próprio painel |
+| `du -sb` de uma lista curta e fixa | `/var/log`, `/var/lib/docker/containers`, `data/` do Face Detect e o staging do próprio painel |
 | `journalctl --disk-usage` | instantâneo, e o journal é suspeito recorrente |
 | `find -newermt -size +50M` | arquivo **grande que mudou na janela** — quem está crescendo agora |
 | `lsof +L1` | arquivo apagado que um processo mantém aberto: o `du` não acha e o `df` continua cheio |
@@ -165,11 +165,11 @@ e **o que a NtechLab recomenda**, quando ela recomenda algo.
 
 | Caso | Por que cresce | Recomendação do fabricante |
 |---|---|---|
-| `/var/log` | log de acesso HTTP do FindFace em operação normal: 8 GB/dia num servidor deste ambiente | `SystemMaxUse=3G` no journald e driver `journald` no daemon.json (`logs.html`) — é o que a contenção de Manutenção aplica |
+| `/var/log` | log de acesso HTTP do Face Detect em operação normal: 8 GB/dia num servidor deste ambiente | `SystemMaxUse=3G` no journald e driver `journald` no daemon.json (`logs.html`) — é o que a contenção de Manutenção aplica |
 | `/var/lib/docker/containers` | driver `json-file` sem `max-size`: o arquivo só cresce | trocar para o driver `journald` (`logs.html`); exige reiniciar o Docker, então é janela de manutenção |
 | `data/` (eventos e fotos) | cada passagem grava foto, miniatura e quadro | `manage.py cleanup` com prazo por tipo de evento e `CLEANUP_SCHEDULE` (`event-cleaner.html`) — e nada de reiniciar container durante a purga |
 | `data/findface-tarantool-server` | base biométrica: cadastro + snapshots, em 16 shards e 16 réplicas | **não há** recomendação de limpeza. A purga de eventos não libera este espaço |
-| Postgres / Mongo | eventos vivem no banco antes de virar arquivo | reduzir pela retenção do FindFace, não mexendo no banco por fora |
+| Postgres / Mongo | eventos vivem no banco antes de virar arquivo | reduzir pela retenção do Face Detect, não mexendo no banco por fora |
 | staging do painel | execução de backup interrompida deixou artefato | é problema **nosso** — faxina pontual, categoria "Sobras de staging" |
 | arquivo apagado e aberto | `rm` num log que o rsyslog mantém aberto | comportamento do Linux; use `truncate -s 0`, nunca `rm` |
 | inodes | milhões de arquivos pequenos | não documentado pelo fabricante |
