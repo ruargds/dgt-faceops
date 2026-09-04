@@ -120,6 +120,13 @@ COLUNAS_NOVAS = [
      '''JSON NOT NULL DEFAULT '["servico_parado","host_sem_contato","retorno","metrica"]'::json'''),
     ("notificacao_regras", "atraso_s", "INTEGER NOT NULL DEFAULT 0"),
     ("notificacao_envios", "destino", "VARCHAR(120) NOT NULL DEFAULT ''"),
+    # Dia da semana e faixa de horário por regra (04/09/2026) — o "time
+    # period" do Zabbix. Os padrões são o "vale sempre": lista de dias
+    # vazia e janela de zero a zero. É o que faz toda regra já criada
+    # continuar valendo 24/7 sem backfill nenhum.
+    ("notificacao_regras", "dias_semana", "JSON NOT NULL DEFAULT '[]'::json"),
+    ("notificacao_regras", "hora_inicio_min", "INTEGER NOT NULL DEFAULT 0"),
+    ("notificacao_regras", "hora_fim_min", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 # Alterações que não são "coluna nova". Escritas para serem idempotentes:
