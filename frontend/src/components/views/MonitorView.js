@@ -778,22 +778,45 @@ export default function MonitorView({ alvo, nav }) {
               {coletor.intervalo_s || 60} segundos — se o servidor foi cadastrado
               agora, aguarde um minuto.
             </div>
-          ) : (
+          ) : (() => {
+            // Amostra com `erro` é coleta que FALHOU (SSH recusou, script
+            // estourou o tempo) — os campos numéricos ficam no padrão da
+            // coluna (0.0), não em "não medido". Sem este filtro, uma
+            // falha de conexão vira um V caindo a zero e voltando nos
+            // gráficos de Carga, Memória, Disco e E/S — parecendo que o
+            // disco esvaziou, quando na verdade a leitura não aconteceu.
+            const boas = serie.amostras.filter((a) => !a.erro);
+            if (boas.length === 0) {
+              return (
+                <div className="small muted">
+                  Todas as {serie.amostras.length} amostra(s) deste período
+                  falharam na coleta — nenhuma leitura válida para desenhar.
+                </div>
+              );
+            }
+            const ultima = boas.at(-1);
+            return (
             <div className="stack-v" style={{ gap: 18 }}>
+              {serie.amostras.length > boas.length && (
+                <div className="small muted">
+                  {serie.amostras.length - boas.length} de {serie.amostras.length}{" "}
+                  amostra(s) deste período falharam na coleta e ficaram de fora
+                  dos gráficos abaixo.
+                </div>
+              )}
               {/* Uso real quando existe medição; amostra antiga não tem, e
                   aí o ponto some do gráfico em vez de virar 0%. */}
               <Painel
                 titulo={t("Processador em uso")}
                 explicacao={EXPLICACAO.cpu}
-                serie={serie.amostras
+                serie={boas
                   .filter((a) => a.cpu_uso !== null && a.cpu_uso !== undefined)
                   .map((a) => ({ ts: a.ts, valor: a.cpu_uso }))}
                 limite={90}
                 legenda={
-                  serie.amostras.at(-1).cpu_uso === null ||
-                  serie.amostras.at(-1).cpu_uso === undefined
+                  ultima.cpu_uso === null || ultima.cpu_uso === undefined
                     ? "sem medição de uso nesta amostra"
-                    : `agora: ${serie.amostras.at(-1).cpu_uso}%`
+                    : `agora: ${ultima.cpu_uso}%`
                 }
               />
               <Painel
@@ -802,42 +825,42 @@ export default function MonitorView({ alvo, nav }) {
                   "Quantos processos querem CPU ao mesmo tempo, por núcleo. " +
                   "Acima de 1,00 há alguém esperando a vez."
                 }
-                serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.cpu }))}
+                serie={boas.map((a) => ({ ts: a.ts, valor: a.cpu }))}
                 limite={90}
                 maximo={200}
-                legenda={`agora: ${serie.amostras.at(-1).carga} por núcleo`}
+                legenda={`agora: ${ultima.carga} por núcleo`}
               />
               <Painel
                 titulo={t("Memória")}
                 explicacao={EXPLICACAO.mem}
-                serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.mem }))}
+                serie={boas.map((a) => ({ ts: a.ts, valor: a.mem }))}
                 limite={90}
                 legenda={
-                  deTotal(serie.amostras.at(-1).mem_usado_mb, serie.amostras.at(-1).mem_total_mb)
-                    ? `${deTotal(serie.amostras.at(-1).mem_usado_mb, serie.amostras.at(-1).mem_total_mb)} · ${serie.amostras.at(-1).mem}%`
-                    : `agora: ${serie.amostras.at(-1).mem}%`
+                  deTotal(ultima.mem_usado_mb, ultima.mem_total_mb)
+                    ? `${deTotal(ultima.mem_usado_mb, ultima.mem_total_mb)} · ${ultima.mem}%`
+                    : `agora: ${ultima.mem}%`
                 }
               />
               <Painel
                 titulo={t("Disco")}
                 explicacao={EXPLICACAO.disco}
-                serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.disco }))}
+                serie={boas.map((a) => ({ ts: a.ts, valor: a.disco }))}
                 limite={90}
                 legenda={
-                  `${serie.amostras.at(-1).disco_ponto} — ` +
+                  `${ultima.disco_ponto} — ` +
                   (deTotalGb(
-                    serie.amostras.at(-1).disco_total_gb - serie.amostras.at(-1).disco_livre_gb,
-                    serie.amostras.at(-1).disco_total_gb
-                  ) || `${serie.amostras.at(-1).disco_livre_gb} GB livres`) +
-                  ` · ${serie.amostras.at(-1).disco_livre_gb} GB livres`
+                    ultima.disco_total_gb - ultima.disco_livre_gb,
+                    ultima.disco_total_gb
+                  ) || `${ultima.disco_livre_gb} GB livres`) +
+                  ` · ${ultima.disco_livre_gb} GB livres`
                 }
               />
               <Painel
                 titulo={t("E/S do disco")}
                 explicacao={EXPLICACAO.disco_io}
-                serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.disco_util_pct }))}
+                serie={boas.map((a) => ({ ts: a.ts, valor: a.disco_util_pct }))}
                 limite={85}
-                legenda={`${serie.amostras.at(-1).disco_iops} operações/s`}
+                legenda={`${ultima.disco_iops} operações/s`}
               />
               {/* Só quando há mais de um dispositivo: com um só, é a mesma
                   curva do painel acima — regra 4, não duplicar o que já
@@ -884,28 +907,26 @@ export default function MonitorView({ alvo, nav }) {
                         : `${t("Placa de vídeo")} — ${t("uso")}`
                     }
                     explicacao={EXPLICACAO.gpu}
-                    serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.gpu }))}
+                    serie={boas.map((a) => ({ ts: a.ts, valor: a.gpu }))}
                     limite={95}
-                    legenda={`${serie.amostras.at(-1).gpu}% · ${serie.amostras.at(-1).gpu_temp} °C`}
+                    legenda={`${ultima.gpu}% · ${ultima.gpu_temp} °C`}
                   />
                   <Painel
                     titulo={t("Placa de vídeo — memória")}
                     explicacao={EXPLICACAO.gpu_mem}
-                    serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.gpu_mem }))}
+                    serie={boas.map((a) => ({ ts: a.ts, valor: a.gpu_mem }))}
                     limite={92}
                     legenda={
-                      deTotal(
-                        serie.amostras.at(-1).gpu_mem_usado_mb,
-                        serie.amostras.at(-1).gpu_mem_total_mb
-                      )
-                        ? `${deTotal(serie.amostras.at(-1).gpu_mem_usado_mb, serie.amostras.at(-1).gpu_mem_total_mb)} · ${serie.amostras.at(-1).gpu_mem}%`
-                        : `agora: ${serie.amostras.at(-1).gpu_mem}%`
+                      deTotal(ultima.gpu_mem_usado_mb, ultima.gpu_mem_total_mb)
+                        ? `${deTotal(ultima.gpu_mem_usado_mb, ultima.gpu_mem_total_mb)} · ${ultima.gpu_mem}%`
+                        : `agora: ${ultima.gpu_mem}%`
                     }
                   />
                 </>
               )}
             </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
@@ -980,8 +1001,13 @@ function ComparacaoMetrica({ titulo, serieComp, servidores, campo }) {
       return {
         nome: (host && (host.rotulo || host.host)) || `host ${x.hostId}`,
         cor: corDaSerie(i),
+        // Amostra com `erro` é coleta que falhou — os campos numéricos
+        // ficam no padrão 0.0 da coluna, não em "não medido". Sem este
+        // filtro, uma falha de conexão em UM servidor aparecia como um V
+        // caindo a zero na linha dele, como se o recurso tivesse liberado
+        // de repente.
         pontos: x.r.amostras
-          .filter((a) => a[campo] !== null && a[campo] !== undefined)
+          .filter((a) => !a.erro && a[campo] !== null && a[campo] !== undefined)
           .map((a) => ({ ts: a.ts, valor: a[campo] })),
       };
     });
