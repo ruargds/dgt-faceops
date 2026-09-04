@@ -11,6 +11,73 @@ const NIVEIS = {
   critical: ["pill-err", "crítico"],
 };
 
+/**
+ * O detalhe da auditoria, em português.
+ *
+ * A coluna mostrava o JSON cru (`{"perfil":"admin"}`, `{"motivo":
+ * "encerrada","sessao_id":4,"usou_sudo":true}`). Quem audita não precisa
+ * ler a estrutura de dados do painel para entender o que aconteceu — e,
+ * pior, o JSON cortado em 200 caracteres escondia justamente o fim, que é
+ * onde costuma estar o campo que importa.
+ *
+ * Os rótulos cobrem as chaves que existem de fato no banco. Chave nova e
+ * desconhecida não some: aparece com o próprio nome, legível, em vez de
+ * sumir da tela sem ninguém perceber.
+ */
+const ROTULO_DETALHE = {
+  perfil: "perfil", run_id: "execução", destinos: "destinos",
+  containers: "containers", servicos_dados: "serviços de dados",
+  acao: "ação", arquivo_removido: "arquivo removido", servidores: "servidores",
+  distribuido: "distribuído", linha_removida: "linha removida",
+  campos: "campos", tail: "últimas linhas", motivo: "motivo",
+  destrutivo: "destrutivo", sessao_id: "sessão", erro: "erro",
+  restantes: "restantes", ativo: "ativo", login_ssh: "login SSH",
+  gravacao: "gravação", bot: "bot", usuario_ssh: "usuário SSH",
+  credencial: "credencial", token_trocado: "token trocado",
+  host_key: "chave do host", bytes_recebidos: "recebido",
+  bytes_enviados: "enviado", usou_sudo: "usou sudo", endereco: "endereço",
+  container: "container", estado: "estado", duracao_ms: "duração",
+  saude: "saúde", requisicoes: "requisições", horas: "horas", tipo: "tipo",
+  tarefa_viva: "tarefa viva", pulados: "pulados", atraso_s: "espera",
+  novo_dir: "novo diretório",
+};
+
+const PERFIL_LEGIVEL = {
+  admin: "administrador", tecnico: "técnico",
+  operador: "operador", observador: "observador",
+};
+
+function valorLegivel(chave, valor) {
+  if (valor === null || valor === undefined || valor === "") return null;
+  // Booleano vira presença: "usou sudo" já diz tudo; "usou sudo: não" é
+  // ruído numa coluna que precisa ser varrida com o olho.
+  if (typeof valor === "boolean") return valor ? "" : null;
+  if (Array.isArray(valor)) {
+    if (valor.length === 0) return null;
+    if (valor.length <= 3) return valor.join(", ");
+    return `${valor.length}`;
+  }
+  if (typeof valor === "object") return `${Object.keys(valor).length} item(ns)`;
+  if (chave === "perfil") return PERFIL_LEGIVEL[valor] || String(valor);
+  if (chave === "bytes_enviados" || chave === "bytes_recebidos") {
+    return formatBytes(Number(valor) || 0);
+  }
+  if (chave === "duracao_ms") return formatDuracao((Number(valor) || 0) / 1000);
+  if (chave === "atraso_s") return formatDuracao(Number(valor) || 0);
+  return String(valor);
+}
+
+function descreverDetalhe(detail) {
+  const partes = [];
+  for (const [chave, valor] of Object.entries(detail || {})) {
+    const texto = valorLegivel(chave, valor);
+    if (texto === null) continue;
+    const rotulo = ROTULO_DETALHE[chave] || chave.replace(/_/g, " ");
+    partes.push(texto === "" ? rotulo : `${rotulo}: ${texto}`);
+  }
+  return partes.join(" · ");
+}
+
 export default function AuditoriaView() {
   const { has } = usePermissions();
   const [aba, setAba] = useState("acoes");
@@ -268,13 +335,17 @@ function Acoes() {
                         </div>
                       )}
                     </td>
-                    <td className="small muted" style={{ maxWidth: 340 }}>
+                    <td className="small" style={{ maxWidth: 340 }}>
                       {Object.keys(r.detail || {}).length > 0 ? (
-                        <span className="mono" style={{ fontSize: 11.5 }}>
-                          {JSON.stringify(r.detail).slice(0, 200)}
+                        // O JSON cru continua alcançável no `title`: quem
+                        // audita de verdade às vezes precisa do campo
+                        // exato, e escondê-lo seria trocar um problema por
+                        // outro.
+                        <span title={JSON.stringify(r.detail)}>
+                          {descreverDetalhe(r.detail)}
                         </span>
                       ) : (
-                        "—"
+                        <span className="muted">—</span>
                       )}
                     </td>
                   </tr>

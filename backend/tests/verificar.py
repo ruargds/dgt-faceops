@@ -2687,6 +2687,56 @@ async def cenario_aviso_explica_o_servico_para_quem_nao_conhece():
     assert not faltando, f"componentes sem impacto: {faltando}"
 
 
+async def cenario_regra_vale_por_dia_e_hora():
+    """
+    O "time period" do Zabbix: cada regra vale em dias e horas escolhidos.
+
+    O que isto resolve de verdade: o plantão da madrugada não é a mesma
+    pessoa do horário comercial, e "atenção às 15h" e "crítico às 3h" não
+    vão para o mesmo lugar.
+
+    Três travas, e a terceira é a que costuma faltar em implementação
+    caseira:
+
+    * regra sem dia/hora vale sempre — toda regra já criada continua
+      funcionando, sem migração e sem surpresa;
+    * fora do dia OU fora da hora, a regra não vale;
+    * janela que CRUZA A MEIA-NOITE (22:00–06:00) — que é justamente o
+      turno da madrugada, o caso mais pedido.
+    """
+    from datetime import datetime as dt
+
+    from app.models.notificacao import NotificacaoRegra
+    from app.services.notificacao_service import NotificacaoService as NS
+
+    # Quarta-feira, 4 de setembro de 2026 — weekday()=2, então dia 3 na
+    # numeração da tela (segunda=1).
+    quarta_15h = dt(2026, 9, 2, 15, 30)
+    quarta_3h = dt(2026, 9, 2, 3, 30)
+    domingo_15h = dt(2026, 9, 6, 15, 30)
+
+    sempre = NotificacaoRegra(dias_semana=[], hora_inicio_min=0, hora_fim_min=0)
+    assert NS.na_janela(sempre, quarta_15h), "regra sem janela deixou de valer"
+    assert NS.na_janela(sempre, domingo_15h)
+
+    # Comercial: segunda a sexta, 08:00–18:00.
+    comercial = NotificacaoRegra(
+        dias_semana=[1, 2, 3, 4, 5], hora_inicio_min=8 * 60, hora_fim_min=18 * 60,
+    )
+    assert NS.na_janela(comercial, quarta_15h), "quarta 15h30 é horário comercial"
+    assert not NS.na_janela(comercial, quarta_3h), "3h da manhã não é comercial"
+    assert not NS.na_janela(comercial, domingo_15h), "domingo não é dia útil"
+
+    # Madrugada: todo dia, 22:00–06:00 — a janela cruza a meia-noite.
+    madrugada = NotificacaoRegra(
+        dias_semana=[], hora_inicio_min=22 * 60, hora_fim_min=6 * 60,
+    )
+    assert NS.na_janela(madrugada, quarta_3h), "3h30 está dentro de 22h–06h"
+    assert NS.na_janela(madrugada, dt(2026, 9, 2, 23, 0)), "23h está dentro"
+    assert not NS.na_janela(madrugada, quarta_15h), "15h30 não é madrugada"
+    assert not NS.na_janela(madrugada, dt(2026, 9, 2, 6, 0)), "06:00 é o fim, exclusivo"
+
+
 async def cenario_retorno_nao_sai_sem_a_abertura():
     """
     O "resolvido" que chegava sozinho.
@@ -3934,6 +3984,7 @@ CENARIOS = [
     cenario_aviso_explica_o_servico_para_quem_nao_conhece,
     cenario_notificacao_nao_repete_o_mesmo_evento,
     cenario_retorno_nao_sai_sem_a_abertura,
+    cenario_regra_vale_por_dia_e_hora,
     cenario_notificacao_manda_para_dois_destinos,
     cenario_notificacao_nunca_derruba_o_ciclo,
     cenario_telegram_ponta_a_ponta,

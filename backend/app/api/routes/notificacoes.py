@@ -275,6 +275,8 @@ async def listar_regras(
             "servico": x.servico, "tipos": list(x.tipos or []),
             "nivel_minimo": x.nivel_minimo, "atraso_s": x.atraso_s,
             "ativo": x.ativo,
+            "dias_semana": list(x.dias_semana or []),
+            "hora_inicio_min": x.hora_inicio_min, "hora_fim_min": x.hora_fim_min,
         }
         for x in r.scalars().all()
     ]
@@ -306,6 +308,11 @@ class RegraIn(BaseModel):
     nivel_minimo: str = "critico"
     atraso_s: int = Field(default=0, ge=0, le=86400)
     ativo: bool = True
+    # 1 (segunda) a 7 (domingo), como no Zabbix. Vazio = todos os dias.
+    dias_semana: list[int] = Field(default_factory=list)
+    # Minutos desde a meia-noite, hora local. Iguais = o dia inteiro.
+    hora_inicio_min: int = Field(default=0, ge=0, le=1439)
+    hora_fim_min: int = Field(default=0, ge=0, le=1439)
 
 
 @router.put("/regras")
@@ -317,6 +324,13 @@ async def salvar_regra(
 ):
     if dados.nivel_minimo not in NIVEIS:
         raise HTTPException(status_code=400, detail=f"nível inválido: {dados.nivel_minimo}")
+
+    fora = [d for d in dados.dias_semana if d < 1 or d > 7]
+    if fora:
+        raise HTTPException(
+            status_code=400,
+            detail=f"dia da semana inválido: {fora} — use 1 (segunda) a 7 (domingo)",
+        )
 
     desconhecidos = [t for t in dados.tipos if t not in TIPOS_VALIDOS]
     if desconhecidos:
@@ -343,6 +357,9 @@ async def salvar_regra(
     regra.nivel_minimo = dados.nivel_minimo
     regra.atraso_s = dados.atraso_s
     regra.ativo = dados.ativo
+    regra.dias_semana = sorted(dict.fromkeys(dados.dias_semana))
+    regra.hora_inicio_min = dados.hora_inicio_min
+    regra.hora_fim_min = dados.hora_fim_min
     regra.created_by = autor.username
     await db.flush()
 
@@ -352,7 +369,8 @@ async def salvar_regra(
             "destino_id": regra.destino_id, "host_id": regra.host_id,
             "servico": regra.servico, "tipos": regra.tipos,
             "nivel": regra.nivel_minimo, "atraso_s": regra.atraso_s,
-            "ativo": regra.ativo,
+            "ativo": regra.ativo, "dias_semana": regra.dias_semana,
+            "janela_min": [regra.hora_inicio_min, regra.hora_fim_min],
         },
     )
     await db.commit()

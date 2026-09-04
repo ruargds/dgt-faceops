@@ -39,6 +39,27 @@ const SERVICOS_COMUNS = [
   "findface-liveness-api",
 ];
 
+// Segunda = 1, como no Zabbix (e ao contrário do getDay() do JavaScript,
+// que começa no domingo em 0) — a numeração fica igual nos dois lados.
+const DIAS_SEMANA = [
+  { n: 1, curto: "seg" }, { n: 2, curto: "ter" }, { n: 3, curto: "qua" },
+  { n: 4, curto: "qui" }, { n: 5, curto: "sex" }, { n: 6, curto: "sáb" },
+  { n: 7, curto: "dom" },
+];
+
+/** 570 -> "09:30", para o <input type="time">. */
+function minParaHora(min) {
+  const m = Math.max(0, Math.min(1439, Number(min) || 0));
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** "09:30" -> 570. Campo limpo volta a zero, que é "o dia inteiro". */
+function horaParaMin(texto) {
+  const [h, m] = String(texto || "").split(":");
+  if (h === undefined || m === undefined) return 0;
+  return Math.max(0, Math.min(1439, Number(h) * 60 + Number(m)));
+}
+
 const ESPERAS = [
   { s: 0, rotulo: "na hora" },
   { s: 120, rotulo: "2 min" },
@@ -486,6 +507,7 @@ export default function NotificacoesView() {
               destino_id: null, host_id: null, servico: "",
               tipos: ["servico_parado", "host_sem_contato", "retorno"],
               nivel_minimo: "critico", atraso_s: 0, ativo: true,
+              dias_semana: [], hora_inicio_min: 0, hora_fim_min: 0,
             })}
           >
             <IconMais size={13} /> {t("nova regra")}
@@ -855,6 +877,69 @@ function FormRegra({
         </div>
         <div className="form-ajuda">
           {t("Só avisa se o problema persistir por esse tempo — evita acordar alguém por uma piscada. O retorno ao normal nunca espera.")}
+        </div>
+
+        {/* ── Quando esta regra vale ─────────────────────────────────
+            O "time period" do Zabbix. Fica depois da espera porque é a
+            última pergunta que se faz ao montar uma regra: já se sabe o
+            que mandar e para quem, falta quando. */}
+        <div className="section-title" style={{ marginTop: 18, marginBottom: 8 }}>
+          {t("Quando esta regra vale")}
+        </div>
+
+        <div className="stack-h" style={{ gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          {DIAS_SEMANA.map((d) => {
+            const marcado = (r.dias_semana || []).includes(d.n);
+            return (
+              <button
+                key={d.n}
+                type="button"
+                className={`btn btn-sm ${marcado ? "btn-primary" : "btn-secondary"}`}
+                style={{ minWidth: 46 }}
+                onClick={() => {
+                  const atual = r.dias_semana || [];
+                  setR({
+                    ...r,
+                    dias_semana: marcado
+                      ? atual.filter((x) => x !== d.n)
+                      : [...atual, d.n].sort((a, b) => a - b),
+                  });
+                }}
+              >
+                {t(d.curto)}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="row row-4 form-linha">
+          <div className="field">
+            <label className="label">{t("Das")}</label>
+            <input
+              type="time"
+              value={minParaHora(r.hora_inicio_min)}
+              onChange={(e) =>
+                setR({ ...r, hora_inicio_min: horaParaMin(e.target.value) })
+              }
+            />
+          </div>
+          <div className="field">
+            <label className="label">{t("Até")}</label>
+            <input
+              type="time"
+              value={minParaHora(r.hora_fim_min)}
+              onChange={(e) =>
+                setR({ ...r, hora_fim_min: horaParaMin(e.target.value) })
+              }
+            />
+          </div>
+        </div>
+        <div className="form-ajuda">
+          {(r.dias_semana || []).length === 0 && r.hora_inicio_min === r.hora_fim_min
+            ? t("Sem dia nem horário marcado: a regra vale sempre, todos os dias.")
+            : r.hora_fim_min < r.hora_inicio_min
+              ? t("A janela cruza a meia-noite — é o turno da madrugada.")
+              : t("Fora deste dia e horário a regra não manda nada, nem o retorno.")}
         </div>
       </div>
     </div>

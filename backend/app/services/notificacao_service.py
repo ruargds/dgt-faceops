@@ -338,6 +338,44 @@ class NotificacaoService:
             return False
         return True
 
+    @staticmethod
+    def na_janela(regra: NotificacaoRegra, agora: datetime | None = None) -> bool:
+        """
+        A regra vale NESTE momento? É o "time period" do Zabbix.
+
+        Três casos, e o padrão é o mais permissivo para que toda regra já
+        criada continue valendo 24/7:
+
+        * `dias_semana` vazio = todos os dias;
+        * início igual ao fim = o dia inteiro;
+        * fim ANTES do início = janela que cruza a meia-noite
+          (22:00–06:00), o turno da madrugada.
+
+        A hora é a LOCAL do painel — é a que a pessoa usou para
+        configurar, e converter para UTC na tela só criaria uma
+        oportunidade a mais de errar por um fuso.
+        """
+        agora = agora or datetime.now()
+        if agora.tzinfo is not None:
+            agora = agora.astimezone().replace(tzinfo=None)
+
+        dias = list(regra.dias_semana or [])
+        if dias:
+            # Python: segunda=0. Zabbix e a tela: segunda=1.
+            if (agora.weekday() + 1) not in [int(d) for d in dias]:
+                return False
+
+        inicio = int(regra.hora_inicio_min or 0)
+        fim = int(regra.hora_fim_min or 0)
+        if inicio == fim:
+            return True
+
+        minuto = agora.hour * 60 + agora.minute
+        if inicio < fim:
+            return inicio <= minuto < fim
+        # Cruza a meia-noite.
+        return minuto >= inicio or minuto < fim
+
     @classmethod
     def rotear(
         cls,
@@ -370,6 +408,11 @@ class NotificacaoService:
             if tipo not in (regra.tipos or []):
                 continue
             if not cls._escopo_casa(regra, evento):
+                continue
+            # Fora do dia/horário da regra ela simplesmente não vale —
+            # nem para a abertura, nem para o retorno. Silêncio aqui é a
+            # intenção de quem configurou: "não me acorde fora do turno".
+            if not cls.na_janela(regra):
                 continue
             # Gravidade não se aplica ao retorno: quem pediu para saber que
             # voltou quer saber, independente de quão grave foi a queda.

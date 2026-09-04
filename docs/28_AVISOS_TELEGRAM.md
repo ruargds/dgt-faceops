@@ -64,6 +64,7 @@ Cada regra combina:
 | **Tipos de evento** | quais eventos passam (abaixo) |
 | **Gravidade mínima** | *só quando parar* (crítico) ou *atenção e parada* |
 | **Avisar depois de** | só avisa se persistir por esse tempo |
+| **Quando vale** | dias da semana e faixa de horário (o *time period* do Zabbix) |
 
 **Regras diferentes valem ao mesmo tempo.** Uma mais específica não anula
 as outras: o plantão pode receber tudo, e o dono de um serviço receber só
@@ -89,6 +90,29 @@ Com espera de 5 min, o aviso só sai se o problema **persistir** — o ciclo
 reavalia a cada passada e a deduplicação garante um envio só.
 
 O **retorno ao normal nunca espera**: boa notícia não tem por que atrasar.
+
+### Dia da semana e horário — o `time period` do Zabbix
+
+Cada regra escolhe **quando vale**: dias da semana e uma faixa de
+horário. Fora dela, a regra não manda nada — nem a abertura, nem o
+retorno.
+
+É o que permite montar o desenho que toda operação com plantão acaba
+precisando, com duas regras para o mesmo grupo:
+
+| Regra | Dias | Horário | Gravidade mínima |
+|---|---|---|---|
+| Comercial | seg–sex | 08:00–18:00 | atenção e parada |
+| Plantão | todos | 22:00–06:00 | só quando parar |
+
+Três detalhes que importam:
+
+* **Sem dia e sem horário marcado, a regra vale sempre.** É o padrão, e é
+  o que mantém funcionando, sem migração, toda regra criada antes disto
+  existir.
+* **A janela pode cruzar a meia-noite.** `22:00–06:00` é uma janela só,
+  não duas — que é justamente o turno da madrugada.
+* **A hora é a local do painel**, a mesma que a pessoa leu ao configurar.
 
 ### O retorno depende da abertura ter saído
 

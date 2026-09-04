@@ -127,6 +127,24 @@ class NotificacaoRegra(Base):
 
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # ── Quando esta regra vale ────────────────────────────────────────
+    #
+    # O "time period" do Zabbix, com o mesmo propósito: o plantão da
+    # madrugada não é a mesma pessoa do horário comercial, e "crítico às
+    # 3h" e "atenção às 15h" não vão para o mesmo lugar.
+    #
+    # `dias_semana`: lista de 1 (segunda) a 7 (domingo), como no Zabbix.
+    # VAZIA = todos os dias — é o padrão, e é o que mantém toda regra já
+    # criada funcionando exatamente como antes.
+    dias_semana: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+
+    # Minutos desde a meia-noite, hora local do painel. Iguais = a regra
+    # vale o dia inteiro (padrão). O fim ANTES do início é janela que
+    # cruza a meia-noite (22:00–06:00), que é justamente o turno da
+    # madrugada — o caso mais pedido.
+    hora_inicio_min: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    hora_fim_min: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     # Legado da primeira versão, quando o retorno era um booleano em vez de
     # um tipo de evento. Mantido para não exigir migração destrutiva; quem
     # decide hoje é `tipos` conter "retorno".
