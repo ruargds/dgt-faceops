@@ -106,6 +106,7 @@ class FaxinaService:
             "logs_esvaziados": 0,
             "amostras_removidas": 0,
             "containers_removidos": 0,
+            "discos_removidos": 0,
             "incidentes_removidos": 0,
             "crescimentos_removidos": 0,
             "padroes_removidos": 0,
@@ -121,6 +122,7 @@ class FaxinaService:
             ("banco", self._banco),
             ("amostras", self._amostras),
             ("containers", self._containers),
+            ("discos", self._discos),
             ("incidentes", self._incidentes),
             ("crescimentos", self._crescimentos),
             ("padroes de log", self._padroes_log),
@@ -288,6 +290,17 @@ class FaxinaService:
             r["containers_removidos"] = await CrescimentoService.limpar_containers(
                 db, dias
             )
+            await db.commit()
+
+    async def _discos(self, r: dict) -> None:
+        """E/S por dispositivo de disco, com retenção própria (padrão 7 dias)."""
+        dias = int(self._cfg("discos.retencao_dias", 7))
+        if dias <= 0:
+            return
+        from app.services.crescimento_service import CrescimentoService
+
+        async with AsyncSessionLocal() as db:
+            r["discos_removidos"] = await CrescimentoService.limpar_discos(db, dias)
             await db.commit()
 
     async def _incidentes(self, r: dict) -> None:
@@ -614,6 +627,7 @@ class FaxinaService:
 
         from app.models.amostra import Amostra
         from app.models.amostra_container import AmostraContainer
+        from app.models.amostra_disco import AmostraDisco
         from app.models.crescimento import Crescimento
         from app.models.incidente import Incidente
         from app.models.licenca_amostra import LicencaAmostra
@@ -631,6 +645,7 @@ class FaxinaService:
         d_exec = dias_de("faxina.execucoes_dias", 730)
         d_amostra = dias_de("monitor.retencao_dias", 30)
         d_ct = dias_de("containers.retencao_dias", 7)
+        d_disco = dias_de("discos.retencao_dias", 7)
         d_inc = dias_de("incidentes.retencao_dias", 30)
         d_cresc = dias_de("crescimento.retencao_dias", 90)
         d_padrao = dias_de("analise.retencao_dias", 30)
@@ -695,6 +710,7 @@ class FaxinaService:
             containers = await contar(
                 AmostraContainer, AmostraContainer.ts, d_ct
             )
+            discos = await contar(AmostraDisco, AmostraDisco.ts, d_disco)
             incidentes = await contar(
                 Incidente, Incidente.fim, d_inc, Incidente.fim.isnot(None)
             )
@@ -734,6 +750,9 @@ class FaxinaService:
             {"chave": "containers", "rotulo": "Memória por container",
              "nota": "a série que desenha o gráfico de quem consome",
              "quantidade": containers, "retencao": f"{d_ct} dias"},
+            {"chave": "discos", "rotulo": "E/S por dispositivo de disco",
+             "nota": "a série que aponta qual disco está saturado",
+             "quantidade": discos, "retencao": f"{d_disco} dias"},
             {"chave": "incidentes", "rotulo": "Incidentes encerrados",
              "nota": "janelas de indisponibilidade já fechadas",
              "quantidade": incidentes, "retencao": f"{d_inc} dias"},

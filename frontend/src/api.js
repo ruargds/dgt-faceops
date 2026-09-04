@@ -372,6 +372,8 @@ export const api = {
     get(`/crescimento/analise/${hostId}?${consultaPeriodo(periodo)}`),
   crescimentoContainers: (hostId, periodo, limite = 24) =>
     get(`/crescimento/containers/${hostId}?${consultaPeriodo(periodo)}&limite=${limite}`),
+  crescimentoDiscos: (hostId, horas) =>
+    get(`/crescimento/discos/${hostId}?horas=${horas}`),
   crescimentoVigilancias: (hostId, dias = 7) =>
     get(`/crescimento?dias=${dias}${hostId ? `&host_id=${hostId}` : ""}`),
   crescimentoRastrear: (id) => post(`/crescimento/${id}/rastrear`, {}),

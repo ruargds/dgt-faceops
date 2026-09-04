@@ -62,6 +62,7 @@ from sqlalchemy import delete, select
 
 from app.models.amostra import Amostra
 from app.models.amostra_container import AmostraContainer
+from app.models.amostra_disco import AmostraDisco
 from app.models.crescimento import Crescimento
 from app.services.catalogo_crescimento import (
     NAO_E_VAZAMENTO, casar_caminho, casar_container,
@@ -746,6 +747,9 @@ class CrescimentoService:
         # — gravar por ciclo seria 172 mil linhas por dia para desenhar a
         # mesma curva.
         self._ultima_gravacao: dict[int, datetime] = {}
+        # Mesma ideia, para a série por dispositivo de disco — cadência
+        # própria, separada da de containers.
+        self._ultima_gravacao_disco: dict[int, datetime] = {}
 
     def _cfg(self, chave: str, padrao):
         if self.config is None:
@@ -1559,6 +1563,137 @@ class CrescimentoService:
         corte = datetime.now(timezone.utc) - timedelta(days=dias)
         r = await db.execute(
             delete(AmostraContainer).where(AmostraContainer.ts < corte)
+        )
+        return r.rowcount or 0
+
+    async def gravar_discos(self, db, host, discos_io: list[dict]) -> int:
+        """
+        Guarda IOPS/utilização por dispositivo — o `/proc/diskstats` desta
+        passada já foi lido duas vezes para achar o pior (ver
+        `metrics_service.calcular_io`). Custo de servidor: zero.
+        """
+        if not discos_io or not bool(self._cfg("discos.historico_ativo", True)):
+            return 0
+
+        agora = datetime.now(timezone.utc)
+        minutos = max(1, int(self._cfg("discos.intervalo_min", 5)))
+        ultima = self._ultima_gravacao_disco.get(host.id)
+        if ultima is not None and (agora - ultima) < timedelta(minutes=minutos):
+            return 0
+
+        for d in discos_io:
+            nome = str(d.get("dispositivo") or "").strip()[:64]
+            if not nome:
+                continue
+            db.add(AmostraDisco(
+                host_id=host.id,
+                ts=agora,
+                dispositivo=nome,
+                iops=round(float(d.get("iops") or 0), 1),
+                leitura_ps=round(float(d.get("leitura_ps") or 0), 1),
+                escrita_ps=round(float(d.get("escrita_ps") or 0), 1),
+                util_pct=round(float(d.get("util_pct") or 0), 1),
+            ))
+
+        self._ultima_gravacao_disco[host.id] = agora
+        return len(discos_io)
+
+    async def serie_discos(
+        self, db, host_id: int, horas: float = 6, pontos: int = 240,
+        de: datetime | None = None, ate: datetime | None = None,
+    ) -> dict:
+        """
+        Uma série por dispositivo de disco, já reduzida ao que a tela
+        desenha — poucos dispositivos por servidor (1 a 5, tipicamente),
+        então nenhum teto de quantidade é necessário aqui, diferente da
+        série de containers.
+        """
+        desde, ateh = self._intervalo(horas, de, ate)
+        janela = (ateh - desde).total_seconds() / 3600
+
+        r = await db.execute(
+            select(
+                AmostraDisco.ts, AmostraDisco.dispositivo,
+                AmostraDisco.iops, AmostraDisco.util_pct,
+            )
+            .where(
+                AmostraDisco.host_id == host_id,
+                AmostraDisco.ts >= desde,
+                AmostraDisco.ts <= ateh,
+            )
+            .order_by(AmostraDisco.ts)
+        )
+        linhas = list(r.all())
+        antiga = await self._mais_antiga(db, AmostraDisco, host_id)
+        contexto = {
+            "de": desde.isoformat(),
+            "ate": ateh.isoformat(),
+            "mais_antiga": antiga.isoformat() if antiga else None,
+            "retencao_dias": int(self._cfg("discos.retencao_dias", 7)),
+            "intervalo_min": int(self._cfg("discos.intervalo_min", 5)),
+        }
+        if not linhas:
+            return {
+                **contexto,
+                "host_id": host_id, "horas": round(janela, 2), "series": [],
+                "motivo": (
+                    "não há gravação por dispositivo neste período — a mais "
+                    f"antiga que existe é de {antiga:%d/%m %H:%M} (UTC)"
+                    if antiga else
+                    "ainda não há histórico por dispositivo — a primeira "
+                    "gravação acontece no próximo ciclo do coletor"
+                ),
+            }
+
+        por_dispositivo: dict[str, list] = {}
+        for linha in linhas:
+            por_dispositivo.setdefault(linha.dispositivo, []).append(linha)
+
+        series = []
+        for nome, registros in por_dispositivo.items():
+            passo = max(1, len(registros) // max(30, pontos))
+            escolhidos = registros[::passo]
+            if escolhidos[-1] is not registros[-1]:
+                escolhidos.append(registros[-1])
+            iops_vals = [float(reg.iops or 0) for reg in registros]
+            util_vals = [float(reg.util_pct or 0) for reg in registros]
+            series.append({
+                "dispositivo": nome,
+                "iops_media": round(sum(iops_vals) / len(iops_vals), 1),
+                "iops_pico": round(max(iops_vals), 1),
+                "iops_agora": round(iops_vals[-1], 1),
+                "util_media": round(sum(util_vals) / len(util_vals), 1),
+                "util_pico": round(max(util_vals), 1),
+                "util_agora": round(util_vals[-1], 1),
+                "pontos": [
+                    {
+                        "ts": reg.ts.isoformat(),
+                        "iops": round(float(reg.iops or 0), 1),
+                        "util_pct": round(float(reg.util_pct or 0), 1),
+                    }
+                    for reg in escolhidos
+                ],
+            })
+        # O mais ocupado primeiro — é o candidato a olhar de perto.
+        series.sort(key=lambda s: s["util_media"], reverse=True)
+
+        return {
+            **contexto,
+            "host_id": host_id,
+            "horas": round(janela, 2),
+            "amostras": len(linhas),
+            "series": series,
+            "em": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @staticmethod
+    async def limpar_discos(db, dias: int) -> int:
+        """Faxina da série por dispositivo de disco — retenção própria, curta."""
+        if dias <= 0:
+            return 0
+        corte = datetime.now(timezone.utc) - timedelta(days=dias)
+        r = await db.execute(
+            delete(AmostraDisco).where(AmostraDisco.ts < corte)
         )
         return r.rowcount or 0
 

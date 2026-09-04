@@ -345,6 +345,20 @@ class MonitorService:
         except Exception:
             log.exception("falha ao gravar memória por container de %s", host.id)
 
+    async def _gravar_discos(self, db, host, discos_io: list[dict]) -> None:
+        """
+        Guarda IOPS/utilização por dispositivo — o `/proc/diskstats` desta
+        passada já foi lido duas vezes para achar o pior (ver
+        `metrics_service.calcular_io`); aqui o retrato completo deixa de
+        ser descartado. Cadência e retenção próprias — ver `AmostraDisco`.
+        """
+        if self.crescimento is None or not discos_io:
+            return
+        try:
+            await self.crescimento.gravar_discos(db, host, discos_io)
+        except Exception:
+            log.exception("falha ao gravar E/S por disco de %s", host.id)
+
     async def _registrar_crescimento(self, db, host) -> None:
         """
         Vigilância de consumo crescente, sobre a amostra que acabou de ser
@@ -403,6 +417,7 @@ class MonitorService:
         mem = dados.get("memoria", {})
         gpus = dados.get("gpus", [])
         containers = dados.get("containers", [])
+        discos_io = (dados.get("io") or {}).get("todos", [])
 
         carga = float(cpu.get("carga_por_nucleo", 0) or 0)
         amostra.carga_por_nucleo = round(carga, 3)
@@ -432,8 +447,9 @@ class MonitorService:
         # não vê — disco vazio satura igual quando estoura o teto
         # de IOPS do provedor.
         io = dados.get("io") or {}
-        amostra.disco_iops = float(io.get("iops") or 0)
-        amostra.disco_util_pct = float(io.get("util_pct") or 0)
+        pior_io = io.get("pior") or {}
+        amostra.disco_iops = float(pior_io.get("iops") or 0)
+        amostra.disco_util_pct = float(pior_io.get("util_pct") or 0)
         amostra.disco_livre_gb = livre
         amostra.disco_total_gb = total_disco
 
@@ -491,6 +507,7 @@ class MonitorService:
         # fez. Antes da análise de tendência, para o culpado da vigilância
         # que abrir agora já vir da série.
         await self._gravar_containers(db, host, containers)
+        await self._gravar_discos(db, host, discos_io)
 
         # Depois de gravar: a série desta janela já inclui a leitura de
         # agora, e é dela que sai a tendência.

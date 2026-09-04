@@ -126,6 +126,38 @@ async def containers(
     return dados
 
 
+@router.get("/discos/{host_id}")
+async def discos(
+    host_id: int,
+    request: Request,
+    horas: float = Query(default=6, ge=0.25, le=24 * MAX_DIAS),
+    pontos: int = Query(default=240, ge=30, le=2000),
+    de: str | None = Query(default=None),
+    ate: str | None = Query(default=None),
+    _: User = Depends(require_permission("metrics.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    IOPS e utilização por dispositivo de disco ao longo do tempo — a
+    amostra do host guarda só o mais castigado; aqui vem o retrato
+    completo, quando o servidor tem mais de um disco.
+
+    Lê só o banco: o `/proc/diskstats` já foi lido duas vezes pela coleta
+    para calcular o pior, e esta série é o que ela gravou dos demais.
+    """
+    host = await db.get(Host, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="servidor não encontrado")
+
+    inicio, fim = _intervalo(de, ate)
+    dados = await request.app.state.crescimento.serie_discos(
+        db, host_id, horas=horas, pontos=pontos, de=inicio, ate=fim,
+    )
+    dados["host"] = host.name
+    dados["rotulo"] = host.rotulo
+    return dados
+
+
 @router.get("")
 async def listar(
     request: Request,

@@ -124,17 +124,20 @@ def calcular_io(texto1: str, texto2: str, segundos: float) -> dict:
     encostar nele, o provedor enfileira, a latência explode e tudo que
     toca disco trava junto — inclusive o systemd e o sshd.
 
-    Devolve o dispositivo mais castigado, não a soma: é ele que satura
-    primeiro, e a média entre um disco parado e um saturado esconde o
-    problema.
+    Devolve o dispositivo mais castigado em `pior`, não a soma: é ele que
+    satura primeiro, e a média entre um disco parado e um saturado esconde
+    o problema. `todos` traz o mesmo cálculo por dispositivo, para quem
+    quiser o retrato completo (ver `AmostraDisco`) — nenhuma leitura a
+    mais, é o mesmo `/proc/diskstats` que já foi lido para achar o pior.
     """
     if segundos <= 0:
-        return {}
+        return {"pior": {}, "todos": []}
     antes, depois = _diskstats(texto1), _diskstats(texto2)
     if not antes or not depois:
-        return {}
+        return {"pior": {}, "todos": []}
 
     pior = {}
+    todos = []
     for nome, (l2, e2, o2) in depois.items():
         if nome not in antes:
             continue
@@ -148,15 +151,17 @@ def calcular_io(texto1: str, texto2: str, segundos: float) -> dict:
         # a utilização. Pode passar de 100% em disco com fila (NVMe), daí
         # o teto.
         util = min(100.0, (o2 - o1) / (segundos * 1000) * 100)
+        item = {
+            "dispositivo": nome,
+            "iops": round(iops, 1),
+            "leitura_ps": round((l2 - l1) / segundos, 1),
+            "escrita_ps": round((e2 - e1) / segundos, 1),
+            "util_pct": round(util, 1),
+        }
+        todos.append(item)
         if not pior or iops > pior["iops"]:
-            pior = {
-                "dispositivo": nome,
-                "iops": round(iops, 1),
-                "leitura_ps": round((l2 - l1) / segundos, 1),
-                "escrita_ps": round((e2 - e1) / segundos, 1),
-                "util_pct": round(util, 1),
-            }
-    return pior
+            pior = item
+    return {"pior": pior, "todos": todos}
 
 
 def _split_sections(saida: str) -> dict[str, str]:

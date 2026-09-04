@@ -1310,32 +1310,36 @@ async def cenario_saturacao_de_disco_e_medida():
     # 600 leituras + 700 escritas em 1s, com 1000ms de tempo ocupado.
     d1 = "8 0 sda 100 0 0 0 200 0 0 0 0 5000 0"
     d2 = "8 0 sda 700 0 0 0 900 0 0 0 0 6000 0"
-    io = calcular_io(d1, d2, 1.0)
+    io = calcular_io(d1, d2, 1.0)["pior"]
     assert io["iops"] == 1300.0, io
     assert io["leitura_ps"] == 600.0 and io["escrita_ps"] == 700.0, io
     assert io["util_pct"] == 100.0, io
     assert io["dispositivo"] == "sda"
 
     # Janela inválida não vira número inventado.
-    assert calcular_io(d1, d2, 0) == {}
-    assert calcular_io("", "", 1.0) == {}
+    assert calcular_io(d1, d2, 0) == {"pior": {}, "todos": []}
+    assert calcular_io("", "", 1.0) == {"pior": {}, "todos": []}
 
     # Contador que reinicia (boot) é descartado, não vira valor negativo
     # nem um pico falso de milhões.
-    assert calcular_io(d2, d1, 1.0) == {}
+    assert calcular_io(d2, d1, 1.0) == {"pior": {}, "todos": []}
 
     # Disco virtual não entra na conta: loop de snap e device-mapper
     # inflariam o número sem representar E/S real do provedor.
     lixo1 = "7 0 loop0 999999 0 0 0 999999 0 0 0 0 999999 0\n8 0 sda 100 0 0 0 200 0 0 0 0 5000 0"
     lixo2 = "7 0 loop0 999999 0 0 0 999999 0 0 0 0 999999 0\n8 0 sda 110 0 0 0 210 0 0 0 0 5100 0"
     io2 = calcular_io(lixo1, lixo2, 1.0)
-    assert io2["dispositivo"] == "sda", io2
+    assert io2["pior"]["dispositivo"] == "sda", io2
+    assert [d["dispositivo"] for d in io2["todos"]] == ["sda"], io2
 
     # Devolve o disco MAIS castigado, não a média: a média entre um disco
-    # parado e um saturado esconde exatamente o que se procura.
+    # parado e um saturado esconde exatamente o que se procura. E `todos`
+    # traz os dois, para quem quiser o retrato completo (AmostraDisco).
     a = "8 0 sda 0 0 0 0 0 0 0 0 0 0 0\n8 16 sdb 0 0 0 0 0 0 0 0 0 0 0"
     b = "8 0 sda 10 0 0 0 10 0 0 0 0 100 0\n8 16 sdb 900 0 0 0 900 0 0 0 0 900 0"
-    assert calcular_io(a, b, 1.0)["dispositivo"] == "sdb"
+    io3 = calcular_io(a, b, 1.0)
+    assert io3["pior"]["dispositivo"] == "sdb"
+    assert {d["dispositivo"] for d in io3["todos"]} == {"sda", "sdb"}, io3
 
     # O limite existe no catálogo, e o de IOPS vem DESLIGADO: o teto varia
     # por tipo de disco, e um padrão errado geraria alarme falso todo dia.

@@ -62,6 +62,7 @@ export default function MonitorView({ alvo, nav }) {
   const [janela, setJanela] = useState(6);
   const [som, setSom] = useState(true);
   const [pico, setPico] = useState(null);
+  const [serieDiscos, setSerieDiscos] = useState(null);
   const [verRecentes, setVerRecentes] = useState(false);
   const [recentes, setRecentes] = useState(null);
   const [recorrentes, setRecorrentes] = useState(null);
@@ -237,6 +238,8 @@ export default function MonitorView({ alvo, nav }) {
       carregarSerie(detalhe, janela);
       setPico(null);
       api.monitorPico(detalhe, 14).then(setPico).catch(() => setPico(null));
+      setSerieDiscos(null);
+      api.crescimentoDiscos(detalhe, janela).then(setSerieDiscos).catch(() => setSerieDiscos(null));
     }
   }, [detalhe, janela, carregarSerie]);
 
@@ -836,6 +839,41 @@ export default function MonitorView({ alvo, nav }) {
                 limite={85}
                 legenda={`${serie.amostras.at(-1).disco_iops} operações/s`}
               />
+              {/* Só quando há mais de um dispositivo: com um só, é a mesma
+                  curva do painel acima — regra 4, não duplicar o que já
+                  existe na tela. */}
+              {serieDiscos && serieDiscos.series && serieDiscos.series.length > 1 && (
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 2 }}>
+                    {t("Disco por dispositivo")}
+                  </div>
+                  <div className="small muted" style={{ marginBottom: 6 }}>
+                    {t("Este servidor tem mais de um disco — utilização de E/S de cada um, na mesma janela.")}
+                  </div>
+                  <GraficoMultiLinha
+                    series={serieDiscos.series.map((s, i) => ({
+                      nome: s.dispositivo,
+                      cor: corDaSerie(i),
+                      pontos: s.pontos.map((p) => ({ ts: p.ts, valor: p.util_pct })),
+                    }))}
+                    escala="linear"
+                    unidade="%"
+                    formatar={(v) => `${v.toFixed(1)}%`}
+                  />
+                  <div className="stack-v" style={{ gap: 3, marginTop: 8 }}>
+                    {serieDiscos.series.map((s, i) => (
+                      <div key={s.dispositivo} className="stack-h small" style={{ gap: 8, alignItems: "center" }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: corDaSerie(i), flexShrink: 0 }} />
+                        <span className="mono" style={{ flex: 1 }}>{s.dispositivo}</span>
+                        <span className="muted mono">
+                          {t("média")} {s.util_media}% · {t("máx")} {s.util_pico}% ·{" "}
+                          {t("agora")} {s.util_agora}% · {s.iops_agora} {t("operações/s")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {serie.tem_gpu && (
                 <>
                   <Painel

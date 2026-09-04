@@ -593,6 +593,30 @@ CATALOGO: list[ItemConfig] = [
                "memória agora e desde quando'. O histórico longo de capacidade "
                "continua sendo o das amostras do host.",
                minimo=1, maximo=90),
+    ItemConfig("discos.historico_ativo", "monitor",
+               "Guardar E/S por dispositivo de disco", "booleano",
+               True,
+               "O `/proc/diskstats` já é lido duas vezes por ciclo para achar o "
+               "disco mais castigado (ver 33_SATURACAO_DE_DISCO), e o resultado "
+               "por dispositivo era jogado fora depois de escolher o pior. "
+               "Guardando, o painel responde QUAL disco está saturado quando há "
+               "mais de um — sem leitura nova no servidor."),
+    ItemConfig("discos.intervalo_min", "monitor",
+               "Gravar E/S por dispositivo a cada (minutos)", "numero",
+               5,
+               "Mesma lógica da memória por container: poucos dispositivos por "
+               "servidor tornam isto barato, mas gravar a cada ciclo de 60 s "
+               "ainda seria trabalho sem ganho — a saturação que interessa dura "
+               "minutos, não segundos.",
+               minimo=1, maximo=120),
+    ItemConfig("discos.retencao_dias", "monitor",
+               "Guardar E/S por dispositivo por (dias)", "numero",
+               7,
+               "Curto de propósito: responde 'qual disco está sofrendo agora e "
+               "desde quando'. O alerta de saturação (`alerta.disco_util_pct`) "
+               "não depende disto — só do pior dispositivo, guardado na amostra "
+               "do host.",
+               minimo=1, maximo=90),
     ItemConfig("crescimento.retencao_dias", "monitor",
                "Guardar vigilâncias encerradas por (dias)", "numero",
                90,

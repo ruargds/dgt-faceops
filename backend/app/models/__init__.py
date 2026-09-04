@@ -10,6 +10,7 @@ from app.models.backup import (
 )
 from app.models.amostra import Amostra
 from app.models.amostra_container import AmostraContainer
+from app.models.amostra_disco import AmostraDisco
 from app.models.licenca_amostra import LicencaAmostra
 from app.models.configuracao import Configuracao
 from app.models.crescimento import Crescimento
@@ -35,6 +36,7 @@ __all__ = [
     "Configuracao",
     "Amostra",
     "AmostraContainer",
+    "AmostraDisco",
     "LicencaAmostra",
     "Incidente",
     "Crescimento",
