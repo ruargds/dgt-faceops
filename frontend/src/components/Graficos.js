@@ -240,6 +240,28 @@ export function GraficoLinha({
           pointerEvents: "none",
         }}
       />
+
+      {/* Número ao lado do ponto — sem ele, o valor de agora só existia
+          no texto de acessibilidade, escondido de quem enxerga a tela. */}
+      {!mini && (
+        <div
+          style={{
+            position: "absolute",
+            top: py(ultimo) - 7,
+            right: 14,
+            fontSize: 11,
+            fontWeight: 600,
+            color: traco,
+            background: "var(--white)",
+            padding: "0 4px",
+            borderRadius: 3,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+          }}
+        >
+          {ultimo}{unidade}
+        </div>
+      )}
     </div>
   );
 }

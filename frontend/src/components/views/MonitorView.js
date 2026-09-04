@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatBytes, formatData, formatDuracao } from "../../api";
 import { t } from "../../i18n";
-import { BarraMetrica, Faisca, GraficoLinha, tocarAlerta } from "../Graficos";
+import {
+  BarraMetrica, corDaSerie, Faisca, GraficoLinha, GraficoMultiLinha, tocarAlerta,
+} from "../Graficos";
 import { Carregando, Erro, Estatistica, Vazio } from "../Comuns";
 import { IconAlerta, IconAtualizar, IconDownload, IconGPU, IconOk } from "../Icons";
 
@@ -63,6 +65,14 @@ export default function MonitorView({ alvo, nav }) {
   const [verRecentes, setVerRecentes] = useState(false);
   const [recentes, setRecentes] = useState(null);
   const [recorrentes, setRecorrentes] = useState(null);
+  // Comparação entre servidores — array (não Set) para dar referência
+  // estável a dependência de efeito, sem expressão calculada no array de
+  // deps.
+  const [selecionados, setSelecionados] = useState([]);
+  const [janelaComp, setJanelaComp] = useState(6);
+  const [serieComp, setSerieComp] = useState(null);
+  const [erroComp, setErroComp] = useState("");
+  const pedidoComp = useRef(0);
 
   // Chegou aqui a partir de um alerta em outra tela ("ir para Monitor"):
   // abre direto no host certo, sem a pessoa precisar procurar de novo o
@@ -157,6 +167,33 @@ export default function MonitorView({ alvo, nav }) {
     }
   }, []);
 
+  /**
+   * Uma série por servidor selecionado, na mesma janela — é o que permite
+   * ver se o pico de um coincide com o de outro. Continua lendo o banco do
+   * painel (o mesmo endpoint do histórico de um host só, um por vez, em
+   * paralelo); nenhum servidor é consultado de novo por causa disto.
+   */
+  const carregarComparacao = useCallback(async (hostIds, horas) => {
+    if (!hostIds || hostIds.length < 2) return;
+    const meu = ++pedidoComp.current;
+    try {
+      const resultados = await Promise.all(
+        hostIds.map((id) =>
+          api
+            .monitorSerie(id, horas)
+            .then((r) => ({ hostId: id, r }))
+            .catch(() => ({ hostId: id, r: null }))
+        )
+      );
+      if (meu === pedidoComp.current) {
+        setSerieComp(resultados);
+        setErroComp("");
+      }
+    } catch (ex) {
+      if (meu === pedidoComp.current) setErroComp(ex.message);
+    }
+  }, []);
+
   // Atualização de fundo.
   //
   // Barata de propósito: lê do banco do painel, nunca toca num servidor.
@@ -173,6 +210,7 @@ export default function MonitorView({ alvo, nav }) {
       if (document.visibilityState === "visible") {
         await carregar();
         if (detalhe) await carregarSerie(detalhe, janela);
+        if (selecionados.length >= 2) await carregarComparacao(selecionados, janelaComp);
       }
       // Quem decide de quanto em quanto tempo perguntar é o SERVIDOR:
       // ele sabe se o coletor está em modo econômico. Buscar a cada 10 s
@@ -191,7 +229,7 @@ export default function MonitorView({ alvo, nav }) {
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", aoVoltar);
     };
-  }, [carregar, carregarSerie, detalhe, janela]);
+  }, [carregar, carregarSerie, detalhe, janela, selecionados, janelaComp, carregarComparacao]);
 
   useEffect(() => {
     if (detalhe) {
@@ -201,6 +239,24 @@ export default function MonitorView({ alvo, nav }) {
       api.monitorPico(detalhe, 14).then(setPico).catch(() => setPico(null));
     }
   }, [detalhe, janela, carregarSerie]);
+
+  useEffect(() => {
+    if (selecionados.length >= 2) {
+      setSerieComp(null);
+      carregarComparacao(selecionados, janelaComp);
+    } else {
+      setSerieComp(null);
+    }
+  }, [selecionados, janelaComp, carregarComparacao]);
+
+  function alternarSelecao(hostId) {
+    setSelecionados((atual) =>
+      atual.includes(hostId) ? atual.filter((id) => id !== hostId) : [...atual, hostId]
+    );
+  }
+  function limparSelecao() {
+    setSelecionados([]);
+  }
 
   useEffect(() => {
     if (!verRecentes) return;
@@ -229,6 +285,10 @@ export default function MonitorView({ alvo, nav }) {
     setDetalhe(hostId);
     const el = document.getElementById(`host-card-${hostId}`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function selecionarTodos() {
+    setSelecionados(servidores.filter((s) => s.ativo && s.monitorado).map((s) => s.host_id));
   }
 
   return (
@@ -430,10 +490,24 @@ export default function MonitorView({ alvo, nav }) {
         <Vazio titulo={t("Nenhum servidor cadastrado")}>{t("Cadastre as máquinas em")} <strong>{t("Servidores")}</strong> {t("para o monitor começar a acompanhar.")}</Vazio>
       ) : (
         <>
-        <div className="section-title" style={{ marginBottom: 8 }}>
-          {t("Servidores")} · <span style={{ textTransform: "none", fontWeight: 400 }}>
-            {t("clique num cartão para abrir o histórico")}
-          </span>
+        <div className="stack-h" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          <div className="section-title" style={{ marginBottom: 0 }}>
+            {t("Servidores")} · <span style={{ textTransform: "none", fontWeight: 400 }}>
+              {t("clique num cartão para abrir o histórico")}
+            </span>
+          </div>
+          {servidores.length > 1 && (
+            <div className="stack-h" style={{ gap: 6 }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={selecionarTodos}>
+                {t("Selecionar todos para comparar")}
+              </button>
+              {selecionados.length > 0 && (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={limparSelecao}>
+                  {t("Limpar seleção")} ({selecionados.length})
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div className="grid-cards">
           {servidores.map((s) => (
@@ -444,10 +518,51 @@ export default function MonitorView({ alvo, nav }) {
               alertas={alertas.filter((a) => a.host_id === s.host_id)}
               selecionado={detalhe === s.host_id}
               onSelecionar={() => setDetalhe(detalhe === s.host_id ? null : s.host_id)}
+              emComparacao={selecionados.includes(s.host_id)}
+              onAlternarComparacao={() => alternarSelecao(s.host_id)}
             />
           ))}
         </div>
         </>
+      )}
+
+      {/* ── Comparação entre servidores ───────────────────────────────
+          A pergunta que os cartões sozinhos não respondem: o pico de um
+          servidor coincidiu com o de outro? Mesma janela, uma linha por
+          servidor selecionado — cruzar visualmente é o diagnóstico. */}
+      {selecionados.length >= 2 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="stack-h" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+            <div className="section-title" style={{ marginBottom: 0 }}>
+              {t("Comparação entre servidores")} · {selecionados.length} {t("selecionados")}
+            </div>
+            <div className="stack-h" style={{ gap: 6 }}>
+              {JANELAS.map((j) => (
+                <button
+                  key={j.horas}
+                  className={`btn btn-sm ${janelaComp === j.horas ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setJanelaComp(j.horas)}
+                >
+                  {j.rotulo}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="small muted" style={{ marginBottom: 14 }}>
+            {t("Mesma janela para todos — se um pico aparece nas mesmas horas em mais de um servidor, um está empurrando o outro.")}
+          </div>
+          <Erro mensagem={erroComp} onTentar={() => carregarComparacao(selecionados, janelaComp)} />
+          {!serieComp ? (
+            <Carregando />
+          ) : (
+            <div className="stack-v" style={{ gap: 20 }}>
+              <ComparacaoMetrica titulo={t("Processador em uso")} serieComp={serieComp} servidores={servidores} campo="cpu_uso" />
+              <ComparacaoMetrica titulo={t("Memória")} serieComp={serieComp} servidores={servidores} campo="mem" />
+              <ComparacaoMetrica titulo={t("Disco")} serieComp={serieComp} servidores={servidores} campo="disco" />
+              <ComparacaoMetrica titulo={t("E/S do disco")} serieComp={serieComp} servidores={servidores} campo="disco_util_pct" />
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── Reincidência ─────────────────────────────────────────────
@@ -797,7 +912,43 @@ function Painel({ titulo, explicacao, serie, limite, legenda, maximo = 100 }) {
   );
 }
 
-function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar }) {
+/**
+ * Uma métrica, uma linha por servidor selecionado.
+ *
+ * Escala LINEAR fixa: os quatro campos aqui (`cpu_uso`, `mem`, `disco`,
+ * `disco_util_pct`) são todos percentual 0–100, e a escala automática do
+ * `GraficoMultiLinha` (log acima de 50× de razão) foi pensada para MB de
+ * container, não para isto — um servidor ocioso a 1% ao lado de outro a
+ * 60% bastaria para acionar o modo log e distorcer a leitura.
+ */
+function ComparacaoMetrica({ titulo, serieComp, servidores, campo }) {
+  const series = (serieComp || [])
+    .filter((x) => x.r && x.r.amostras && x.r.amostras.length)
+    .map((x, i) => {
+      const host = servidores.find((sv) => sv.host_id === x.hostId);
+      return {
+        nome: (host && (host.rotulo || host.host)) || `host ${x.hostId}`,
+        cor: corDaSerie(i),
+        pontos: x.r.amostras
+          .filter((a) => a[campo] !== null && a[campo] !== undefined)
+          .map((a) => ({ ts: a.ts, valor: a[campo] })),
+      };
+    });
+
+  return (
+    <div>
+      <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{titulo}</div>
+      <GraficoMultiLinha
+        series={series}
+        escala="linear"
+        unidade="%"
+        formatar={(v) => `${v.toFixed(1)}%`}
+      />
+    </div>
+  );
+}
+
+function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar, emComparacao, onAlternarComparacao }) {
   const a = s.amostra;
   const grave = alertas.some((x) => x.nivel === "critico");
   const aviso = alertas.length > 0;
@@ -820,7 +971,11 @@ function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar }) {
         cursor: "pointer",
         opacity: s.ativo ? 1 : 0.6,
         borderColor: selecionado ? "var(--blue)" : grave ? "var(--red-bd)" : "var(--border)",
-        boxShadow: selecionado ? "0 0 0 3px rgba(26,111,196,.10)" : undefined,
+        boxShadow: selecionado
+          ? "0 0 0 3px rgba(26,111,196,.10)"
+          : emComparacao
+          ? "0 0 0 2px rgba(23,163,152,.35)"
+          : undefined,
       }}
     >
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 2 }}>
@@ -828,11 +983,24 @@ function CartaoMonitor({ s, id, alertas, selecionado, onSelecionar }) {
           <span className={`dot ${dot}`} />
           <strong style={{ fontSize: 15, color: "var(--titulo)" }}>{s.rotulo || s.host}</strong>
         </div>
-        {s.tem_gpu && (
-          <span className="pill pill-info" title={s.gpu_nome || t("GPU")}>
-            <IconGPU size={12} /> {s.gpu_nome || t("GPU")}
-          </span>
-        )}
+        <div className="stack-h" style={{ gap: 8 }}>
+          {s.tem_gpu && (
+            <span className="pill pill-info" title={s.gpu_nome || t("GPU")}>
+              <IconGPU size={12} /> {s.gpu_nome || t("GPU")}
+            </span>
+          )}
+          {/* Comparar não é o mesmo clique que abre o histórico — por isso
+              a propagação para para aqui. */}
+          <label
+            className="check"
+            style={{ margin: 0 }}
+            title={t("Marcar para comparar com outros servidores")}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input type="checkbox" checked={emComparacao} onChange={onAlternarComparacao} />
+            <span className="small muted">{t("comparar")}</span>
+          </label>
+        </div>
       </div>
 
       <div className="small muted" style={{ marginBottom: 12 }}>
