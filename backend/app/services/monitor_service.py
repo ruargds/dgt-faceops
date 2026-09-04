@@ -550,6 +550,8 @@ class MonitorService:
                     "disco_ponto": a.disco_ponto,
                     "disco_livre_gb": a.disco_livre_gb,
                     "disco_total_gb": a.disco_total_gb,
+                    "disco_iops": a.disco_iops,
+                    "disco_util_pct": a.disco_util_pct,
                     "gpu": a.gpu_pct,
                     "gpu_mem": a.gpu_mem_pct,
                     "gpu_mem_total_mb": a.gpu_mem_total_mb,

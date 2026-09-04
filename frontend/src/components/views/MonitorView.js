@@ -37,6 +37,10 @@ const EXPLICACAO = {
     "com uso baixo quando os processos estão esperando disco.",
   mem: "Memória em uso, já descontando cache. Perto de 100%, o sistema começa a matar containers.",
   disco: "O disco mais cheio. Cheio, o banco para de gravar e o reconhecimento para junto.",
+  disco_io:
+    "Quanto do tempo o disco passou ocupado atendendo leitura e escrita — não é " +
+    "espaço livre, é fila. Dá para estourar o teto de IOPS contratado com o " +
+    "disco quase vazio: a latência dispara e tudo que toca disco trava junto.",
   gpu: "Quanto a placa de vídeo está trabalhando. É ela que faz o reconhecimento.",
   gpu_mem: "Memória da placa. Perto do limite, a próxima câmera causa falha.",
 };
@@ -709,6 +713,13 @@ export default function MonitorView({ alvo, nav }) {
                   ) || `${serie.amostras.at(-1).disco_livre_gb} GB livres`) +
                   ` · ${serie.amostras.at(-1).disco_livre_gb} GB livres`
                 }
+              />
+              <Painel
+                titulo={t("E/S do disco")}
+                explicacao={EXPLICACAO.disco_io}
+                serie={serie.amostras.map((a) => ({ ts: a.ts, valor: a.disco_util_pct }))}
+                limite={85}
+                legenda={`${serie.amostras.at(-1).disco_iops} operações/s`}
               />
               {serie.tem_gpu && (
                 <>
