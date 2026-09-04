@@ -413,31 +413,24 @@ export default function ConfiguracoesView() {
     }
   }
 
-  if (carregando) return <Carregando />;
-
+  // ANTES do retorno antecipado, sempre. Hook depois de `if (...) return`
+  // é chamado em um render e não no outro, e o React derruba a tela
+  // inteira com o erro #310 ("mais hooks que no render anterior") — foi
+  // o que quebrou esta tela assim que ela terminava de carregar.
   const gruposFiltrados = useMemo(() => {
-
     const termos = termosDaBusca(buscaCfg);
-
     if (termos.length === 0) return grupos;
-
     return grupos
-
       .map((g) => ({
-
         ...g,
-
         itens: g.itens.filter((i) =>
-
           casaBusca(termos, i.rotulo, i.chave, i.ajuda, g.titulo),
-
         ),
-
       }))
-
       .filter((g) => g.itens.length > 0);
-
   }, [grupos, buscaCfg]);
+
+  if (carregando) return <Carregando />;
 
 
   return (

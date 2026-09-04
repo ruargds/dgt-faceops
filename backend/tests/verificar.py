@@ -2687,6 +2687,104 @@ async def cenario_aviso_explica_o_servico_para_quem_nao_conhece():
     assert not faltando, f"componentes sem impacto: {faltando}"
 
 
+async def cenario_retorno_nao_sai_sem_a_abertura():
+    """
+    O "resolvido" que chegava sozinho.
+
+    Gravidade mínima e espera valem só para a abertura — de propósito:
+    quem soube que caiu quer saber que voltou, sem esperar de novo. Mas
+    quando a abertura era BARRADA por um desses dois filtros, o retorno
+    saía assim mesmo: o plantão recebia o fim de uma história cujo começo
+    ninguém contou. Foi o que aconteceu com a vigilância de disco, que
+    abre como "atenção" e não passava numa regra de "só crítico" — e
+    mesmo assim anunciava "voltou a funcionar" a cada episódio.
+
+    Agora o retorno confere se a abertura correspondente chegou NAQUELE
+    destino. As duas famílias entram: incidente (chave espelhada) e
+    crescimento (prefixo, porque o nível vira chave própria).
+    """
+    from app.core.vault import encrypt_secret
+    from app.models.notificacao import (
+        NotificacaoConta, NotificacaoDestino, NotificacaoRegra,
+    )
+    from app.services import notificacao_service as ns
+
+    engine, fabrica = await nova_sessao()
+    enviados = []
+
+    async def enviar_falso(token, chat_id, texto):
+        enviados.append((chat_id, texto))
+        return {"ok": True}
+
+    original = ns.telegram_service.enviar
+    ns.telegram_service.enviar = enviar_falso
+    try:
+        async with fabrica() as db:
+            host = await com_host(db)
+            db.add(NotificacaoConta(
+                bot_nome="bot", bot_token_enc=encrypt_secret("123:abc"), ativo=True,
+            ))
+            db.add(NotificacaoDestino(nome="Plantão", tipo="grupo", chat_id="-100", ativo=True))
+            # A regra do caso real: só crítico, e o crescimento marcado.
+            db.add(NotificacaoRegra(
+                destino_id=None, host_id=None, servico="", ativo=True,
+                tipos=["crescimento", "retorno"], nivel_minimo="critico", atraso_s=0,
+            ))
+            await db.flush()
+            serv = ns.NotificacaoService()
+
+            # A vigilância abre em "atenção": a regra pede crítico, então a
+            # abertura NÃO sai.
+            abertura = {
+                "tipo": "crescimento", "chave": f"cre:{host.id}:disco:atencao",
+                "host_id": host.id, "host": host.name, "servico": "",
+                "nivel": "atencao", "texto": "disco em 68%", "duracao_s": 0,
+            }
+            assert await serv.despachar(db, [abertura]) == 0, "abriu sendo atenção"
+            await db.flush()
+
+            # E o retorno dela também não pode sair.
+            retorno = {
+                "tipo": "retorno", "chave": f"cre:{host.id}:disco:7",
+                "host_id": host.id, "host": host.name,
+                "servico": "disco deste servidor", "nivel": "atencao",
+                "duracao_s": 401,
+                "chave_abertura_prefixo": f"cre:{host.id}:disco:",
+                "abertura_desde": "2020-01-01T00:00:00+00:00",
+            }
+            assert await serv.despachar(db, [retorno]) == 0, (
+                "mandou 'voltou a funcionar' de um problema que nunca foi avisado"
+            )
+            await db.flush()
+            assert enviados == [], enviados
+
+            # Agora com a abertura DE VERDADE avisada (crítico passa):
+            abertura_grave = dict(abertura, nivel="critico",
+                                  chave=f"cre:{host.id}:disco:critico")
+            assert await serv.despachar(db, [abertura_grave]) == 1
+            await db.flush()
+            assert await serv.despachar(db, [retorno]) == 1, (
+                "abertura avisada, e o retorno ficou preso"
+            )
+            await db.flush()
+            assert len(enviados) == 2, enviados
+
+            # Incidente: mesma regra, pela chave espelhada.
+            inicio = "2026-09-04T20:00:00+00:00"
+            retorno_inc = {
+                "tipo": "retorno", "chave": f"fim:{host.id}:servico:pgbouncer:{inicio}",
+                "host_id": host.id, "host": host.name, "servico": "pgbouncer",
+                "nivel": "critico", "duracao_s": 90,
+                "chave_abertura": f"ini:{host.id}:servico:pgbouncer:{inicio}",
+            }
+            assert await serv.despachar(db, [retorno_inc]) == 0, (
+                "retorno de incidente saiu sem a abertura"
+            )
+    finally:
+        ns.telegram_service.enviar = original
+    await engine.dispose()
+
+
 async def cenario_notificacao_nao_repete_o_mesmo_evento():
     """
     Aviso que repete vira aviso que se ignora. O mesmo evento, para o mesmo
@@ -3835,6 +3933,7 @@ CENARIOS = [
     cenario_duracao_no_formato_do_zabbix,
     cenario_aviso_explica_o_servico_para_quem_nao_conhece,
     cenario_notificacao_nao_repete_o_mesmo_evento,
+    cenario_retorno_nao_sai_sem_a_abertura,
     cenario_notificacao_manda_para_dois_destinos,
     cenario_notificacao_nunca_derruba_o_ciclo,
     cenario_telegram_ponta_a_ponta,

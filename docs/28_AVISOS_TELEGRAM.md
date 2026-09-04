@@ -90,6 +90,20 @@ reavalia a cada passada e a deduplicação garante um envio só.
 
 O **retorno ao normal nunca espera**: boa notícia não tem por que atrasar.
 
+### O retorno depende da abertura ter saído
+
+Gravidade mínima e espera valem só para a abertura — mas, quando um
+desses filtros barrava a abertura, o retorno saía assim mesmo. O grupo
+recebia "voltou a funcionar" de um problema que nunca foi anunciado.
+
+Aconteceu de verdade com a vigilância de disco, que abre como **atenção**
+e não passava numa regra de "só quando parar (crítico)": a cada episódio
+chegava só o "✅ Resolvido", sem nunca o aviso correspondente.
+
+Agora o retorno confere se a abertura chegou **naquele destino** antes de
+sair. É como Zabbix e Alertmanager amarram o par, e pela mesma razão:
+resolução sem alerta não informa, confunde.
+
 ## Como a mensagem chega
 
 O formato é **deliberadamente o mesmo do template de Telegram do

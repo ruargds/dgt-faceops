@@ -276,6 +276,12 @@ class IncidenteService:
                 # A chave carrega o início: o mesmo serviço caindo de novo
                 # amanhã é outro evento, e precisa avisar de novo.
                 "chave": f"fim:{host.id}:{incidente.tipo}:{incidente.servico}:{inicio.isoformat()}",
+                # A chave da abertura correspondente. É ela que permite ao
+                # despacho não anunciar o fim de uma história cujo começo
+                # ninguém contou — ver `NotificacaoService.despachar`.
+                "chave_abertura": (
+                    f"ini:{host.id}:{incidente.tipo}:{incidente.servico}:{inicio.isoformat()}"
+                ),
             })
 
         # Abre quem é novo, e emite evento para TODA queda ainda aberta.

@@ -438,6 +438,16 @@ class NotificacaoService:
                 if await self._ja_enviado(db, chave, repetir_s):
                     continue
 
+                # Retorno órfão não sai. A abertura pode ter sido barrada
+                # pela gravidade mínima ou pela espera da regra — e aí o
+                # "resolvido" chegava sozinho, contando o fim de uma
+                # história cujo começo ninguém recebeu. Zabbix e
+                # Alertmanager amarram os dois pelo mesmo motivo.
+                if evento.get("tipo") == "retorno" and not await self._abertura_enviada(
+                    db, evento, destino.id
+                ):
+                    continue
+
                 texto = montar_mensagem(evento, cliente)
                 registro = NotificacaoEnvio(
                     chave=chave, texto=texto[:1000], destino=destino.nome[:120],
@@ -456,6 +466,52 @@ class NotificacaoService:
                 db.add(registro)
 
         return enviados
+
+    @staticmethod
+    async def _abertura_enviada(db, evento: dict, destino_id: int) -> bool:
+        """
+        A abertura correspondente a este retorno chegou NESTE destino?
+
+        Duas formas, porque as duas famílias de evento numeram diferente:
+
+        * **incidente** — a chave do fim espelha a do início, então a
+          conferência é por igualdade (`chave_abertura`);
+        * **crescimento** — cada nível é uma chave própria (a vigilância
+          pode ter subido de atenção para crítico no meio), então a
+          conferência é por PREFIXO, limitada ao episódio: só vale o envio
+          feito depois que a vigilância abriu.
+
+        Evento sem nenhuma das duas pistas passa — é o comportamento
+        antigo, e vale para qualquer origem que ainda não amarre o par.
+        """
+        exata = evento.get("chave_abertura")
+        prefixo = evento.get("chave_abertura_prefixo")
+        if not exata and not prefixo:
+            return True
+
+        consulta = select(NotificacaoEnvio.id).where(
+            NotificacaoEnvio.status == "enviado"
+        )
+        if exata:
+            consulta = consulta.where(
+                NotificacaoEnvio.chave == f"{exata}|d{destino_id}"
+            )
+        else:
+            consulta = consulta.where(
+                NotificacaoEnvio.chave.like(f"{prefixo}%|d{destino_id}")
+            )
+            desde = evento.get("abertura_desde")
+            if desde:
+                try:
+                    corte = datetime.fromisoformat(str(desde))
+                    if corte.tzinfo is None:
+                        corte = corte.replace(tzinfo=timezone.utc)
+                    consulta = consulta.where(NotificacaoEnvio.ts >= corte)
+                except ValueError:
+                    pass
+
+        r = await db.execute(consulta.limit(1))
+        return r.scalar() is not None
 
     @staticmethod
     async def _ja_enviado(db, chave: str, repetir_s: int = 0) -> bool:

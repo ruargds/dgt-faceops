@@ -1311,6 +1311,13 @@ class CrescimentoService:
                      f"({vig.desfecho}) — está em {vig.valor_atual}%",
             "duracao_s": (agora - inicio).total_seconds(),
             "chave": f"cre:{host.id}:{vig.recurso}:{vig.id}",
+            # A abertura desta mesma vigilância. O nível pode ter subido no
+            # meio (atenção -> crítico), e cada nível é uma chave própria —
+            # por isso PREFIXO, e não chave exata. `desde` amarra ao
+            # episódio: um aviso de duas semanas atrás, do mesmo recurso,
+            # não vale como "a abertura desta".
+            "chave_abertura_prefixo": f"cre:{host.id}:{vig.recurso}:",
+            "abertura_desde": inicio.isoformat(),
         }
 
     def _evento(self, host, vig: Crescimento, tipo: str) -> dict:
