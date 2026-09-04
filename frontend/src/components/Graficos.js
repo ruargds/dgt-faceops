@@ -516,7 +516,13 @@ export function GraficoMultiLinha({
   // Proporção: cresce com a largura até um teto, e nunca fica mais baixo
   // que o pedido. Numa tela de 1080p o gráfico ganha altura em vez de
   // virar uma tira; no celular, não estoura a dobra.
-  const H = Math.round(Math.min(Math.max(largura * 0.34, altura), altura * 1.7));
+  //
+  // O fator era 0,34 com teto em 1,7×: num card de largura cheia (comum
+  // nas telas de comparação entre servidores) isso inflava o gráfico bem
+  // além do pedido, mesmo quando os valores variavam pouco — muito
+  // espaço vazio acima e abaixo da curva. 0,16 e 1,3× mantêm o gráfico
+  // largo sem multiplicar a altura pela largura da tela.
+  const H = Math.round(Math.min(Math.max(largura * 0.16, altura), altura * 1.3));
   const L = 62, R = 16, T = 14, B = 28;
   const areaW = Math.max(10, largura - L - R);
   const areaH = Math.max(10, H - T - B);
@@ -561,25 +567,34 @@ export function GraficoMultiLinha({
   const px = (ts) => L + ((+new Date(ts) - t0) / span) * areaW;
   const py = (v) => T + areaH - eixo.posicao(v) * areaH;
 
-  // Cadência típica da série, para saber o que é buraco. Mediana, não
-  // média: um único buraco enorme puxaria a média e esconderia os outros.
-  const maisLonga = desenhadas.reduce(
-    (a, b) => (b.pontos.length > a.pontos.length ? b : a),
-    desenhadas[0],
-  );
-  const intervalos = [];
-  for (let i = 1; i < maisLonga.pontos.length; i++) {
-    intervalos.push(
-      +new Date(maisLonga.pontos[i].ts) - +new Date(maisLonga.pontos[i - 1].ts),
-    );
+  // Cadência típica de CADA série, para saber o que é buraco NELA —
+  // mediana, não média: um único buraco enorme puxaria a média e
+  // esconderia os outros.
+  //
+  // Uma cadência só, tirada da série com mais pontos, quebrava as
+  // OUTRAS: um servidor visto com frequência (poll mais rápido) virava a
+  // "série mais longa" com cadência de 10-15 s, e o intervalo normal de
+  // 60 s dos demais passava a contar como buraco em toda a linha — o
+  // gráfico inteiro picotado sem nenhum buraco real ter acontecido.
+  function cadenciaDe(pontos) {
+    if (!pontos || pontos.length < 2) return 0;
+    const intervalos = [];
+    for (let i = 1; i < pontos.length; i++) {
+      intervalos.push(+new Date(pontos[i].ts) - +new Date(pontos[i - 1].ts));
+    }
+    intervalos.sort((a, b) => a - b);
+    return intervalos[Math.floor(intervalos.length / 2)];
   }
-  intervalos.sort((a, b) => a - b);
-  const cadencia = intervalos.length ? intervalos[Math.floor(intervalos.length / 2)] : 0;
-  const limiteBuraco = cadencia > 0 ? cadencia * 2.5 : Infinity;
+  const limitesBuraco = new Map(
+    desenhadas.map((s) => {
+      const cad = cadenciaDe(s.pontos);
+      return [s.nome, cad > 0 ? cad * 2.5 : Infinity];
+    }),
+  );
 
   const { marcas, passo: passoTempo } = marcasDeTempo(t0, t1);
 
-  const caminho = (pontos) => {
+  const caminho = (pontos, limiteBuraco) => {
     let d = "";
     let anterior = null;
     pontos.forEach((p) => {
@@ -612,7 +627,8 @@ export function GraficoMultiLinha({
         });
         // Ponto longe demais não é leitura daquele instante: a série
         // estava fora do ar ali, e mostrar o vizinho seria inventar.
-        if (!melhor || distancia > Math.max(limiteBuraco, (span / areaW) * 8)) {
+        const limite = limitesBuraco.get(s.nome) ?? Infinity;
+        if (!melhor || distancia > Math.max(limite, (span / areaW) * 8)) {
           return null;
         }
         return { nome: s.nome, cor: s.cor, valor: melhor.valor, ts: melhor.ts };
@@ -674,7 +690,7 @@ export function GraficoMultiLinha({
           return (
             <path
               key={s.nome}
-              d={caminho(s.pontos)}
+              d={caminho(s.pontos, limitesBuraco.get(s.nome) ?? Infinity)}
               fill="none"
               stroke={s.cor}
               strokeWidth={destaque === s.nome ? 2.4 : 1.5}

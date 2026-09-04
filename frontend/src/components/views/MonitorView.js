@@ -856,15 +856,16 @@ export default function MonitorView({ alvo, nav }) {
                       cor: corDaSerie(i),
                       pontos: s.pontos.map((p) => ({ ts: p.ts, valor: p.util_pct })),
                     }))}
+                    altura={160}
                     escala="linear"
                     unidade="%"
                     formatar={(v) => `${v.toFixed(1)}%`}
                   />
-                  <div className="stack-v" style={{ gap: 3, marginTop: 8 }}>
+                  <div className="stack-v" style={{ gap: 4, marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
                     {serieDiscos.series.map((s, i) => (
                       <div key={s.dispositivo} className="stack-h small" style={{ gap: 8, alignItems: "center" }}>
                         <span style={{ width: 10, height: 10, borderRadius: 2, background: corDaSerie(i), flexShrink: 0 }} />
-                        <span className="mono" style={{ flex: 1 }}>{s.dispositivo}</span>
+                        <span className="mono" style={{ width: 100, flexShrink: 0 }}>{s.dispositivo}</span>
                         <span className="muted mono">
                           {t("média")} {s.util_media}% · {t("máx")} {s.util_pico}% ·{" "}
                           {t("agora")} {s.util_agora}% · {s.iops_agora} {t("operações/s")}
@@ -990,14 +991,17 @@ function ComparacaoMetrica({ titulo, serieComp, servidores, campo }) {
       <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{titulo}</div>
       <GraficoMultiLinha
         series={series}
+        altura={190}
         escala="linear"
         unidade="%"
         formatar={(v) => `${v.toFixed(1)}%`}
       />
       {/* Legenda fixa com média/máx/agora — sem ela, o resumo só existia
           passando o mouse no gráfico, e é o número que decide "quem é o
-          candidato" numa comparação de vários servidores de uma vez. */}
-      <div className="stack-v" style={{ gap: 3, marginTop: 8 }}>
+          candidato" numa comparação de vários servidores de uma vez.
+          Nome com largura fixa (não `flex: 1`): esticar até a borda
+          jogava o resumo lá longe, sem relação visual com o nome. */}
+      <div className="stack-v" style={{ gap: 4, marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
         {series.map((s) => {
           const est = estatisticasDaSerie(s.pontos);
           return (
@@ -1005,11 +1009,15 @@ function ComparacaoMetrica({ titulo, serieComp, servidores, campo }) {
               <span
                 style={{ width: 10, height: 10, borderRadius: 2, background: s.cor, flexShrink: 0 }}
               />
-              <span className="mono" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span
+                className="mono"
+                style={{ width: 190, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                title={s.nome}
+              >
                 {s.nome}
               </span>
               {est ? (
-                <span className="muted mono" style={{ flexShrink: 0 }}>
+                <span className="muted mono">
                   {t("média")} {est.media.toFixed(1)}% · {t("máx")} {est.maximo.toFixed(1)}% ·{" "}
                   {t("agora")} {est.ultimo.toFixed(1)}%
                 </span>
