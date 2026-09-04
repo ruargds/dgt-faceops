@@ -39,6 +39,10 @@ export function GraficoLinha({
   unidade = "%",
   maximo = 100,
 }) {
+  // Hook antes de qualquer retorno condicional — regra do React, e aqui
+  // tem retorno cedo logo abaixo (série vazia).
+  const [cursor, setCursor] = React.useState(null);
+
   const L = 8, R = 8, T = 8, B = 18;
   const W = 600;
   const H = altura;
@@ -86,6 +90,24 @@ export function GraficoLinha({
   // Em gráfico pequeno (mini/faísca) os rótulos poluem — só aparecem no
   // gráfico grande.
   const mini = altura < 60;
+
+  // ── Cursor — o mesmo "passar o mouse e ver o número" que o gráfico de
+  // várias linhas já tem. O SVG interno é sempre 0..W (esticado por
+  // `preserveAspectRatio="none"`), então a posição do mouse — medida em
+  // pixels reais do elemento — precisa ser convertida para essa mesma
+  // escala antes de achar o ponto mais próximo.
+  const aoMoverCursor = (evento) => {
+    const caixa = evento.currentTarget.getBoundingClientRect();
+    if (caixa.width <= 0) return;
+    const fracao = Math.min(1, Math.max(0, (evento.clientX - caixa.left) / caixa.width));
+    const svgX = fracao * W;
+    const i = n === 1
+      ? 0
+      : Math.min(n - 1, Math.max(0, Math.round(((svgX - L) / areaW) * (n - 1))));
+    const p = serie[i];
+    setCursor({ pctX: n === 1 ? 50 : (i / (n - 1)) * 100, valor: p.valor, ts: p.ts });
+  };
+  const aoSairCursor = () => setCursor(null);
   const topLimite = limite !== null && limite <= maximo ? py(limite) : null;
 
   // ── Eixo de tempo ──────────────────────────────────────────────────
@@ -146,7 +168,9 @@ export function GraficoLinha({
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
-        style={{ width: "100%", height: altura, display: "block" }}
+        style={{ width: "100%", height: altura, display: "block", cursor: mini ? undefined : "crosshair" }}
+        onMouseMove={mini ? undefined : aoMoverCursor}
+        onMouseLeave={mini ? undefined : aoSairCursor}
         role="img"
         aria-label={`${rotulo}: ${ultimo}${unidade}, pico de ${pico}${unidade}`}
       >
@@ -261,6 +285,61 @@ export function GraficoLinha({
         >
           {ultimo}{unidade}
         </div>
+      )}
+
+      {/* Cursor — mesma linguagem visual do gráfico de várias linhas:
+          traço vertical, ponto na curva, e o valor daquele instante. */}
+      {cursor && !mini && (
+        <>
+          <div
+            style={{
+              position: "absolute",
+              left: `${cursor.pctX}%`,
+              top: T,
+              height: areaH,
+              width: 1,
+              background: "var(--text-3)",
+              opacity: 0.5,
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: `${cursor.pctX}%`,
+              top: py(cursor.valor) - 4,
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: traco,
+              boxShadow: "0 0 0 2px var(--white)",
+              transform: "translateX(-50%)",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: Math.max(0, py(cursor.valor) - 42),
+              left: cursor.pctX > 60 ? undefined : `calc(${cursor.pctX}% + 12px)`,
+              right: cursor.pctX > 60 ? `calc(${100 - cursor.pctX}% + 12px)` : undefined,
+              background: "var(--white)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+              padding: "4px 8px",
+              fontSize: 11,
+              whiteSpace: "nowrap",
+              pointerEvents: "none",
+              boxShadow: "0 4px 14px rgba(0,0,0,.18)",
+              zIndex: 2,
+            }}
+          >
+            <div className="muted" style={{ marginBottom: 2 }}>
+              {cursor.ts ? new Date(cursor.ts).toLocaleString("pt-BR") : ""}
+            </div>
+            <strong style={{ color: traco }}>{cursor.valor}{unidade}</strong>
+          </div>
+        </>
       )}
     </div>
   );
