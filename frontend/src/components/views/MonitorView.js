@@ -866,7 +866,7 @@ export default function MonitorView({ alvo, nav }) {
                   curva do painel acima — regra 4, não duplicar o que já
                   existe na tela. */}
               {serieDiscos && serieDiscos.series && serieDiscos.series.length > 1 && (
-                <div>
+                <div className="bloco-grafico">
                   <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 2 }}>
                     {t("Disco por dispositivo")}
                   </div>
@@ -955,7 +955,7 @@ export default function MonitorView({ alvo, nav }) {
 
 function Painel({ titulo, explicacao, serie, limite, legenda, maximo = 100 }) {
   return (
-    <div>
+    <div className="bloco-grafico">
       <div className="stack-h" style={{ justifyContent: "space-between", marginBottom: 2 }}>
         <span style={{ fontWeight: 600, fontSize: 13.5 }}>{titulo}</span>
         <span className="small mono muted">{legenda}</span>
@@ -1013,7 +1013,7 @@ function ComparacaoMetrica({ titulo, serieComp, servidores, campo }) {
     });
 
   return (
-    <div>
+    <div className="bloco-grafico">
       <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{titulo}</div>
       <GraficoMultiLinha
         series={series}

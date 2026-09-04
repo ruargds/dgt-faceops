@@ -266,12 +266,15 @@ export function GraficoLinha({
       />
 
       {/* Número ao lado do ponto — sem ele, o valor de agora só existia
-          no texto de acessibilidade, escondido de quem enxerga a tela. */}
+          no texto de acessibilidade, escondido de quem enxerga a tela.
+          Quando a curva termina perto do topo, o número ACIMA do ponto
+          tampava justamente a ponta do gráfico — por isso ele troca de
+          lado conforme a metade em que o ponto cai. */}
       {!mini && (
         <div
           style={{
             position: "absolute",
-            top: py(ultimo) - 7,
+            top: py(ultimo) < T + areaH / 2 ? py(ultimo) + 8 : py(ultimo) - 20,
             right: 14,
             fontSize: 11,
             fontWeight: 600,

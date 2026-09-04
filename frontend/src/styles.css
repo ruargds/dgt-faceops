@@ -86,8 +86,12 @@
   --border: #22303F;
   --border-2: #33475C;
   --text: #E6EDF5;
-  --text-2: #AEBFD0;
-  --text-3: #7C8CA0;
+  /* Mais claros que o original (#AEBFD0 / #7C8CA0): a legenda de valor,
+     a explicação de cada gráfico e o eixo de tempo ficavam apagados
+     demais sobre o fundo escuro — texto de operação precisa ser lido
+     rápido, não decifrado. */
+  --text-2: #C1CEDC;
+  --text-3: #94A6BC;
   /* `--white` é a cor de SUPERFÍCIE (cartão, tabela, modal), não o branco
      literal — daí ela escurecer aqui. O nome ficou do tema claro. */
   --white: #101A27;
@@ -278,6 +282,15 @@ input[type="checkbox"] { width: auto; }
   border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-sm);
 }
 .card-tight { padding: 14px; }
+
+/* Contorno leve ao redor de um bloco de gráfico — separação visual sem
+   empilhar cartão dentro de cartão (sem fundo próprio, sem sombra: só a
+   borda, para não competir com o `.card` que já envolve a tela toda). */
+.bloco-grafico {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
 
 .section-title {
   font-size: 12px; font-weight: 700; text-transform: uppercase;
