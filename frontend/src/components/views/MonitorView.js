@@ -921,6 +921,18 @@ function Painel({ titulo, explicacao, serie, limite, legenda, maximo = 100 }) {
  * container, não para isto — um servidor ocioso a 1% ao lado de outro a
  * 60% bastaria para acionar o modo log e distorcer a leitura.
  */
+/** Média, máximo e último valor da janela — o resumo que a legenda mostra. */
+function estatisticasDaSerie(pontos) {
+  if (!pontos || !pontos.length) return null;
+  const valores = pontos.map((p) => p.valor);
+  const soma = valores.reduce((acc, v) => acc + v, 0);
+  return {
+    media: soma / valores.length,
+    maximo: Math.max(...valores),
+    ultimo: valores[valores.length - 1],
+  };
+}
+
 function ComparacaoMetrica({ titulo, serieComp, servidores, campo }) {
   const series = (serieComp || [])
     .filter((x) => x.r && x.r.amostras && x.r.amostras.length)
@@ -944,6 +956,32 @@ function ComparacaoMetrica({ titulo, serieComp, servidores, campo }) {
         unidade="%"
         formatar={(v) => `${v.toFixed(1)}%`}
       />
+      {/* Legenda fixa com média/máx/agora — sem ela, o resumo só existia
+          passando o mouse no gráfico, e é o número que decide "quem é o
+          candidato" numa comparação de vários servidores de uma vez. */}
+      <div className="stack-v" style={{ gap: 3, marginTop: 8 }}>
+        {series.map((s) => {
+          const est = estatisticasDaSerie(s.pontos);
+          return (
+            <div key={s.nome} className="stack-h small" style={{ gap: 8, alignItems: "center" }}>
+              <span
+                style={{ width: 10, height: 10, borderRadius: 2, background: s.cor, flexShrink: 0 }}
+              />
+              <span className="mono" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.nome}
+              </span>
+              {est ? (
+                <span className="muted mono" style={{ flexShrink: 0 }}>
+                  {t("média")} {est.media.toFixed(1)}% · {t("máx")} {est.maximo.toFixed(1)}% ·{" "}
+                  {t("agora")} {est.ultimo.toFixed(1)}%
+                </span>
+              ) : (
+                <span className="muted">{t("sem dado no período")}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
