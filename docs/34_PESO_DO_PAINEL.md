@@ -31,6 +31,19 @@ métrica: um script só devolve tudo em seções.
 A conexão vem de um **pool com TTL de 120 s**: ciclos seguidos
 reaproveitam a sessão em vez de refazer o handshake.
 
+> **A promessa já esteve quebrada, e por um detalhe.** O ciclo também
+> chama `health_summary` para saber quem está de pé, e ela perguntava
+> *toda vez* qual é o nome do projeto compose — um `docker ps -a` que,
+> num servidor com ~80 containers, faz o dockerd varrer todos. Eram três
+> idas por host por ciclo onde este documento promete uma: 17 mil
+> execuções por dia em vez de 5.760.
+>
+> O nome do projeto só muda se a instalação mudar de lugar, então hoje
+> ele é memoizado por host, como o binário do compose ao lado. O palpite
+> de "nenhum container de pé" **não** entra no cache: é estado passageiro,
+> e memoizá-lo faria o painel seguir usando o nome adivinhado depois de o
+> stack subir. Há trava no cenário `painel nao pesa no que monitora`.
+
 > **A medição de saturação de disco não custa disco.** Foi por isso que
 > ela saiu de `/proc/diskstats`, e não de `iostat`: medir E/S gastando
 > E/S seria contraditório. As duas leituras aproveitam a mesma janela que

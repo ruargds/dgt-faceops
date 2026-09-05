@@ -525,6 +525,33 @@ não é garantida); se ainda assim falhar, mostra o motivo por tipo e troca
 "sem evento" por **"não verificada"**. Ausência de dado deixou de ser
 apresentada como resposta.
 
+## "Esta tela falhou ao desenhar" — React #310
+
+**Sintoma:** uma tela inteira substituída pelo aviso da fronteira de erro,
+com `Minified React error #310`. Aconteceu em **Configurações**, e só
+depois de a tela terminar de carregar — abrir e ver o erro parecia
+aleatório.
+
+**Causa:** hook chamado **depois** de um `return` condicional:
+
+```js
+if (carregando) return <Carregando />;   // primeiro render sai aqui
+const filtrados = useMemo(...)           // e este hook não é chamado
+```
+
+No primeiro render (`carregando = true`) a função sai antes do `useMemo`;
+no segundo, já carregada, ela chega nele. O número de hooks muda entre um
+render e o outro, e o React derruba o componente — é literalmente o que o
+erro #310 quer dizer ("mais hooks que no render anterior").
+
+**Correção:** todo hook **antes** de qualquer `return`. A varredura das
+outras telas de busca não achou outro caso.
+
+**Como achar de novo:** procure `if (` seguido de `return` que apareça
+ANTES de um `use*(` dentro do mesmo componente. O erro é silencioso até a
+condição mudar em tempo de execução, então não aparece em build nem em
+lint.
+
 ## Método quando nada aqui serve
 
 1. `docker compose logs --tail 200 backend` — o erro está lá, quase sempre

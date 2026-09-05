@@ -182,6 +182,27 @@ rejeitando antes de chegar perto do shell.
 com `.`, e confere o caminho resolvido contra o diretório base. Mesma
 checagem na gravação de terminal.
 
+### Gravação de terminal cifrada em repouso
+
+A gravação da sessão contém tudo que foi digitado — inclusive a senha de
+sudo, quando o operador a digita num prompt. Ela é cifrada **linha a
+linha** com a mesma chave do cofre, então o texto claro nunca toca o
+disco. Detalhe e consequências em
+[07_INTERMINAL](07_INTERMINAL.md#no-disco-cifrada).
+
+### A cerca do projeto vale para o log ao vivo também
+
+`stack_service.logs` (leitura sob demanda) sempre chamou
+`_garantir_do_projeto`. O **stream ao vivo** validava só o formato do nome
+do container: com `services.view` — a permissão mais baixa que existe —
+dava para acompanhar em tempo real o log de qualquer container do
+servidor, inclusive o do próprio painel, que roda numa das VMs vigiadas.
+
+Hoje a mesma cerca é aplicada antes de o ticket ser emitido, e há trava
+para isso. Vale a lição geral: **caminho novo para um dado já protegido
+precisa herdar a proteção** — a validação de formato nunca foi garantia
+de pertencimento.
+
 ## Autenticação
 
 - Senha com bcrypt (passlib)

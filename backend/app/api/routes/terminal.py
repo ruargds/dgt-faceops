@@ -327,9 +327,10 @@ async def baixar_gravacao(
     """
     from pathlib import Path
 
-    from fastapi.responses import FileResponse
+    from fastapi.responses import Response
 
     from app.core.config import settings
+    from app.services.terminal_service import ler_gravacao
 
     sessao = await db.get(TerminalSession, sessao_id)
     if sessao is None or not sessao.recording_path:
@@ -342,6 +343,22 @@ async def baixar_gravacao(
     if not str(caminho).startswith(str(base)) or not caminho.is_file():
         raise HTTPException(status_code=404, detail="arquivo de gravação indisponível")
 
-    return FileResponse(
-        path=str(caminho), filename=caminho.name, media_type="application/x-asciicast"
+    # No disco a gravação é cifrada (ver `Gravador`); aqui ela é decifrada
+    # em memória para quem tem `terminal.sessions.view`. Por isso não é
+    # mais um FileResponse: servir o arquivo cru entregaria base64 que o
+    # asciinema não reproduz.
+    try:
+        conteudo = ler_gravacao(caminho)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500, detail=f"falha ao ler a gravação: {exc}"
+        ) from exc
+
+    # O nome oferecido perde o `.enc`: quem baixa quer um .cast que o
+    # asciinema abra, não o artefato cifrado.
+    nome = caminho.name[:-4] if caminho.name.endswith(".enc") else caminho.name
+    return Response(
+        content=conteudo,
+        media_type="application/x-asciicast",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
     )

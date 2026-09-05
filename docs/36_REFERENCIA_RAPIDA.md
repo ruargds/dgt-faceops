@@ -51,6 +51,27 @@ Completo em [17_ATUALIZACAO](17_ATUALIZACAO.md).
 
 ---
 
+## Segurança que já foi furada uma vez
+
+* **Caminho novo para dado protegido precisa herdar a proteção.** O log
+  ao vivo validava só o FORMATO do nome do container e não chamava
+  `_garantir_do_projeto` — a rota irmã chamava desde sempre. Com
+  `services.view`, a menor permissão que existe, dava para acompanhar o
+  log de qualquer container do servidor.
+* **A gravação de terminal é cifrada em repouso**, linha a linha, com a
+  chave do cofre. Ela contém a senha de sudo digitada num prompt. Perder
+  a `SECRET_KEY` torna as gravações ilegíveis — de propósito, e por isso
+  ela fica fora do backup do painel.
+* **`shlex.quote` também no que vem do SERVIDOR.** "O valor vem do
+  Docker, não do operador" já foi a premissa de muita injeção.
+
+## Frontend: hook depois de `return` derruba a tela
+
+`if (carregando) return <Carregando />` seguido de `useMemo` muda o
+número de hooks entre renders, e o React mata o componente com o erro
+#310. Não aparece em build nem em lint — só em execução, quando a
+condição muda. Todo hook antes de qualquer `return`.
+
 ## Cercas de ação destrutiva
 
 * **Toda ação em container passa por `StackService._garantir_do_projeto()`**

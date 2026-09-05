@@ -18,6 +18,7 @@ entra no coletor contínuo.
 """
 import logging
 import re
+import shlex
 
 from app.core.config import settings
 from app.services.ssh_service import SSHError, SSHService
@@ -25,6 +26,19 @@ from app.services.ssh_service import SSHError, SSHService
 log = logging.getLogger("faceops.dispositivos")
 
 SEP = "###FACEOPS:"
+
+
+def _literal_sql(valor: str) -> str:
+    """
+    Literal de texto para SQL, com a aspa simples escapada.
+
+    Aqui não dá para usar parâmetro de driver: a consulta é montada como
+    argumento do `psql -tAc` do outro lado de um SSH, e não há conexão
+    Python com o banco do Face Detect. Então a citação é explícita — e
+    fica numa função só, para não depender de alguém lembrar da regra em
+    cada ponto de uso.
+    """
+    return "'" + str(valor).replace("'", "''") + "'"
 
 # Padrões de nome observados nas versões 2.x. A descoberta casa por
 # padrão, então uma instalação com prefixo diferente ainda funciona.
@@ -113,12 +127,12 @@ class DispositivosService:
         tentativas: list[str] = []
         if projeto:
             tentativas.append(
-                f"docker ps --filter label=com.docker.compose.project={projeto} "
+                f"docker ps --filter label=com.docker.compose.project={shlex.quote(projeto)} "
                 "--filter label=com.docker.compose.service=postgresql "
                 "--format '{{.Names}}' | head -1"
             )
             tentativas.append(
-                f"docker ps --filter label=com.docker.compose.project={projeto} "
+                f"docker ps --filter label=com.docker.compose.project={shlex.quote(projeto)} "
                 "--format '{{.Names}} {{.Image}}' "
                 "| grep -iE 'postgres|pgsql|timescale' | awk '{print $1}' | head -1"
             )
@@ -161,7 +175,7 @@ class DispositivosService:
 
         script = f"""
 set +e
-C={container}
+C={shlex.quote(container)}
 PGUSER=$(docker exec $C sh -c 'echo -n "$POSTGRES_USER"' 2>/dev/null)
 [ -z "$PGUSER" ] && PGUSER=postgres
 
@@ -258,11 +272,18 @@ echo "{SEP}END"
         return esquema
 
     async def _colunas(self, host, sudo, container, usuario, banco, tabela) -> list[str]:
+        # `shlex.quote` em tudo que vai para a linha de comando (regra 7
+        # do projeto). O nome da tabela ainda é literal DENTRO do SQL, mas
+        # o comando inteiro vai citado, então um nome esquisito devolvido
+        # pelo Docker não escapa para o shell.
+        consulta = (
+            "SELECT column_name FROM information_schema.columns "
+            f"WHERE table_schema='public' AND table_name={_literal_sql(tabela)}"
+        )
         r = await self.ssh.run(
             host,
-            f"docker exec {container} psql -U {usuario} -d {banco} -tAc "
-            f"\"SELECT column_name FROM information_schema.columns "
-            f"WHERE table_schema='public' AND table_name='{tabela}'\"",
+            f"docker exec {shlex.quote(container)} psql -U {shlex.quote(usuario)} "
+            f"-d {shlex.quote(banco)} -tAc {shlex.quote(consulta)}",
             sudo=sudo,
             timeout=60,
         )

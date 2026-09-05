@@ -48,6 +48,24 @@ log = logging.getLogger("faceops.faxina")
 # trás. 24h é folga suficiente para o backup mais longo terminar.
 STAGING_HORAS = 24
 
+# Os dois formatos de gravação do InTerminal: `.cast` em claro (antes da
+# cifragem) e `.cast.enc` (agora, ver `terminal_service.Gravador`). Ficam
+# aqui, num lugar só, porque três pontos diferentes varrem esta mesma
+# pasta — e um glob esquecido significaria gravação que nunca mais é
+# apagada, acumulando no disco da VM do painel em silêncio.
+PADROES_GRAVACAO = ("*.cast", "*.cast.enc")
+
+
+def _gravacoes(pasta):
+    """Toda gravação da pasta, nos dois formatos, sem repetir."""
+    vistos = set()
+    for padrao in PADROES_GRAVACAO:
+        for arquivo in pasta.glob(padrao):
+            if arquivo in vistos:
+                continue
+            vistos.add(arquivo)
+            yield arquivo
+
 # Teto de linhas de execução avaliadas por passada. A verificação bate no
 # disco uma vez por candidato; com teto, um atraso grande é resolvido em
 # vários dias em vez de um pico num só.
@@ -163,7 +181,7 @@ class FaxinaService:
 
         corte = time.time() - dias * 86400
         removidos: list[str] = []
-        for arquivo in pasta.glob("*.cast"):
+        for arquivo in _gravacoes(pasta):
             try:
                 st = arquivo.stat()
                 if st.st_mtime < corte:
@@ -490,7 +508,7 @@ class FaxinaService:
         if "gravacoes" in pedidas:
             pasta = Path(settings.TERMINAL_SESSION_DIR)
             if pasta.exists():
-                for arquivo in pasta.glob("*.cast"):
+                for arquivo in _gravacoes(pasta):
                     try:
                         st = arquivo.stat()
                         if st.st_mtime >= corte_ts:
@@ -668,9 +686,14 @@ class FaxinaService:
                     continue
             return qtd, tam
 
-        gravacoes, gravacoes_bytes = varrer(
-            Path(settings.TERMINAL_SESSION_DIR), "*.cast", d_grav * 86400
-        )
+        # Os dois formatos: `.cast` de antes da cifragem e `.cast.enc`
+        # de agora. Somar os dois é o que impede a prévia de dizer zero
+        # enquanto a faxina apaga.
+        gravacoes = gravacoes_bytes = 0
+        for _padrao in PADROES_GRAVACAO:
+            _q, _t = varrer(Path(settings.TERMINAL_SESSION_DIR), _padrao, d_grav * 86400)
+            gravacoes += _q
+            gravacoes_bytes += _t
         staging, staging_bytes = varrer(
             Path(settings.LOCAL_BACKUP_DIR) / "_staging", "*", STAGING_HORAS * 3600
         )

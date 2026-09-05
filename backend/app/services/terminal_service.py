@@ -24,6 +24,7 @@ from pathlib import Path
 import asyncssh
 
 from app.core.config import settings
+from app.core.vault import decrypt_secret, encrypt_secret
 from app.services import erros_conexao
 from app.services.ssh_service import SSHError
 
@@ -36,14 +37,45 @@ MAX_ENTRADA = 64 * 1024
 
 class Gravador:
     """
-    Grava a sessão em asciicast v2 (formato do asciinema).
+    Grava a sessão em asciicast v2 (formato do asciinema), **cifrado**.
 
-    Escolhido porque é uma linha JSON por evento: dá para reproduzir com
-    `asciinema play`, e dá para ler com `grep` quando alguém precisa achar
-    um comando específico numa auditoria.
+    O formato foi escolhido porque é uma linha JSON por evento: dá para
+    reproduzir com `asciinema play` e para achar um comando específico
+    numa auditoria.
+
+    ## Por que cifrar, e por que linha a linha
+
+    A gravação é o artefato mais sensível do painel depois das
+    credenciais: ela contém TUDO que foi digitado, inclusive a senha de
+    sudo quando o operador a digita num prompt, e o conteúdo de qualquer
+    arquivo que ele tenha aberto. Em claro no disco, ela vale mais para
+    um invasor do que o próprio cofre.
+
+    Cifrar só ao fechar deixaria a sessão inteira em claro enquanto ela
+    dura — e uma sessão de plantão dura horas. Pior: painel derrubado no
+    meio deixaria o arquivo em claro para sempre. Cifrando LINHA A LINHA,
+    o texto claro nunca toca o disco.
+
+    A chave é a mesma do cofre (`core.vault`, derivada da SECRET_KEY), e
+    isso tem uma consequência que precisa estar dita: **perder a
+    SECRET_KEY torna as gravações ilegíveis**. É o mesmo trato já aceito
+    para as credenciais, e é a razão de a SECRET_KEY ficar deliberadamente
+    fora do backup do painel (docs/19).
+
+    Arquivo novo sai com sufixo `.cast.enc`. O `.cast` em claro continua
+    sendo lido na hora de baixar — gravação antiga não deixa de abrir por
+    causa desta mudança.
     """
 
-    def __init__(self, caminho: Path, colunas: int, linhas: int, titulo: str) -> None:
+    def __init__(
+        self, caminho: Path, colunas: int, linhas: int, titulo: str,
+        cifrar: bool = True,
+    ) -> None:
+        self.cifrar = cifrar
+        # O sufixo é o que diz ao leitor se precisa decifrar. Sem ele, a
+        # única forma de saber seria tentar e ver se falha.
+        if cifrar and caminho.suffix != ".enc":
+            caminho = caminho.with_suffix(caminho.suffix + ".enc")
         self.caminho = caminho
         self.inicio = time.time()
         self._fh = None
@@ -58,7 +90,15 @@ class Gravador:
             "title": titulo,
             "env": {"TERM": "xterm-256color", "SHELL": "/bin/bash"},
         }
-        self._fh.write(json.dumps(cabecalho, ensure_ascii=False) + "\n")
+        self._escrever_linha(json.dumps(cabecalho, ensure_ascii=False))
+
+    def _escrever_linha(self, linha: str) -> None:
+        """Uma linha do asciicast, cifrada quando for o caso."""
+        if self.cifrar:
+            # Fernet devolve base64 urlsafe: não contém '\n', então a
+            # quebra de linha continua sendo separador confiável.
+            linha = encrypt_secret(linha)
+        self._fh.write(linha + "\n")
 
     async def escrever(self, dados: str, canal: str = "o") -> None:
         if self._fh is None:
@@ -66,7 +106,7 @@ class Gravador:
         async with self._lock:
             try:
                 evento = [round(time.time() - self.inicio, 6), canal, dados]
-                self._fh.write(json.dumps(evento, ensure_ascii=False) + "\n")
+                self._escrever_linha(json.dumps(evento, ensure_ascii=False))
             except (OSError, ValueError):
                 pass
 
@@ -77,6 +117,39 @@ class Gravador:
             except OSError:
                 pass
             self._fh = None
+
+
+def ler_gravacao(caminho: Path) -> str:
+    """
+    O asciicast em claro, para baixar e reproduzir.
+
+    Aceita os dois formatos, e é essa a razão de existir: gravação feita
+    antes da cifragem (`.cast`) continua abrindo normalmente, e o
+    operador não descobre que perdeu o histórico justamente no dia em
+    que precisa dele.
+
+    Linha ilegível não derruba o arquivo inteiro: entra como um evento de
+    comentário e a reprodução segue. Uma gravação truncada por queda do
+    painel ainda vale pelo que tem — perder as 3 mil linhas boas por
+    causa da última, escrita pela metade, seria trocar um problema
+    pequeno por um grande.
+    """
+    bruto = caminho.read_text(encoding="utf-8", errors="replace")
+    if caminho.suffix != ".enc":
+        return bruto
+
+    linhas = []
+    for linha in bruto.splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        try:
+            linhas.append(decrypt_secret(linha))
+        except ValueError:
+            linhas.append(json.dumps(
+                [0.0, "o", "[linha ilegível: gravada com outra SECRET_KEY]\r\n"]
+            ))
+    return "\n".join(linhas) + "\n"
 
 
 class SessaoTerminal:

@@ -140,7 +140,38 @@ que não acontece com formato binário.
 
 `"i"` é entrada (o que foi digitado), `"o"` é saída (o que apareceu na tela).
 
-**Baixar:** Auditoria → Sessões de terminal → botão de download.
+### No disco, cifrada
+
+O trecho acima é o que se vê **ao baixar**. No disco, cada uma dessas
+linhas está cifrada com Fernet (AES-128-CBC + HMAC-SHA256), a mesma caixa
+das credenciais SSH — o arquivo sai com sufixo `.cast.enc`.
+
+A razão é o próprio conteúdo: a gravação tem **tudo** que foi digitado,
+inclusive a senha de sudo quando o operador a digita num prompt, e o
+conteúdo de qualquer arquivo aberto na tela. Em claro no disco, ela vale
+mais para um invasor do que o cofre de credenciais.
+
+**Linha a linha, não ao fechar.** Cifrar só no fim deixaria a sessão
+inteira em claro enquanto ela dura — e sessão de plantão dura horas. Pior:
+painel derrubado no meio deixaria o arquivo em claro para sempre. Cifrando
+por linha, o texto claro nunca toca o disco.
+
+Duas consequências que precisam estar ditas:
+
+* **Perder a `SECRET_KEY` torna as gravações ilegíveis.** É o mesmo trato
+  já aceito para as credenciais, e é a razão de a `SECRET_KEY` ficar
+  deliberadamente fora do backup do painel (ver
+  [19_BACKUP_DO_PAINEL](19_BACKUP_DO_PAINEL.md)).
+* **`grep` direto no arquivo não funciona mais** — o arquivo no disco é
+  base64. Baixe primeiro (o download entrega o `.cast` em claro) e depois
+  procure. Os exemplos abaixo valem para o arquivo baixado.
+
+Gravação feita **antes** desta mudança continua em claro (`.cast`) e
+continua abrindo normalmente: ninguém descobre que perdeu o histórico
+justamente no dia em que precisa dele. A faxina enxerga os dois formatos.
+
+**Baixar:** Auditoria → Sessões de terminal → botão de download. O painel
+decifra na hora e entrega um `.cast` que o `asciinema` reproduz.
 
 **Reproduzir:**
 

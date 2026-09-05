@@ -1349,6 +1349,73 @@ async def cenario_painel_nao_pesa_no_que_monitora():
     )
 
 
+async def cenario_gravacao_de_terminal_e_cifrada():
+    """
+    A gravação da sessão é o artefato mais sensível do painel depois das
+    credenciais: contém TUDO que foi digitado — inclusive a senha de sudo
+    quando o operador a digita num prompt — e o conteúdo de qualquer
+    arquivo que ele tenha aberto na tela.
+
+    Quatro travas:
+
+    * o texto claro NUNCA toca o disco (cifra linha a linha, não ao
+      fechar: sessão de plantão dura horas, e painel derrubado no meio
+      deixaria o arquivo em claro para sempre);
+    * o que foi gravado volta idêntico ao baixar;
+    * gravação ANTIGA, em claro, continua abrindo — ninguém descobre que
+      perdeu o histórico no dia em que precisa dele;
+    * a faxina enxerga os dois formatos, senão a gravação cifrada nunca
+      seria apagada e acumularia em silêncio.
+    """
+    import json as _json
+    import tempfile
+    from pathlib import Path as _Path
+
+    from app.services.terminal_service import Gravador, ler_gravacao
+
+    segredo = "senha-de-sudo-Sup3rS3cr3ta"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        alvo = _Path(tmp) / "20260904-210000_vm-appserver_ruã.cast"
+        g = Gravador(alvo, 120, 32, "ruã@vm-appserver")
+
+        # O sufixo muda: é ele que diz ao leitor que precisa decifrar.
+        assert g.caminho.name.endswith(".cast.enc"), g.caminho.name
+        await g.escrever(f"# sudo -S <<< {segredo}\r\n", "i")
+        await g.escrever("ok\r\n", "o")
+        g.fechar()
+
+        bruto = g.caminho.read_text(encoding="utf-8")
+        assert segredo not in bruto, (
+            "a senha digitada apareceu EM CLARO no arquivo de gravação"
+        )
+        assert "vm-appserver" not in bruto, "o cabeçalho ficou em claro"
+
+        # E volta inteiro na hora de baixar.
+        aberto = ler_gravacao(g.caminho)
+        assert segredo in aberto, "a gravação não voltou legível"
+        linhas = [l for l in aberto.splitlines() if l.strip()]
+        cabecalho = _json.loads(linhas[0])
+        assert cabecalho["version"] == 2 and cabecalho["width"] == 120, cabecalho
+        assert _json.loads(linhas[1])[1] == "i", linhas[1]
+
+        # Gravação antiga, em claro, continua abrindo.
+        velha = _Path(tmp) / "antiga.cast"
+        conteudo = _json.dumps({"version": 2, "width": 80, "height": 24}) + "\n"
+        velha.write_text(conteudo, encoding="utf-8")
+        assert ler_gravacao(velha) == conteudo, "gravação antiga deixou de abrir"
+
+        # A faxina enxerga os dois formatos.
+        from app.services.faxina_service import PADROES_GRAVACAO, _gravacoes
+
+        achados = {p.name for p in _gravacoes(_Path(tmp))}
+        assert g.caminho.name in achados, (
+            f"a faxina não acha a gravação cifrada — ela acumularia para "
+            f"sempre. Padrões: {PADROES_GRAVACAO}"
+        )
+        assert "antiga.cast" in achados, "a faxina parou de achar a gravação antiga"
+
+
 async def cenario_saturacao_de_disco_e_medida():
     """
     Um pico de E/S derrubou um servidor de produção e o painel não tinha
@@ -4025,6 +4092,7 @@ CENARIOS = [
     cenario_projeto_sem_marca_de_ferramenta,
     cenario_coletor_desacelera_sem_ninguem_olhando,
     cenario_painel_nao_pesa_no_que_monitora,
+    cenario_gravacao_de_terminal_e_cifrada,
     cenario_saturacao_de_disco_e_medida,
     cenario_backup_do_painel_nao_disputa_disco,
     cenario_erro_de_conexao_diz_onde_procurar,
