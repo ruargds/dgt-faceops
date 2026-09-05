@@ -145,7 +145,7 @@ grupo, e três detalhes daquele template resolvem problemas reais:
 ### A primeira linha assina a origem
 
 ```
-🎥 FaceOps · DGT
+🧠🤖 FaceOps · DGT
 ```
 
 Não é enfeite. **No mesmo grupo caem avisos do Zabbix e do FaceOps**, e o
@@ -153,12 +153,12 @@ caminho de resolução é diferente em cada caso — quem lê precisa saber a
 origem antes de decidir o que fazer. O nome do cliente vem de
 `projeto.cliente` (Configurações → Identidade do projeto): o **mesmo
 campo** que já nomeia o painel e a aba do navegador, para não haver dois
-lugares dizendo quem é o cliente. Vazio, sai só `🎥 FaceOps`.
+lugares dizendo quem é o cliente. Vazio, sai só `🧠🤖 FaceOps`.
 
 ### Serviço parado
 
 ```
-🎥 FaceOps · DGT
+🧠🤖 FaceOps · DGT
 
 🔴 - vm-appserver (Aplicação) - 🔴
 
@@ -179,7 +179,7 @@ lugares dizendo quem é o cliente. Vazio, sai só `🎥 FaceOps`.
 ### Voltou ao normal
 
 ```
-🎥 FaceOps · DGT
+🧠🤖 FaceOps · DGT
 
 ✅✅ - vm-appserver (Aplicação) - ✅✅
 

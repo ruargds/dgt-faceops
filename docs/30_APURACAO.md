@@ -33,7 +33,7 @@ de retorno — uma segunda mensagem depois seria mais spam para dizer o que
 cabia na primeira:
 
 ```
-🎥 FaceOps · PROCERGS
+🧠🤖 FaceOps · PROCERGS
 
 ✅✅ - VM-APPSERVER-01 (Aplicação) - ✅✅
 
