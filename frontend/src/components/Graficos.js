@@ -658,20 +658,37 @@ export function GraficoMultiLinha({
   // "série mais longa" com cadência de 10-15 s, e o intervalo normal de
   // 60 s dos demais passava a contar como buraco em toda a linha — o
   // gráfico inteiro picotado sem nenhum buraco real ter acontecido.
-  function cadenciaDe(pontos) {
-    if (!pontos || pontos.length < 2) return 0;
+  //
+  // E a MEDIANA também não serve de régua, pelo mesmo motivo por outro
+  // caminho: o coletor tem duas velocidades de propósito (desacelera
+  // quando ninguém está olhando o painel). Medido em produção, numa
+  // janela de 6 h: mediana de 74 s, mas 33 intervalos passando de 5 min
+  // — todos legítimos. Com `mediana × 2,5` a linha quebrava 33 vezes e o
+  // gráfico virava confete por causa de um comportamento esperado.
+  //
+  // A régua é o ritmo mais LENTO que ainda é normal: o percentil 90 dos
+  // intervalos. Buraco de verdade — servidor fora, painel derrubado —
+  // continua cortando a linha, porque é muito maior que a economia; a
+  // desaceleração de rotina, não.
+  function limiteDeBuraco(pontos) {
+    if (!pontos || pontos.length < 2) return Infinity;
     const intervalos = [];
     for (let i = 1; i < pontos.length; i++) {
       intervalos.push(+new Date(pontos[i].ts) - +new Date(pontos[i - 1].ts));
     }
     intervalos.sort((a, b) => a - b);
-    return intervalos[Math.floor(intervalos.length / 2)];
+    const p90 = intervalos[Math.min(
+      intervalos.length - 1,
+      Math.floor(intervalos.length * 0.9),
+    )];
+    // Piso pela mediana: série curta (poucos pontos) tem p90 instável, e
+    // sem o piso um único intervalo grande viraria a régua de tudo.
+    const mediana = intervalos[Math.floor(intervalos.length / 2)];
+    const base = Math.max(p90 || 0, mediana || 0);
+    return base > 0 ? base * 2.5 : Infinity;
   }
   const limitesBuraco = new Map(
-    desenhadas.map((s) => {
-      const cad = cadenciaDe(s.pontos);
-      return [s.nome, cad > 0 ? cad * 2.5 : Infinity];
-    }),
+    desenhadas.map((s) => [s.nome, limiteDeBuraco(s.pontos)]),
   );
 
   const { marcas, passo: passoTempo } = marcasDeTempo(t0, t1);
