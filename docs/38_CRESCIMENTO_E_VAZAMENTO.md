@@ -310,7 +310,7 @@ previsão vai no texto do problema, e não numa linha extra, porque é ela
 que faz alguém agir e precisa caber na primeira linha da mensagem:
 
 ```
-FaceOps 🤖 · PROCERGS
+🤖 FaceOps · PROCERGS
 
 📈 - VM-APPSERVER-01 (Aplicação) - 📈
 

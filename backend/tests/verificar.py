@@ -2682,7 +2682,7 @@ async def cenario_notificacao_mensagem_tem_campos_e_assina_a_origem():
     assert "\n\n" in texto, "campos colados, sem respiro entre eles"
 
     # Assinatura e cliente no topo, antes de qualquer detalhe.
-    assert campos[0].startswith("FaceOps 🤖"), texto
+    assert campos[0].startswith("🤖 FaceOps"), texto
     assert "DGT" in campos[0], texto
     # Servidor no campo seguinte, com o papel em palavras.
     assert "vm-appserver" in campos[1] and "Aplicação" in campos[1], texto
@@ -2708,7 +2708,7 @@ async def cenario_notificacao_mensagem_tem_campos_e_assina_a_origem():
         "tipo": "servico_parado", "host": "vm-x", "servico": "s",
         "nivel": "atencao", "texto": "o serviço s está parado",
     })
-    assert sem_cliente.split("\n\n")[0] == "FaceOps 🤖", sem_cliente
+    assert sem_cliente.split("\n\n")[0] == "🤖 FaceOps", sem_cliente
 
     # Texto longo é cortado sem partir palavra, e avisa que foi cortado.
     longa = montar_mensagem({
@@ -3229,7 +3229,7 @@ async def cenario_telegram_ponta_a_ponta():
             # João recebeu a queda no formato novo: assinatura, servidor
             # e o campo que diz o problema.
             so_dele = por_destino["João"][0]
-            assert so_dele.startswith("FaceOps 🤖"), so_dele
+            assert so_dele.startswith("🤖 FaceOps"), so_dele
             assert "Problema:" in so_dele and "Gravidade: Crítico" in so_dele, so_dele
 
             # E o token nunca apareceu em nenhuma mensagem.
