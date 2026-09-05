@@ -1293,6 +1293,61 @@ async def cenario_painel_nao_pesa_no_que_monitora():
         assert chave in POR_CHAVE, f"retenção sumiu do catálogo: {chave}"
         assert POR_CHAVE[chave].padrao, f"{chave} veio sem prazo padrão"
 
+    # ── 5. O nome do projeto compose é perguntado UMA vez ───────────────
+    #
+    # `list_services` roda a cada ciclo, em cada host, e chamava
+    # `_projeto` toda vez — um `docker ps -a` que, num servidor com ~80
+    # containers, faz o dockerd varrer todos. A resposta só muda se a
+    # instalação mudar de lugar; perguntar de minuto em minuto era uma
+    # das três idas SSH por host por ciclo, onde o desenho promete uma.
+    from app.services.stack_service import StackService
+
+    class SSHFalso:
+        def __init__(self):
+            self.chamadas = 0
+
+        async def docker_needs_sudo(self, host):
+            return False
+
+        async def run(self, host, comando, **kw):
+            self.chamadas += 1
+            return type("R", (), {
+                "stdout": "com.docker.compose.project=findface-multi",
+                "stderr": "", "ok": True, "duration_ms": 1,
+            })()
+
+    ssh = SSHFalso()
+    servico = StackService(ssh=ssh)
+    alvo = type("H", (), {
+        "id": 1, "name": "vm",
+        "ffmulti_dir": "/opt/findface-multi", "compose_file": "",
+    })()
+
+    primeiro = await servico._projeto(alvo)
+    assert primeiro == "findface-multi", primeiro
+    assert ssh.chamadas == 1, ssh.chamadas
+    for _ in range(5):
+        assert await servico._projeto(alvo) == "findface-multi"
+    assert ssh.chamadas == 1, (
+        f"o nome do projeto foi perguntado {ssh.chamadas}x — voltou a ser "
+        "um docker ps por ciclo, em cada host"
+    )
+
+    # ── 6. O log ao vivo passa pela cerca do projeto ────────────────────
+    #
+    # A leitura sob demanda (`stack_service.logs`) sempre chamou
+    # `_garantir_do_projeto`. O stream ao vivo validava só o FORMATO do
+    # nome: com `services.view` — a permissão mais baixa — dava para
+    # acompanhar o log de qualquer container do servidor, inclusive o do
+    # próprio painel.
+    rota_logs = (pathlib.Path(__file__).resolve().parents[1]
+                 / "app" / "api" / "routes" / "logs.py").read_text(encoding="utf-8")
+    trecho = rota_logs[rota_logs.index("async def emitir_ticket("):]
+    trecho = trecho[:trecho.index("@router", 10)]
+    assert "_garantir_do_projeto" in trecho, (
+        "o ticket de log ao vivo voltou a ser emitido sem a cerca de projeto"
+    )
+
 
 async def cenario_saturacao_de_disco_e_medida():
     """

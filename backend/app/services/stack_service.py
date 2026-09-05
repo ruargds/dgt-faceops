@@ -96,6 +96,13 @@ class StackService:
         self.config = config
         # host_id -> "docker compose" | "docker-compose"
         self._bin_cache: dict[int, str] = {}
+        # host_id -> nome do projeto compose. O nome sai de um `docker ps
+        # -a` e NÃO muda enquanto a instalação for a mesma — mas era
+        # perguntado a cada `list_services`, ou seja, a cada ciclo do
+        # monitor, em cada host. Num servidor com ~80 containers esse
+        # `docker ps -a` faz o dockerd varrer todos, de minuto em minuto,
+        # para reler uma resposta que já se sabia.
+        self._projeto_cache: dict[int, str] = {}
 
     def _limite_disco(self) -> int:
         if self.config is None:
@@ -254,7 +261,14 @@ done
         Nome do projeto compose. O Docker deriva do nome do diretório, mas
         um `COMPOSE_PROJECT_NAME` no .env muda isso — então perguntamos ao
         próprio Docker em vez de adivinhar pelo caminho.
+
+        Memoizado por host, como o `compose_bin` ao lado: a resposta só
+        muda se a instalação mudar de lugar, e aí o painel é reiniciado
+        ou o host é reeditado — os dois esvaziam o cache.
         """
+        if host.id in self._projeto_cache:
+            return self._projeto_cache[host.id]
+
         arquivo = shlex.quote(_compose_file(host))
         diretorio = shlex.quote(_compose_dir(host))
         sudo = await self.ssh.docker_needs_sudo(host)
@@ -267,9 +281,15 @@ done
         )
         for parte in (r.stdout or "").split(","):
             if parte.startswith("com.docker.compose.project="):
-                return parte.split("=", 1)[1].strip()
+                nome = parte.split("=", 1)[1].strip()
+                if nome:
+                    self._projeto_cache[host.id] = nome
+                return nome
 
-        # Nenhum container de pé — cai no padrão do Docker: nome do diretório
+        # Nenhum container de pé — cai no padrão do Docker: nome do
+        # diretório. NÃO entra no cache: "nenhum container de pé" é um
+        # estado passageiro, e memoizar o palpite faria o painel seguir
+        # usando o nome adivinhado depois de o stack subir.
         r2 = await self.ssh.run(host, f"basename {diretorio}", timeout=20)
         nome = r2.stdout.strip().lower()
         return re.sub(r"[^a-z0-9_-]", "", nome) or "findface-multi"

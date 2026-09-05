@@ -29,6 +29,7 @@ from app.db.database import AsyncSessionLocal, get_db
 from app.models.host import Host
 from app.models.user import User
 from app.models.visao_log import VisaoLog
+from app.services.stack_service import StackError
 from app.services import audit_service
 from app.services.logs_service import LogError, SessaoLog, listar_containers
 from app.services.ssh_service import SSHError
@@ -207,9 +208,9 @@ async def remover_visao(
 @router.post("/ticket/{host_id}")
 async def emitir_ticket(
     host_id: int,
+    request: Request,
     container: str = Query(..., min_length=1, max_length=128),
     tail: int = Query(default=200, ge=0, le=5000),
-    request: Request = None,
     autor: User = Depends(require_permission("services.view")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -219,6 +220,17 @@ async def emitir_ticket(
     if not host.enabled:
         raise HTTPException(status_code=400, detail=f"'{host.name}' está desativado")
 
+    # A MESMA cerca que `stack_service.logs` aplica na leitura sob
+    # demanda. Sem ela, este caminho lia o log de QUALQUER container do
+    # servidor — inclusive o do próprio painel, que roda numa das VMs
+    # vigiadas — bastando `services.view`, a permissão mais baixa que
+    # existe. O nome ser válido no formato nunca foi garantia de ser um
+    # container do projeto.
+    try:
+        await request.app.state.stack._garantir_do_projeto(host, container)
+    except StackError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     _limpar_tickets()
     ticket = secrets.token_urlsafe(32)
     _tickets[ticket] = {
@@ -226,7 +238,7 @@ async def emitir_ticket(
         "host_id": host_id,
         "container": container,
         "tail": tail,
-        "ip": client_ip(request) if request else "",
+        "ip": client_ip(request),
         "expira_em": time.monotonic() + TICKET_TTL,
     }
     return {"ticket": ticket, "expira_em_s": TICKET_TTL}

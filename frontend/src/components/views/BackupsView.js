@@ -1230,20 +1230,33 @@ function ModalDetalhe({ runId, onFechar }) {
 
   useEffect(() => {
     let vivo = true;
+    let id = null;
+
     const buscar = () =>
       api
         .backup(runId)
-        .then((r) => vivo && setRun(r))
+        .then((r) => {
+          if (!vivo) return;
+          setRun(r);
+          // Execução terminada não muda mais: seguir perguntando de 3 em
+          // 3 s seria bater no banco para sempre enquanto a janela
+          // ficasse aberta — inclusive esquecida numa aba de plantão.
+          if (id && r && ["sucesso", "falha", "cancelado"].includes(r.status)) {
+            clearInterval(id);
+            id = null;
+          }
+        })
         .catch((e) => vivo && setErro(e.message));
 
     buscar();
-    // Acompanha ao vivo enquanto estiver rodando
-    const id = setInterval(() => {
-      if (vivo) buscar();
+    // Acompanha ao vivo enquanto estiver rodando — e só com a aba à
+    // vista, como o resto do painel.
+    id = setInterval(() => {
+      if (vivo && document.visibilityState === "visible") buscar();
     }, 3000);
     return () => {
       vivo = false;
-      clearInterval(id);
+      if (id) clearInterval(id);
     };
   }, [runId]);
 
