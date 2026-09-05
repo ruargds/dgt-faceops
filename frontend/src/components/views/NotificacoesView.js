@@ -75,7 +75,7 @@ export default function NotificacoesView() {
   // `projeto.cliente`, o mesmo campo do título do painel.
   const { marca } = useSessao();
   const cliente = ((marca || MARCA_PADRAO).cliente || "").trim();
-  const assinatura = cliente ? `🧠🤖 FaceOps · ${cliente}` : "🧠🤖 FaceOps";
+  const assinatura = cliente ? `FaceOps 🤖 · ${cliente}` : "FaceOps 🤖";
   const [conta, setConta] = useState(null);
   const [destinos, setDestinos] = useState([]);
   const [regras, setRegras] = useState([]);

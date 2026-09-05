@@ -132,7 +132,7 @@ def _duracao(segundos: float | None) -> str:
 # cada caso. O nome do cliente vem de `projeto.cliente` (Configurações →
 # Identidade do projeto) — o mesmo campo que já nomeia o painel, para não
 # haver dois lugares dizendo quem é o cliente.
-MARCA = "🧠🤖 FaceOps"
+MARCA = "FaceOps 🤖"
 
 # Separador entre ícone e rótulo, como no template do Zabbix.
 SEP_CAMPO = " - "
