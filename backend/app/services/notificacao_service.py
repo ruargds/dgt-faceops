@@ -370,11 +370,20 @@ class NotificacaoService:
         if inicio == fim:
             return True
 
+        # O fim é INCLUSIVO: "até 23:59" cobre até 23:59:59, que é o que a
+        # pessoa quis dizer ao escrever o último horário do dia. Com fim
+        # exclusivo, `00:00–23:59` deixaria o último minuto de fora — um
+        # minuto cego, e ninguém descobre um minuto cego por inspeção: só
+        # pelo alerta que não chegou.
+        #
+        # Duas regras vizinhas (08:00–18:00 e 18:00–22:00) passam a se
+        # tocar às 18:00. É de propósito: regra somam, então sobreposição
+        # não causa dano, enquanto buraco causa.
         minuto = agora.hour * 60 + agora.minute
         if inicio < fim:
-            return inicio <= minuto < fim
+            return inicio <= minuto <= fim
         # Cruza a meia-noite.
-        return minuto >= inicio or minuto < fim
+        return minuto >= inicio or minuto <= fim
 
     @classmethod
     def rotear(

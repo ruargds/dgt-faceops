@@ -162,6 +162,11 @@ async def listar_destinos(
 
 
 class DestinoIn(BaseModel):
+    # Preenchido = editar ESTE destino, inclusive trocar o chat_id (o
+    # grupo mudou de id, virou supergrupo). Vazio mantém o
+    # comportamento antigo: o chat_id é a chave natural, e salvar duas
+    # vezes o mesmo chat atualiza em vez de duplicar.
+    id: int | None = None
     nome: str = Field(min_length=1, max_length=120)
     tipo: str = "grupo"
     chat_id: str = Field(min_length=1, max_length=64)
@@ -181,11 +186,33 @@ async def salvar_destino(
         raise HTTPException(status_code=400, detail=f"tipo inválido: {dados.tipo}")
 
     chat_id = dados.chat_id.strip()
-    r = await db.execute(select(NotificacaoDestino).where(NotificacaoDestino.chat_id == chat_id))
-    destino = r.scalars().first()
-    if destino is None:
-        destino = NotificacaoDestino(chat_id=chat_id)
-        db.add(destino)
+    if dados.id is not None:
+        destino = await db.get(NotificacaoDestino, dados.id)
+        if destino is None:
+            raise HTTPException(status_code=404, detail="destino não encontrado")
+        # Trocar o chat_id não pode colidir com outro destino: dois
+        # registros para o mesmo chat mandariam a mesma mensagem duas
+        # vezes, e o teto por ciclo esconderia outro aviso no lugar.
+        r = await db.execute(
+            select(NotificacaoDestino).where(
+                NotificacaoDestino.chat_id == chat_id,
+                NotificacaoDestino.id != destino.id,
+            )
+        )
+        if r.scalars().first() is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="já existe outro destino com este id de chat",
+            )
+        destino.chat_id = chat_id
+    else:
+        r = await db.execute(
+            select(NotificacaoDestino).where(NotificacaoDestino.chat_id == chat_id)
+        )
+        destino = r.scalars().first()
+        if destino is None:
+            destino = NotificacaoDestino(chat_id=chat_id)
+            db.add(destino)
 
     destino.nome = dados.nome.strip()
     destino.tipo = dados.tipo

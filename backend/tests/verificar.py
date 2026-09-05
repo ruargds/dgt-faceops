@@ -2734,7 +2734,18 @@ async def cenario_regra_vale_por_dia_e_hora():
     assert NS.na_janela(madrugada, quarta_3h), "3h30 está dentro de 22h–06h"
     assert NS.na_janela(madrugada, dt(2026, 9, 2, 23, 0)), "23h está dentro"
     assert not NS.na_janela(madrugada, quarta_15h), "15h30 não é madrugada"
-    assert not NS.na_janela(madrugada, dt(2026, 9, 2, 6, 0)), "06:00 é o fim, exclusivo"
+
+    # O fim é INCLUSIVO. Com fim exclusivo, "das 00:00 às 23:59" deixaria
+    # 23:59 de fora — um minuto cego por dia, que ninguém descobre por
+    # inspeção: só pelo alerta que não chegou.
+    assert NS.na_janela(madrugada, dt(2026, 9, 2, 6, 0)), "06:00 é o fim, e ele conta"
+    dia_todo = NotificacaoRegra(
+        dias_semana=[], hora_inicio_min=0, hora_fim_min=23 * 60 + 59,
+    )
+    assert NS.na_janela(dia_todo, dt(2026, 9, 2, 23, 59)), (
+        "23:59 ficou de fora de uma janela que vai até 23:59"
+    )
+    assert NS.na_janela(dia_todo, dt(2026, 9, 2, 0, 0)), "00:00 é o início"
 
 
 async def cenario_retorno_nao_sai_sem_a_abertura():

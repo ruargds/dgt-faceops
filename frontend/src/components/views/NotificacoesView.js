@@ -404,6 +404,26 @@ export default function NotificacoesView() {
                     </td>
                     <td>
                       <div className="stack-h" style={{ gap: 4 }}>
+                        {/* Editar carrega o destino no formulário abaixo,
+                            em vez de abrir outro lugar para a mesma
+                            coisa. Inclui trocar o id do chat: grupo que
+                            vira supergrupo MUDA de id, e sem isto o
+                            caminho era apagar e cadastrar de novo —
+                            levando junto as regras que apontavam para
+                            ele. */}
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            setNovoDestino({
+                              id: d.id, nome: d.nome, tipo: d.tipo,
+                              chat_id: d.chat_id, observacao: d.observacao || "",
+                            });
+                            setAviso("");
+                          }}
+                          title={t("Editar este destino")}
+                        >
+                          {t("editar")}
+                        </button>
                         {/* O botão que prova que funciona. */}
                         <button
                           className="btn btn-secondary btn-sm"
@@ -435,10 +455,18 @@ export default function NotificacoesView() {
           style={{ marginTop: 14 }}
           onSubmit={(e) => {
             e.preventDefault();
+            const editando = Boolean(novoDestino.id);
             acao("novo-destino", async () => {
-              await api.salvarNotifDestino({ ...novoDestino, ativo: true });
+              await api.salvarNotifDestino({
+                ...novoDestino,
+                // Na edição preserva o ligado/desligado que está na
+                // tabela; na criação entra ativo.
+                ativo: editando
+                  ? (destinos.find((x) => x.id === novoDestino.id) || {}).ativo !== false
+                  : true,
+              });
               setNovoDestino({ nome: "", tipo: "grupo", chat_id: "", observacao: "" });
-            }, t("Destino cadastrado."));
+            }, editando ? t("Destino atualizado.") : t("Destino cadastrado."));
           }}
         >
           <div className="row row-3 form-linha">
@@ -482,8 +510,23 @@ export default function NotificacoesView() {
           </div>
 
           <div className="form-acao">
+            {novoDestino.id && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setNovoDestino({ nome: "", tipo: "grupo", chat_id: "", observacao: "" })}
+              >
+                {t("cancelar")}
+              </button>
+            )}
             <button className="btn btn-primary" disabled={ocupado === "novo-destino"}>
-              <IconMais size={14} /> {t("Adicionar destino")}
+              {novoDestino.id ? (
+                t("Salvar destino")
+              ) : (
+                <>
+                  <IconMais size={14} /> {t("Adicionar destino")}
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -734,15 +777,10 @@ function FormRegra({
             />
             <span>{t("ativa")}</span>
           </label>
-          {mudou && (
-            <button
-              className="btn btn-primary btn-sm"
-              disabled={ocupado.startsWith("r-")}
-              onClick={() => onSalvar(r)}
-            >
-              {t("salvar")}
-            </button>
-          )}
+          {/* O salvar mora no RODAPÉ do formulário, não aqui: quem
+              termina de editar está com o olho na última linha, e um
+              botão que aparece no topo só quando algo muda é um botão
+              que ninguém encontra. */}
           <button className="btn btn-danger btn-sm" onClick={onRemover}>
             <IconLixeira size={13} />
           </button>
@@ -935,11 +973,44 @@ function FormRegra({
           </div>
         </div>
         <div className="form-ajuda">
-          {(r.dias_semana || []).length === 0 && r.hora_inicio_min === r.hora_fim_min
-            ? t("Sem dia nem horário marcado: a regra vale sempre, todos os dias.")
+          {/* A frase acompanha o que está configurado. Dizer "fora deste
+              horário a regra não manda nada" quando início e fim são
+              iguais seria mentir: aí ela vale o dia inteiro. */}
+          {r.hora_inicio_min === r.hora_fim_min
+            ? ((r.dias_semana || []).length === 0
+                ? t("Vale sempre: todos os dias, o dia inteiro.")
+                : t("Nos dias marcados, o dia inteiro."))
             : r.hora_fim_min < r.hora_inicio_min
-              ? t("A janela cruza a meia-noite — é o turno da madrugada.")
-              : t("Fora deste dia e horário a regra não manda nada, nem o retorno.")}
+              ? t("A janela cruza a meia-noite — é o turno da madrugada. O horário final entra por completo (até 23:59 cobre o minuto inteiro).")
+              : t("Fora deste dia e horário a regra não manda nada, nem o retorno. O horário final entra por completo.")}
+        </div>
+
+        {/* ── Rodapé: o estado, e o que fazer com ele ────────────────
+            Sempre visível. Botão que só aparece depois de mexer em algo
+            deixa a pessoa sem saber se precisava salvar — e some da vista
+            justamente quem rolou até o fim do formulário para editar. */}
+        <div
+          className="stack-h"
+          style={{
+            justifyContent: "space-between", alignItems: "center", gap: 10,
+            flexWrap: "wrap", marginTop: 16, paddingTop: 12,
+            borderTop: "1px solid var(--border)",
+          }}
+        >
+          <span className="small" style={{ color: mudou ? "var(--amber-fg)" : "var(--text-3)" }}>
+            {mudou
+              ? t("Alterações ainda não salvas.")
+              : (nova ? t("Preencha e salve para criar a regra.") : t("Tudo salvo."))}
+          </span>
+          <button
+            className={`btn btn-sm ${mudou ? "btn-primary" : "btn-secondary"}`}
+            disabled={!mudou || ocupado.startsWith("r-")}
+            onClick={() => onSalvar(r)}
+          >
+            {ocupado.startsWith("r-")
+              ? t("Salvando…")
+              : (nova ? t("Criar regra") : t("Salvar alterações"))}
+          </button>
         </div>
       </div>
     </div>

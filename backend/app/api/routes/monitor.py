@@ -268,7 +268,16 @@ async def horario_de_pico(
             func.avg(Amostra.gpu_pct).label("gpu"),
             func.count(Amostra.id).label("amostras"),
         )
-        .where(Amostra.host_id == host_id, Amostra.ts >= desde)
+        .where(
+            Amostra.host_id == host_id,
+            Amostra.ts >= desde,
+            # Amostra que FALHOU na coleta vale 0 em todo campo numérico —
+            # é o padrão da coluna, não uma leitura. Entrando na média,
+            # ela puxa o pico para baixo com um valor que nunca foi
+            # medido: às 3h da manhã, quando a rede oscila, a hora
+            # apareceria mais calma do que realmente é.
+            Amostra.erro == "",
+        )
         .group_by("hora")
         .order_by("hora")
     )
